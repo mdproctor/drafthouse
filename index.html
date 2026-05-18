@@ -100,7 +100,8 @@ const $ = id => document.getElementById(id);
 // ── State ────────────────────────────────────────────────────────────
 const filePaths = { a: null, b: null };
 const contents  = { a: null, b: null };
-const watchers  = {};                    // path → EventSource
+const watchers    = {};   // path → EventSource
+const watcherRefs = {};   // path → Set of panels currently watching it
 let API_PORT    = null;
 let syncEnabled = true, syncing = false, dragging = false;
 let lastChunks = [], lastTotalA = 0, lastTotalB = 0;
@@ -116,15 +117,17 @@ async function fetchFile(filePath) {
   return res.text();
 }
 
-function watchFile(filePath) {
-  if (watchers[filePath]) watchers[filePath].close();
+function watchFile(panel, filePath) {
+  if (!watcherRefs[filePath]) watcherRefs[filePath] = new Set();
+  watcherRefs[filePath].add(panel);
+  if (watchers[filePath]) return; // already watching, just added the ref
   const es = new EventSource(apiUrl(`/api/watch?path=${encodeURIComponent(filePath)}`));
   es.onmessage = async () => {
-    for (const panel of ['a', 'b']) {
-      if (filePaths[panel] === filePath) {
+    for (const p of ['a', 'b']) {
+      if (filePaths[p] === filePath) {
         try {
           const content = await fetchFile(filePath);
-          renderMarkdown(panel, content);
+          renderMarkdown(p, content);
         } catch (_) {}
       }
     }
@@ -132,8 +135,14 @@ function watchFile(filePath) {
   watchers[filePath] = es;
 }
 
-function unwatchFile(filePath) {
-  if (watchers[filePath]) { watchers[filePath].close(); delete watchers[filePath]; }
+function unwatchFile(panel, filePath) {
+  if (watcherRefs[filePath]) {
+    watcherRefs[filePath].delete(panel);
+    if (watcherRefs[filePath].size === 0) {
+      if (watchers[filePath]) { watchers[filePath].close(); delete watchers[filePath]; }
+      delete watcherRefs[filePath];
+    }
+  }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -157,7 +166,7 @@ async function loadFile(panel, path) {
   filePaths[panel] = path;
   $(`path-${panel}`).textContent = path;
   $(`path-${panel}`).classList.add('loaded');
-  if (prev && prev !== path) unwatchFile(prev);
+  if (prev && prev !== path) unwatchFile(panel, prev);
   try {
     const content = await fetchFile(path);
     renderMarkdown(panel, content);
@@ -165,7 +174,7 @@ async function loadFile(panel, path) {
     $(`render-${panel}`).innerHTML =
       `<p style="color:var(--error);padding:24px">Could not read file: ${err.message}</p>`;
   }
-  watchFile(path);
+  watchFile(panel, path);
 }
 
 function renderMarkdown(panel, content) {
@@ -343,9 +352,20 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Init ─────────────────────────────────────────────────────────────
-window.compare.onInitConfig(({ port }) => { API_PORT = port; });
+let _pendingFiles = null;
+
+window.compare.onInitConfig(({ port }) => {
+  API_PORT = port;
+  if (_pendingFiles) {
+    const [pathA, pathB] = _pendingFiles;
+    _pendingFiles = null;
+    if (pathA) loadFile('a', pathA);
+    if (pathB) loadFile('b', pathB);
+  }
+});
 
 window.compare.onInitFiles(async (pathA, pathB) => {
+  if (API_PORT === null) { _pendingFiles = [pathA, pathB]; return; }
   if (pathA) await loadFile('a', pathA);
   if (pathB) await loadFile('b', pathB);
 });
