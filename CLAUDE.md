@@ -70,6 +70,8 @@ The 2 skipped tests are scroll-sync tests that self-skip when the fixture conten
 | `playwright.config.js` | `workers:1` (sequential — each test spawns a JVM) |
 | `node_modules/` | Symlink → Sparge's `node_modules` (gitignored) |
 | `docs/FEATURES.md` | Feature backlog and planned work |
+| `docs/superpowers/specs/` | Design specs (brainstorming output) |
+| `docs/superpowers/plans/` | Implementation plans |
 | `sample-a.md`, `sample-b.md` | Demo content for manual testing |
 
 ## Architecture
@@ -87,6 +89,9 @@ Electron (renderer: index.html)
   ├── fetch /api/file              ← load file content
   ├── EventSource /api/watch       ← live reload on file change (ref-counted)
   ├── marked.js + highlight.js     ← render markdown
+  ├── panels { a, b } object       ← single source of truth: path, content, label per panel
+  ├── syncPanelDOM()               ← renders panels[x] state to DOM
+  ├── swapPanels()                 ← swaps A↔B atomically (paths, content, labels)
   ├── LCS line diff                ← compare A and B
   ├── Canvas minimap               ← red=A-side changes, green=B-side changes
   └── annotateRendered()           ← border-top/bottom on changed blocks

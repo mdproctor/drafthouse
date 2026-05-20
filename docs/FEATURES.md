@@ -25,6 +25,7 @@ Planned and completed features for md-compare.
 ## Planned
 
 ### Diff viewer completeness
+- [ ] **Improved scroll sync** — heading-anchor interpolation with percentage fallback (issue #3)
 - [ ] **Next/prev diff navigation** — ↑↓ buttons + keyboard (`n`/`p`) to jump between changed blocks
 - [ ] **Diff summary** — topbar count: "5 changes (2 ▲ 3 ▼)" so orientation is instant
 - [ ] **Diff legend** — small colour key (red = A only, green = B only) somewhere unobtrusive
