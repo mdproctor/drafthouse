@@ -1,31 +1,45 @@
-# Handover — 2026-05-19
+# Handover — 2026-05-22
 
 **Branch:** `main` (clean)
 
 ## Current state
 
-md-compare is a working Electron + Quarkus desktop app for side-by-side rendered markdown comparison. Built from scratch this session.
+All four diff viewer completeness features are shipped and merged to main. The diff viewer is fully functional: swap panels, next/prev navigation with position counter, diff summary label, and word-level word highlights within changed blocks.
 
-Core diff viewer is complete and tested. Phase 2 (LLM critique) is stubbed but not wired.
+33 Playwright E2E tests passing (2 scroll-sync skip when content fits viewport). JVM cold-start flakiness on full suite run is a known limitation — see issue #6 and the new `docs/protocols/playwright-jvm-warmup.md`.
 
-## What was built
+GitHub repo: `mdproctor/md-compare`. Issues #2, #7, #9, #11 closed. Epic #1 nearly done — scroll sync (#3) remains.
 
-- Electron app with Quarkus 3.34 backend (uber-JAR, dynamic port)
-- `java-server.js` state machine (idle→starting→healthy→crashed→restarting→fatal)
-- Three HTTP endpoints: `GET /api/file`, `GET /api/watch` (SSE), `GET /` (serves UI)
-- LCS line diff → canvas minimap (red=A-side, green=B-side) + inline block markers
-- Scroll sync (percentage-based), draggable divider, click-to-scroll on minimap
-- Live file watch via SSE EventSource (ref-counted, shared across panels)
-- 6 Java tests, 10 Playwright E2E tests passing (2 scroll tests intentionally skip when content fits viewport)
+## What was built this session
 
-## Immediate next work
+- **Swap panels** — `panels = { a, b }` state object replaces scattered `filePaths`/`contents`/`watcherRefs`; ⇄ Swap button in topbar
+- **Next/prev diff navigation** — `n`/`p` keyboard + ↑↓ buttons; `N/M` counter; viewport-recalibrating; minimap click fixed to scroll both panels
+- **Diff summary** — `~N −N +N` topbar label with CSS hover tooltip; `updateDiffSummary()` with ResizeObserver early-return guard
+- **Word-level diff** — DOM-walking LCS on `textContent`; `TreeWalker` splits text nodes in reverse order; preserves inline formatting; skips `<pre>` and inline `<code>`; ResizeObserver mark-stripping fix
 
-From `docs/FEATURES.md` — diff viewer completeness:
+## Immediate next step
 
-1. **Swap panels (A↔B)** — button in topbar; swap `filePaths`/`contents`, swap label values, re-run `updateDiffMap()`
-2. **Next/prev diff navigation** — `n`/`p` keyboard + ↑↓ buttons; walk `lastChunks`, find annotated element, `scrollBy`
-3. **Diff summary** — after `updateDiffMap()`, count chunks by op; render in topbar
-4. **Word-level diff** — within changed blocks, highlight exact word-level changes (not just whole paragraph)
+Start word-level diff feature enhancement OR scroll sync improvement:
+- Scroll sync (issue #3): heading-anchor interpolation with % fallback — design is clear from earlier brainstorm
+- Or: `work-start` for a new feature
+
+## What's left
+
+- Issue #3 — improved scroll sync · L · Med
+- Issue #4 — Playwright test hardening (pageerror listener, fixture guard) · S · Low
+- Issue #5 — syncPanelDOM re-parse efficiency, loadFile redundancy · S · Low
+- Issue #6 — JVM cold-start shared-JVM fix (structural) · M · Med
+- Issue #8 — nav test direction assertion, global-setup deduplication · S · Low
+- Issue #10 — diff-summary test specificity, tokenize shape · XS · Low
+- Issue #12 — word-diff test specificity, tokenize non-word shape · XS · Low
+- Branch `issue-11-word-level-diff` still exists locally and remotely — not yet deleted (awaiting explicit permission)
+
+## What's next
+
+| # | Description | Scale | Complexity | Notes |
+|---|-------------|-------|------------|-------|
+| #3 | Scroll sync — heading anchors with % fallback | L | Med | Design brainstormed; spec not written yet |
+| Phase 2 | Wire POST /api/critique to Claude API | XL | High | Requires API key and server changes |
 
 ## References
 
@@ -33,7 +47,7 @@ From `docs/FEATURES.md` — diff viewer completeness:
 |---|---|
 | Feature backlog | `docs/FEATURES.md` |
 | Architecture + run commands | `CLAUDE.md` |
-| Diff algorithm | `index.html` — `lineDiff()`, `drawDiffMap()`, `annotateRendered()` |
-| Java resources | `server/src/main/java/io/mdcompare/server/` |
-| Playwright tests | `electron-tests/e2e/` |
-| Sparge patterns (reference) | `~/claude/sparge/` — start session with `claude --add-dir /Users/mdproctor/claude/sparge` |
+| JVM warmup protocol | `docs/protocols/playwright-jvm-warmup.md` |
+| Word diff implementation | `index.html` — `tokenize()`, `wordDiff()`, `applyWordHighlights()`, `annotateWordDiffs()` |
+| Design specs | `docs/superpowers/specs/` |
+| GitHub repo | `mdproctor/md-compare` |
