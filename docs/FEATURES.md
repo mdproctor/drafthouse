@@ -15,19 +15,19 @@ Planned and completed features for md-compare.
 - [x] Live file watch (SSE EventSource, ref-counted per path)
 - [x] Quarkus backend (FileResource, WatchResource, UiResource, CritiqueResource stub)
 - [x] `java-server.js` process manager with crash recovery
-- [x] Playwright E2E tests: happy path (8) + regression (4) + swap panels (7) + nav (7)
+- [x] Playwright E2E tests: happy path (8) + regression (4) + swap panels (7) + nav (7) + diff summary (4)
 - [x] Phase 2 critique panel placeholder (layout ready, content empty)
 
 ## Done — recent
 
 - [x] **Swap panels (A↔B)** — ⇄ button in topbar swaps paths, content, and labels atomically; disabled until both panels loaded
 - [x] **Next/prev diff navigation** — ↑↓ topbar buttons + `n`/`p` keyboard; `N/M` counter; viewport-recalibrating nav; minimap click fixed to scroll both panels
+- [x] **Diff summary** — `~N −N +N` topbar label shows modified/deleted/inserted block counts; CSS hover tooltip explains symbols
 
 ## Planned
 
 ### Diff viewer completeness
 - [ ] **Improved scroll sync** — heading-anchor interpolation with percentage fallback (issue #3)
-- [ ] **Diff summary** — topbar count: "5 changes (2 ▲ 3 ▼)" so orientation is instant
 - [ ] **Diff legend** — small colour key (red = A only, green = B only) somewhere unobtrusive
 - [ ] **Word-level diff** — within a changed block, highlight the exact words that differ (not just the whole paragraph)
 
