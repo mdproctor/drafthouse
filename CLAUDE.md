@@ -45,7 +45,7 @@ cd server && /opt/homebrew/bin/mvn package -DskipTests
 cd server && /opt/homebrew/bin/mvn test
 ```
 
-**Playwright E2E tests (33 passing, 2 intentionally skipped):**
+**Playwright E2E tests (46 passing, 2 intentionally skipped):**
 ```bash
 ./node_modules/.bin/playwright test --reporter=list
 ```
@@ -53,6 +53,8 @@ cd server && /opt/homebrew/bin/mvn test
 The 2 skipped tests are scroll-sync tests that self-skip when the fixture content fits in the viewport — correct behaviour, not failures.
 
 **Cold-start note:** On a machine with many JVM processes running (e.g. IntelliJ with multiple projects), the full suite can fail on first run due to JVM startup time. Run it twice — the second run passes in ~10s. Or run each spec file individually. See issue #6.
+
+**Stale process note:** If global-setup crashes with "Target page, context or browser has been closed", kill stray processes first: `pkill -9 -f "Electron|mdcompare|quarkus"`. Happens when a previous run was cancelled without cleanup.
 
 **Test fixtures:** Written to `$TMPDIR/mdcompare-test-{a,b}.md` by `global-setup.js` before each Playwright run.
 
