@@ -17,7 +17,11 @@ async function launchApp(fileA, fileB) {
   const args = [APP_PATH];
   if (fileA) args.push(fileA);
   if (fileB) args.push(fileB);
-  const app    = await electron.launch({ executablePath: ELECTRON_BIN, args });
+  const env = { ...process.env };
+  if (process.env.TEST_QUARKUS_PORT) {
+    env.QUARKUS_PORT = process.env.TEST_QUARKUS_PORT;
+  }
+  const app    = await electron.launch({ executablePath: ELECTRON_BIN, args, env });
   const window = await app.firstWindow();
   const jsErrors = [];
   window.on('pageerror', err => jsErrors.push(err.message));

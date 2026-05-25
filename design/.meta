@@ -1,7 +1,7 @@
-branch: issue-3-scroll-sync-anchors
-project-sha: f8c2ff09a051da6f99d86172e11f6687247ce8ca
+branch: issue-6-jvm-cold-start-fix
+project-sha: 83d7389eba1686459520accd703f8064be222166
 date: 2026-05-25
-issue: 3
+issue: 6
 issue-repo: mdproctor/md-compare
 flyway-next-v: none
 design-repo: project

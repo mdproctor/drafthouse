@@ -54,7 +54,7 @@ cd server && /opt/homebrew/bin/mvn test
 
 The 2 skipped tests are scroll-sync tests that self-skip when the fixture content fits in the viewport — correct behaviour, not failures.
 
-**Cold-start note:** On a machine with many JVM processes running (e.g. IntelliJ with multiple projects), the full suite can fail on first run due to JVM startup time. Run it twice — the second run passes in ~10s. Or run each spec file individually. See issue #6.
+**Shared JVM:** `global-setup.js` starts a single Quarkus JVM shared by all specs. Each spec gets its own Electron window but no JVM. Suite completes in ~10s.
 
 **Stale process note:** If global-setup crashes with "Target page, context or browser has been closed", kill stray processes first: `pkill -9 -f "Electron|mdcompare|quarkus"`. Happens when a previous run was cancelled without cleanup.
 
@@ -66,14 +66,14 @@ The 2 skipped tests are scroll-sync tests that self-skip when the fixture conten
 |---|---|
 | `index.html` | All UI: HTML, styles.css link, JS — the entire renderer |
 | `styles.css` | Archive Room CSS tokens + panel/diff/minimap styles |
-| `main.js` | Electron main: spawns Quarkus, native file dialog IPC |
+| `main.js` | Electron main: spawns Quarkus (skipped when `QUARKUS_PORT` env set), native file dialog IPC |
 | `preload.js` | IPC bridge: `selectFile`, `onInitConfig`, `onInitFiles` |
 | `java-server.js` | Quarkus process manager (state machine, crash recovery) |
 | `server/` | Quarkus 3.34 Maven project |
 | `server/src/main/java/io/mdcompare/server/` | Java resources: Ping, File, Watch, Ui, Critique |
 | `server/target/mdcompare-server-runner.jar` | Built uber-jar (not committed) |
-| `electron-tests/e2e/` | Playwright specs + helpers + global-setup |
-| `playwright.config.js` | `workers:1` (sequential — each test spawns a JVM) |
+| `electron-tests/e2e/` | Playwright specs + helpers + global-setup/teardown |
+| `playwright.config.js` | `workers:1` (sequential — specs share one Quarkus JVM via global-setup) |
 | `node_modules/` | Symlink → Sparge's `node_modules` (gitignored) |
 | `docs/FEATURES.md` | Feature backlog and planned work |
 | `docs/superpowers/specs/` | Design specs (brainstorming output) |

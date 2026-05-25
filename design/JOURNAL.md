@@ -1,1 +1,1 @@
-# Design Journal — issue-3-scroll-sync-anchors
+# Design Journal — issue-6-jvm-cold-start-fix

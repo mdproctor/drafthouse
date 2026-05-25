@@ -49,10 +49,15 @@ async function createMainWindow(port) {
 }
 
 app.whenReady().then(async () => {
-  server.on('fatal', () => showErrorWindow('The md-compare server crashed and could not restart.'));
   try {
-    const port = await findFreePort();
-    await server.spawnServer(port);
+    let port;
+    if (process.env.QUARKUS_PORT) {
+      port = parseInt(process.env.QUARKUS_PORT, 10);
+    } else {
+      server.on('fatal', () => showErrorWindow('The md-compare server crashed and could not restart.'));
+      port = await findFreePort();
+      await server.spawnServer(port);
+    }
     await createMainWindow(port);
   } catch (err) {
     showErrorWindow(err.message);
@@ -61,7 +66,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', async (event) => {
   event.preventDefault();
-  await server.killServer();
+  if (!process.env.QUARKUS_PORT) await server.killServer();
   app.exit(0);
 });
 
