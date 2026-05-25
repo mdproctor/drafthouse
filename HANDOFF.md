@@ -1,53 +1,57 @@
-# Handover — 2026-05-22
+# Handover — 2026-05-25
 
 **Branch:** `main` (clean)
 
 ## Current state
 
-All four diff viewer completeness features are shipped and merged to main. The diff viewer is fully functional: swap panels, next/prev navigation with position counter, diff summary label, and word-level word highlights within changed blocks.
+S/XS cleanup batch complete — issues #4, #5, #8, #10, #12 closed. Also
+discovered and fixed a pre-existing bug: `annotateRendered` was silently
+skipping all paragraphs (marked.js v9 paragraph tokens have `rawLines=0`),
+so word-level diff only ever highlighted headings. Fixed with
+`endForCheck = Math.max(tokenEnd, line + 1)`.
 
-33 Playwright E2E tests passing (2 scroll-sync skip when content fits viewport). JVM cold-start flakiness on full suite run is a known limitation — see issue #6 and the new `docs/protocols/playwright-jvm-warmup.md`.
-
-GitHub repo: `mdproctor/md-compare`. Issues #2, #7, #9, #11 closed. Epic #1 nearly done — scroll sync (#3) remains.
+46 Playwright E2E tests passing (was 33), 2 scroll-sync skipped.
+3 new Playwright protocols in `docs/protocols/`. Blog routing fixed —
+md-compare entries now go to `blog/` in this repo.
 
 ## What was built this session
 
-- **Swap panels** — `panels = { a, b }` state object replaces scattered `filePaths`/`contents`/`watcherRefs`; ⇄ Swap button in topbar
-- **Next/prev diff navigation** — `n`/`p` keyboard + ↑↓ buttons; `N/M` counter; viewport-recalibrating; minimap click fixed to scroll both panels
-- **Diff summary** — `~N −N +N` topbar label with CSS hover tooltip; `updateDiffSummary()` with ResizeObserver early-return guard
-- **Word-level diff** — DOM-walking LCS on `textContent`; `TreeWalker` splits text nodes in reverse order; preserves inline formatting; skips `<pre>` and inline `<code>`; ResizeObserver mark-stripping fix
+- **Test hardening** — `launchApp` returns `jsErrors`; path guard on
+  `undefined` args; global pageerror listener; `if (jsErrors)` guard in
+  all spec `afterAll` blocks
+- **Code quality** — label input no longer calls `syncPanelDOM` on keystroke;
+  `loadFile` redundant DOM lines removed; `onInitConfig` made async with await
+- **Test specificity** — diff-summary regex tightened; tokenize unit + edge
+  case tests; fixture-based word assertions in word-diff
+- **annotateRendered bug fix** — paragraphs now correctly tagged for word-diff
+- **Blog routing** — `blog/` directory added to project; `blog-routing.yaml`
+  updated with `md-compare` destination
 
 ## Immediate next step
 
-Start word-level diff feature enhancement OR scroll sync improvement:
-- Scroll sync (issue #3): heading-anchor interpolation with % fallback — design is clear from earlier brainstorm
-- Or: `work-start` for a new feature
+`work-start` for scroll sync (issue #3): heading-anchor interpolation with
+% fallback — design already brainstormed, no spec written yet.
 
 ## What's left
 
 - Issue #3 — improved scroll sync · L · Med
-- Issue #4 — Playwright test hardening (pageerror listener, fixture guard) · S · Low
-- Issue #5 — syncPanelDOM re-parse efficiency, loadFile redundancy · S · Low
 - Issue #6 — JVM cold-start shared-JVM fix (structural) · M · Med
-- Issue #8 — nav test direction assertion, global-setup deduplication · S · Low
-- Issue #10 — diff-summary test specificity, tokenize shape · XS · Low
-- Issue #12 — word-diff test specificity, tokenize non-word shape · XS · Low
-- Branch `issue-11-word-level-diff` still exists locally and remotely — not yet deleted (awaiting explicit permission)
+- Branch `issue-11-word-level-diff` still exists locally and remotely —
+  delete pending explicit permission
 
 ## What's next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #3 | Scroll sync — heading anchors with % fallback | L | Med | Design brainstormed; spec not written yet |
-| Phase 2 | Wire POST /api/critique to Claude API | XL | High | Requires API key and server changes |
+| #3 | Scroll sync — heading anchors with % fallback | L | Med | Design brainstormed; no spec yet |
+| Phase 2 | Wire POST /api/critique to Claude API | XL | High | Requires API key + server changes |
 
 ## References
 
 | Context | Where |
 |---|---|
 | Feature backlog | `docs/FEATURES.md` |
-| Architecture + run commands | `CLAUDE.md` |
-| JVM warmup protocol | `docs/protocols/playwright-jvm-warmup.md` |
-| Word diff implementation | `index.html` — `tokenize()`, `wordDiff()`, `applyWordHighlights()`, `annotateWordDiffs()` |
-| Design specs | `docs/superpowers/specs/` |
+| Playwright protocols | `docs/protocols/` (4 protocols now) |
+| Blog entry | `blog/2026-05-25-mdp01-bug-that-count-was-hiding.md` |
+| annotateRendered fix | `index.html` — `annotateRendered()` |
 | GitHub repo | `mdproctor/md-compare` |
