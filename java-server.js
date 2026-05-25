@@ -69,6 +69,7 @@ class JavaServer extends EventEmitter {
 
   getPort()  { return this._port; }
   getLogs()  { return [...this._logs]; }
+  getPid()   { return this._process ? this._process.pid : null; }
 
   async spawnServer(port) {
     if (this._state !== 'idle') throw new Error(`Cannot spawn: server is in state '${this._state}'`);
