@@ -3,8 +3,7 @@
 const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
-const { _electron: electron } = require('playwright');
-const { ELECTRON_BIN, APP_PATH } = require('./helpers');
+const { JavaServer, findFreePort } = require('../../java-server');
 
 module.exports = async function globalSetup() {
   const fileA = path.join(os.tmpdir(), 'mdcompare-test-a.md');
@@ -55,21 +54,11 @@ module.exports = async function globalSetup() {
   process.env.TEST_FILE_A = fileA;
   process.env.TEST_FILE_B = fileB;
 
-  // Warm up the Quarkus JVM once before tests begin. Each spec file launches
-  // its own JVM; cold starts on a loaded machine can take >180s. A single warmup
-  // here loads the JAR bytecode into OS page cache so subsequent launches are fast.
-  // We pass both fixture files so the full startup path (Quarkus start + file fetch
-  // + render) runs — this is the most thorough warmup.
-  // Global setup has no per-test timeout — this can run as long as needed.
-  console.log('[global-setup] warming Quarkus JVM (may take 2-3 min on cold machine)...');
-  const app = await electron.launch({ executablePath: ELECTRON_BIN, args: [APP_PATH, fileA, fileB] });
-  const win  = await app.firstWindow();
-  // polling:100 uses timer-based CDP evaluation every 100ms rather than the default
-  // requestAnimationFrame polling. RAF does not fire in hidden Electron windows
-  // (show:false until ready-to-show), which caused waitForFunction to hang indefinitely.
-  // Timer polling works regardless of window visibility.
-  await win.waitForFunction(() => document.querySelector('#render-a h1') !== null, undefined, { timeout: 0, polling: 100 });
-  await win.waitForFunction(() => document.querySelector('#render-b h1') !== null, undefined, { timeout: 0, polling: 100 });
-  await app.close();
-  console.log('[global-setup] JVM warm, starting tests');
+  console.log('[global-setup] starting shared Quarkus JVM...');
+  const server = new JavaServer();
+  const port = await findFreePort();
+  await server.spawnServer(port);
+  process.env.TEST_QUARKUS_PORT = String(port);
+  process.env.TEST_QUARKUS_PID  = String(server.getPid());
+  console.log(`[global-setup] Quarkus ready on port ${port} (pid ${server.getPid()})`);
 };
