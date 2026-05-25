@@ -1,57 +1,56 @@
-# Handover — 2026-05-25
+# Handover — 2026-05-25 (session 2)
 
 **Branch:** `main` (clean)
 
 ## Current state
 
-S/XS cleanup batch complete — issues #4, #5, #8, #10, #12 closed. Also
-discovered and fixed a pre-existing bug: `annotateRendered` was silently
-skipping all paragraphs (marked.js v9 paragraph tokens have `rawLines=0`),
-so word-level diff only ever highlighted headings. Fixed with
-`endForCheck = Math.max(tokenEnd, line + 1)`.
-
-46 Playwright E2E tests passing (was 33), 2 scroll-sync skipped.
-3 new Playwright protocols in `docs/protocols/`. Blog routing fixed —
-md-compare entries now go to `blog/` in this repo.
+Issue #3 (scroll sync) complete — heading-anchor interpolation with percentage
+fallback, two infrastructure bug fixes, code review fixes. Branch rebased onto
+main and closed. 54 Playwright E2E tests passing, 2 scroll-sync skipped.
 
 ## What was built this session
 
-- **Test hardening** — `launchApp` returns `jsErrors`; path guard on
-  `undefined` args; global pageerror listener; `if (jsErrors)` guard in
-  all spec `afterAll` blocks
-- **Code quality** — label input no longer calls `syncPanelDOM` on keystroke;
-  `loadFile` redundant DOM lines removed; `onInitConfig` made async with await
-- **Test specificity** — diff-summary regex tightened; tokenize unit + edge
-  case tests; fixture-based word assertions in word-diff
-- **annotateRendered bug fix** — paragraphs now correctly tagged for word-diff
-- **Blog routing** — `blog/` directory added to project; `blog-routing.yaml`
-  updated with `md-compare` destination
+- **Scroll-anchor sync** — `normHead`, `buildScrollAnchors`, `interp` for
+  piecewise linear interpolation between matched heading pairs. Boundary anchors
+  at `{0,0}` and `{maxA,maxB}` degrade to percentage sync with no special case.
+  Matching: exact text first, 18-char prefix fallback (requires heading ≥18 chars),
+  B-heading consumption tracking via `Set` to prevent duplicates.
+- **RAF polling fix** — Chromium suppresses `requestAnimationFrame` in hidden
+  Electron windows (`show: false`). Switched `waitForFunction` to `polling: 100`
+  in `helpers.js` and `global-setup.js`.
+- **ready-to-show race fix** — `mainWindow.once('ready-to-show', ...)` registered
+  after `await loadURL()` misses the event when CDN resources cause first paint
+  before `did-finish-load`. Moved handler registration before `loadURL` in `main.js`.
+- **Code review fixes** — prefix length guard (≥18 chars), `usedB` Set for
+  B-heading consumption, removed dead `applyPercent` function.
+- **8 new tests** in `scroll-anchors.spec.js` — normHead, boundary anchors,
+  interior anchors, interp edge cases, prefix guard, B-consumption, behavioural
+  sync divergence.
 
-## Immediate next step
+## Garden entries
 
-`work-start` for scroll sync (issue #3): heading-anchor interpolation with
-% fallback — design already brainstormed, no spec written yet.
+Two gotchas submitted and pushed to `~/.hortora/garden/electron/`:
+- `GE-20260525-5f6efe` — Playwright `waitForFunction` hangs in hidden Electron windows (RAF suppression)
+- `GE-20260525-6accc3` — Electron `ready-to-show` handler missed after `await loadURL`
+
+## Blog entries
+
+- `blog/2026-05-25-mdp01-bug-that-count-was-hiding.md` (from prior session)
+- `blog/2026-05-25-mdp02-scroll-sync-two-invisible-bugs.md` (this session)
 
 ## What's left
 
-- Issue #3 — improved scroll sync · L · Med
 - Issue #6 — JVM cold-start shared-JVM fix (structural) · M · Med
 - Branch `issue-11-word-level-diff` still exists locally and remotely —
   delete pending explicit permission
-
-## What's next
-
-| # | Description | Scale | Complexity | Notes |
-|---|-------------|-------|------------|-------|
-| #3 | Scroll sync — heading anchors with % fallback | L | Med | Design brainstormed; no spec yet |
-| Phase 2 | Wire POST /api/critique to Claude API | XL | High | Requires API key + server changes |
+- Phase 2 — wire POST /api/critique to Claude API · XL · High
 
 ## References
 
 | Context | Where |
 |---|---|
 | Feature backlog | `docs/FEATURES.md` |
-| Playwright protocols | `docs/protocols/` (4 protocols now) |
-| Blog entry | `blog/2026-05-25-mdp01-bug-that-count-was-hiding.md` |
-| annotateRendered fix | `index.html` — `annotateRendered()` |
+| Scroll-anchor design spec | `docs/superpowers/specs/2026-05-25-scroll-sync-anchors-design.md` |
+| Playwright protocols | `docs/protocols/` (4 protocols) |
+| Blog entries | `blog/` (2 entries) |
 | GitHub repo | `mdproctor/md-compare` |
