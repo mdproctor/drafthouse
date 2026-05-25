@@ -53,4 +53,35 @@ test.describe('scroll anchors', () => {
     expect(anchors[1].a).toBeGreaterThan(0);
     expect(anchors[1].b).toBeGreaterThan(0);
   });
+
+  test('buildScrollAnchors with shared headings returns sorted interior anchors', async () => {
+    const shortFill = Array.from({ length: 30 },
+      (_, i) => `Short filler paragraph ${i + 1}.`
+    ).join('\n\n');
+    const longFill = Array.from({ length: 60 },
+      (_, i) => `Long filler paragraph ${i + 1}.`
+    ).join('\n\n');
+
+    const contentA =
+      `# Doc A\n\n${shortFill}\n\n## Shared Section\n\n${shortFill}\n\n## Second Heading\n\n${shortFill}`;
+    const contentB =
+      `# Doc B\n\n${longFill}\n\n## Shared Section\n\n${shortFill}\n\n## Second Heading\n\n${shortFill}`;
+
+    await window.evaluate(([a, b]) => {
+      renderMarkdown('a', a);
+      renderMarkdown('b', b);
+    }, [contentA, contentB]);
+
+    const anchors = await window.evaluate(() => getScrollAnchors());
+
+    expect(anchors.length).toBeGreaterThan(2);
+
+    for (let i = 1; i < anchors.length; i++) {
+      expect(anchors[i].a).toBeGreaterThan(anchors[i - 1].a);
+    }
+
+    expect(anchors[0]).toEqual({ a: 0, b: 0 });
+    expect(anchors[anchors.length - 1].a).toBeGreaterThan(0);
+    expect(anchors[anchors.length - 1].b).toBeGreaterThan(0);
+  });
 });

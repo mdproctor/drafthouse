@@ -334,7 +334,28 @@ function buildScrollAnchors() {
   const maxA = bodyA.scrollHeight - bodyA.clientHeight;
   const maxB = bodyB.scrollHeight - bodyB.clientHeight;
   if (maxA <= 0 || maxB <= 0) { scrollAnchors = []; return; }
-  scrollAnchors = [{ a: 0, b: 0 }, { a: maxA, b: maxB }];
+
+  const brA = bodyA.getBoundingClientRect();
+  const brB = bodyB.getBoundingClientRect();
+
+  const aHds = [...$('render-a').querySelectorAll('h2,h3,h4')]
+    .map(el => ({ text: normHead(el.textContent),
+                  pos: el.getBoundingClientRect().top - brA.top + bodyA.scrollTop }));
+  const bHds = [...$('render-b').querySelectorAll('h2,h3,h4')]
+    .map(el => ({ text: normHead(el.textContent),
+                  pos: el.getBoundingClientRect().top - brB.top + bodyB.scrollTop }));
+
+  const anchors = [{ a: 0, b: 0 }];
+  for (const ah of aHds) {
+    const match = bHds.find(bh => bh.text === ah.text)
+               ?? bHds.find(bh => bh.text.startsWith(ah.text.slice(0, 18))
+                                || ah.text.startsWith(bh.text.slice(0, 18)));
+    if (match) anchors.push({ a: ah.pos, b: match.pos });
+  }
+  anchors.push({ a: maxA, b: maxB });
+
+  anchors.sort((x, y) => x.a - y.a);
+  scrollAnchors = anchors.filter((an, i) => i === 0 || an.a > anchors[i - 1].a);
 }
 
 // ── Scroll sync ──────────────────────────────────────────────────────
