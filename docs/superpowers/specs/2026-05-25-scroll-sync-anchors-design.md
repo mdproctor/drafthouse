@@ -163,7 +163,7 @@ Content injection: `evaluate(() => { renderMarkdown('a', contentA); renderMarkdo
 
 Fixtures: A has short preamble then `## Anchor` then padding. B has long preamble then `## Anchor` then short tail. In A, `## Anchor` sits near top (~15% scroll). In B it sits near bottom (~75% scroll).
 
-Test: inject fixtures, scroll A's body to `## Anchor`'s `offsetTop`, wait for rAF × 2, read B's `scrollTop`. Assert B's position is closer to B's heading than to 15% of B's max scroll.
+Test: inject fixtures via `renderMarkdown`, then `evaluate(() => { $('body-a').scrollTop = $('render-a').querySelector('h2').offsetTop; $('body-a').dispatchEvent(new Event('scroll')); })`, wait two rAF cycles (matching the `syncing` guard), read B's `scrollTop`. Assert B's position is closer to B's heading's `offsetTop` than to 15% of B's max scroll.
 
 **Regression:** existing scroll-sync tests in `regression.spec.js` pass unchanged — boundary-only anchors reproduce percentage behaviour exactly.
 
