@@ -97,6 +97,23 @@ Browser UI (index.html)
   └── Scroll sync via anchors      ← heading-based anchor matching
 ```
 
+## Architectural Direction
+
+DraftHouse is designed as a **standalone tool today, Claudony plugin tomorrow**. All
+diff, rendering, and critique logic must be modular — cleanly separable from the
+Electron shell and Quarkus serving layer so it can be embedded as a Claudony channel
+view type when Claudony's plugin API stabilises.
+
+**Practical implications:**
+- Keep diff engine, word-level highlighting, and LLM critique anchoring as pure
+  functions with no UI framework coupling
+- Look at Claudony's channel architecture when designing new features — borrow
+  patterns and share code where possible (channel model, message rendering, etc.)
+- Don't build a second channel system — design for eventual convergence
+- The Electron shell and browser mode are distribution wrappers, not the product
+
+**Claudony repo:** `~/claude/claudony/` (standalone tier peer — see Peer Repos table)
+
 ## Quarkus Server Notes
 
 - Version: 3.34.3
@@ -151,6 +168,9 @@ DraftHouse is part of the casehubio platform. The peer repos are:
 | Foundation | casehub-engine, casehub-ledger, casehub-work, casehub-qhorus, casehub-connectors, casehub-eidos, casehub-platform |
 | Application | casehub-devtown, casehub-aml, casehub-clinical, casehub-life, casehub-drafthouse |
 | Standalone | quarkmind, claudony, openclaw |
+
+**Claudony is the primary integration target.** When designing new UI or channel-like
+features, check Claudony's architecture first and align where possible.
 
 **Do not duplicate** abstractions or SPIs that belong in a foundation module. Check
 `../parent/docs/PLATFORM.md` for ownership boundaries before adding shared concerns.
