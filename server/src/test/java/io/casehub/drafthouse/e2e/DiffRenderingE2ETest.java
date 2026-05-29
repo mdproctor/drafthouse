@@ -15,11 +15,11 @@ import java.net.URL;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @WithPlaywright
-class HappyPathE2ETest {
+class DiffRenderingE2ETest {
 
     @InjectPlaywright
     BrowserContext context;
@@ -40,28 +40,33 @@ class HappyPathE2ETest {
     }
 
     @Test
-    void panelARendersContent() {
+    void diffChunksAnnotated() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-a")).not().isEmpty();
+        int count = page.locator("[data-diff-chunk]").count();
+        assertTrue(count > 0, "expected at least one diff-chunk annotation");
     }
 
     @Test
-    void panelBRendersContent() {
+    void deletedBlockOnAside() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-b")).not().isEmpty();
+        int count = page.locator("#render-a .diff-del").count();
+        assertTrue(count > 0, "expected at least one .diff-del block in panel A");
     }
 
     @Test
-    void topbarIsVisible() {
+    void insertedBlockOnBside() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#topbar")).isVisible();
-        assertThat(page.locator("#btn-sync")).isVisible();
-        assertThat(page.locator("#btn-swap")).isVisible();
+        int count = page.locator("#render-b .diff-ins").count();
+        assertTrue(count > 0, "expected at least one .diff-ins block in panel B");
     }
 
     @Test
-    void pageTitleIsDraftHouse() {
-        page.navigate(index.toString());
-        assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
+    void minimapCanvasHasNonZeroDimensions() {
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        assertThat(page.locator("#diff-map")).isVisible();
+        int width  = (int) page.locator("#diff-map").evaluate("el => el.width");
+        int height = (int) page.locator("#diff-map").evaluate("el => el.height");
+        assertTrue(width  > 0, "minimap canvas width should be > 0");
+        assertTrue(height > 0, "minimap canvas height should be > 0");
     }
 }

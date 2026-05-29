@@ -49,3 +49,7 @@ The minimap will draw a green bar at this section's vertical position.
 This paragraph adds more content to ensure the panel is tall enough to scroll.
 Additional lines of text make the scrollHeight exceed the clientHeight of the panel body.
 Without scrollable content the scroll sync tests cannot verify that panels actually move.
+
+## Appendix B
+
+This appendix section appears only in document B and will produce a standalone inserted chunk.

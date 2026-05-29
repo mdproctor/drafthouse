@@ -52,12 +52,17 @@ Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in 
 
 ## Testing
 
-**Java server tests (6 tests):**
+**All tests (Java server + Playwright E2E):**
 ```bash
 cd server && /opt/homebrew/bin/mvn test
 ```
 
-**E2E tests:** Deferred — Quarkus Playwright migration is a separate epic.
+Run a single E2E class:
+```bash
+cd server && /opt/homebrew/bin/mvn test -Dtest=ScrollSyncE2ETest
+```
+
+E2E tests live in `server/src/test/java/io/casehub/drafthouse/e2e/`. Fixture files are in `server/src/test/resources/fixtures/`.
 
 ## Key Directories
 

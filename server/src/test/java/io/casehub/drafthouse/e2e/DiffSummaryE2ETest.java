@@ -12,14 +12,14 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URL;
 
-import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @WithPlaywright
-class HappyPathE2ETest {
+class DiffSummaryE2ETest {
 
     @InjectPlaywright
     BrowserContext context;
@@ -40,28 +40,34 @@ class HappyPathE2ETest {
     }
 
     @Test
-    void panelARendersContent() {
+    void summaryIsNonEmptyAfterLoad() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-a")).not().isEmpty();
+        String text = page.locator("#diff-summary").innerText();
+        assertFalse(text.isBlank(), "diff summary should show counts after loading files with diffs");
     }
 
     @Test
-    void panelBRendersContent() {
+    void summaryShowsModifiedCount() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-b")).not().isEmpty();
+        String text = page.locator("#diff-summary").innerText();
+        assertTrue(text.contains("~"),
+            "summary should contain ~ for modified chunks, got: " + text);
     }
 
     @Test
-    void topbarIsVisible() {
+    void summaryShowsDeletedCount() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#topbar")).isVisible();
-        assertThat(page.locator("#btn-sync")).isVisible();
-        assertThat(page.locator("#btn-swap")).isVisible();
+        String text = page.locator("#diff-summary").innerText();
+        // The minus sign is U+2212 MINUS SIGN, not a hyphen
+        assertTrue(text.contains("−"),
+            "summary should contain − for A-only chunks, got: " + text);
     }
 
     @Test
-    void pageTitleIsDraftHouse() {
-        page.navigate(index.toString());
-        assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
+    void summaryShowsInsertedCount() {
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        String text = page.locator("#diff-summary").innerText();
+        assertTrue(text.contains("+"),
+            "summary should contain + for B-only chunks, got: " + text);
     }
 }

@@ -15,11 +15,12 @@ import java.net.URL;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static io.casehub.drafthouse.e2e.PlaywrightFixtures.waitForRender;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 @WithPlaywright
-class HappyPathE2ETest {
+class SwapPanelsE2ETest {
 
     @InjectPlaywright
     BrowserContext context;
@@ -40,28 +41,39 @@ class HappyPathE2ETest {
     }
 
     @Test
-    void panelARendersContent() {
+    void swapButtonEnabledAfterLoad() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-a")).not().isEmpty();
+        assertThat(page.locator("#btn-swap")).isEnabled();
     }
 
     @Test
-    void panelBRendersContent() {
+    void swapRerunsAndProducesDiffChunks() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#render-b")).not().isEmpty();
+        page.evaluate("() => swapPanels()");
+        waitForRender(page);
+        int count = page.locator("[data-diff-chunk]").count();
+        assertTrue(count > 0, "diff chunks should be present after swap");
     }
 
     @Test
-    void topbarIsVisible() {
+    void afterSwapAsideShowsOriginalBContent() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("#topbar")).isVisible();
-        assertThat(page.locator("#btn-sync")).isVisible();
-        assertThat(page.locator("#btn-swap")).isVisible();
+        page.evaluate("() => swapPanels()");
+        waitForRender(page);
+        String textA = page.locator("#render-a").innerText();
+        assertTrue(textA.contains("New Section"),
+            "after swap, panel A should contain text from original B (New Section)");
     }
 
     @Test
-    void pageTitleIsDraftHouse() {
-        page.navigate(index.toString());
-        assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
+    void swapTogglesBackToOriginal() {
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        page.evaluate("() => swapPanels()");
+        waitForRender(page);
+        page.evaluate("() => swapPanels()");
+        waitForRender(page);
+        String restoredTextA = page.locator("#render-a").innerText();
+        assertTrue(restoredTextA.contains("Summary"),
+            "after double swap, panel A should be restored (contains 'Summary')");
     }
 }
