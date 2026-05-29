@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Test;
 
 import java.net.URL;
 
+import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
+import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
+import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @QuarkusTest
@@ -23,7 +26,30 @@ class HappyPathE2ETest {
     URL index;
 
     @Test
-    void serverServesIndexHtml() {
+    void panelARendersContent() {
+        Page page = context.newPage();
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        assertThat(page.locator("#render-a")).not().isEmpty();
+    }
+
+    @Test
+    void panelBRendersContent() {
+        Page page = context.newPage();
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        assertThat(page.locator("#render-b")).not().isEmpty();
+    }
+
+    @Test
+    void topbarIsVisible() {
+        Page page = context.newPage();
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        assertThat(page.locator("#topbar")).isVisible();
+        assertThat(page.locator("#btn-sync")).isVisible();
+        assertThat(page.locator("#btn-swap")).isVisible();
+    }
+
+    @Test
+    void pageTitleIsDraftHouse() {
         Page page = context.newPage();
         page.navigate(index.toString());
         assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
