@@ -39,6 +39,10 @@
   <button id="btn-next" onclick="nextDiff()" title="Next diff (n)" disabled style="opacity:.4">↓</button>
   <span id="diff-counter" style="font-size:11px;color:#a09080;padding:0 4px;min-width:36px;display:inline-block;text-align:center">— / —</span>
   <span id="diff-summary" data-tooltip="" style="font-size:11px;color:#a09080;padding:0 6px;cursor:default;position:relative"></span>
+  <span id="diff-legend" title="A only · B only">
+    <span class="legend-swatch legend-del"></span><span class="legend-label">A</span>
+    <span class="legend-swatch legend-ins"></span><span class="legend-label">B</span>
+  </span>
   <div id="topbar-spacer"></div>
   <!-- Phase 2: critique toggle button lives here -->
   <button id="btn-critique" onclick="toggleCritique()" title="Open critique panel" style="opacity:.4" disabled>✦ Critique</button>
