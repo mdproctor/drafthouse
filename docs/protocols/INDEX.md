@@ -1,4 +1,4 @@
-# md-compare Protocols
+# DraftHouse Protocols
 
 | File | Rule | Applies to |
 |---|---|---|
@@ -6,3 +6,5 @@
 | [playwright-one-describe-per-spec.md](playwright-one-describe-per-spec.md) | One describe block per spec file — multiple blocks each spawn a JVM and cold-start | electron-tests/e2e/*.spec.js |
 | [playwright-kill-stale-processes.md](playwright-kill-stale-processes.md) | Kill stale Electron/Quarkus processes before any test run | all Playwright E2E test runs |
 | [playwright-jserrors-in-afterall.md](playwright-jserrors-in-afterall.md) | All describe blocks must destructure jsErrors and guard-assert in afterAll | electron-tests/e2e/*.spec.js |
+| [playwright-page-lifecycle.md](playwright-page-lifecycle.md) | @QuarkusTest Playwright classes must use @WithPlaywright and @BeforeEach/@AfterEach page.close() | server/src/test/java/io/casehub/drafthouse/e2e/ |
+| [playwright-render-complete-signal.md](playwright-render-complete-signal.md) | Wait for [data-diff-chunk] as render-complete signal — not content elements | server/src/test/java/io/casehub/drafthouse/e2e/ |
