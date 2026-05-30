@@ -67,6 +67,10 @@ class NavigationE2ETest {
     @Test
     void pKeyNavigatesToPreviousDiff() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        // Navigate forward twice, then back once → should be at chunk 1.
+        // Assumes n+n scrolls far enough that p finds the previous chunk by index
+        // (not the viewport-centre fallback in prevDiff). Fixtures are long enough
+        // that both n presses scroll past chunk 0, making p reliably land on chunk 1.
         page.keyboard().press("n");
         page.keyboard().press("n");
         page.keyboard().press("p");

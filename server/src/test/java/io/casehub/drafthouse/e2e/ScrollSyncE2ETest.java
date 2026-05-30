@@ -44,8 +44,8 @@ class ScrollSyncE2ETest {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         // diff-a/b has 5 matching headings → at least 7 anchors (start + 5 headings + end)
         int anchorCount = (int) page.evaluate("() => getScrollAnchors().length");
-        assertTrue(anchorCount > 2,
-            "expected interior anchors from heading matches, got " + anchorCount);
+        assertTrue(anchorCount >= 7,
+            "expected 7+ anchors (start + 5 heading matches + end), got " + anchorCount);
     }
 
     @Test
