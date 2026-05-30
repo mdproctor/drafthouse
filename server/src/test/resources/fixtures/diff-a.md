@@ -1,3 +1,8 @@
+## Preface
+
+This preface section appears only in document A and has no counterpart in document B.
+It will be marked as a deleted block producing a standalone diff-del chunk op.
+
 ## Introduction
 
 DraftHouse is a side-by-side markdown comparison tool that highlights differences between documents.
