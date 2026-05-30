@@ -6,6 +6,8 @@ import io.quarkiverse.playwright.InjectPlaywright;
 import io.quarkiverse.playwright.WithPlaywright;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
@@ -25,23 +27,32 @@ class HappyPathE2ETest {
     @TestHTTPResource("/")
     URL index;
 
+    private Page page;
+
+    @BeforeEach
+    void openPage() {
+        page = context.newPage();
+    }
+
+    @AfterEach
+    void closePage() {
+        if (page != null) page.close();
+    }
+
     @Test
     void panelARendersContent() {
-        Page page = context.newPage();
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         assertThat(page.locator("#render-a")).not().isEmpty();
     }
 
     @Test
     void panelBRendersContent() {
-        Page page = context.newPage();
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         assertThat(page.locator("#render-b")).not().isEmpty();
     }
 
     @Test
     void topbarIsVisible() {
-        Page page = context.newPage();
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         assertThat(page.locator("#topbar")).isVisible();
         assertThat(page.locator("#btn-sync")).isVisible();
@@ -50,7 +61,6 @@ class HappyPathE2ETest {
 
     @Test
     void pageTitleIsDraftHouse() {
-        Page page = context.newPage();
         page.navigate(index.toString());
         assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
     }

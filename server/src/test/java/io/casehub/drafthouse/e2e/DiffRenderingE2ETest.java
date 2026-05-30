@@ -6,6 +6,8 @@ import io.quarkiverse.playwright.InjectPlaywright;
 import io.quarkiverse.playwright.WithPlaywright;
 import io.quarkus.test.common.http.TestHTTPResource;
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
@@ -25,54 +27,46 @@ class DiffRenderingE2ETest {
     @TestHTTPResource("/")
     URL index;
 
+    private Page page;
+
+    @BeforeEach
+    void openPage() {
+        page = context.newPage();
+    }
+
+    @AfterEach
+    void closePage() {
+        if (page != null) page.close();
+    }
+
     @Test
     void diffChunksAnnotated() {
-        Page page = context.newPage();
-        try {
-            loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-            int count = page.locator("[data-diff-chunk]").count();
-            assertTrue(count > 0, "expected at least one diff-chunk annotation");
-        } finally {
-            page.close();
-        }
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        int count = page.locator("[data-diff-chunk]").count();
+        assertTrue(count > 0, "expected at least one diff-chunk annotation");
     }
 
     @Test
     void deletedBlockOnAside() {
-        Page page = context.newPage();
-        try {
-            loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-            int count = page.locator("#render-a .diff-del").count();
-            assertTrue(count > 0, "expected at least one .diff-del block in panel A");
-        } finally {
-            page.close();
-        }
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        int count = page.locator("#render-a .diff-del").count();
+        assertTrue(count > 0, "expected at least one .diff-del block in panel A");
     }
 
     @Test
     void insertedBlockOnBside() {
-        Page page = context.newPage();
-        try {
-            loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-            int count = page.locator("#render-b .diff-ins").count();
-            assertTrue(count > 0, "expected at least one .diff-ins block in panel B");
-        } finally {
-            page.close();
-        }
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        int count = page.locator("#render-b .diff-ins").count();
+        assertTrue(count > 0, "expected at least one .diff-ins block in panel B");
     }
 
     @Test
     void minimapCanvasHasNonZeroDimensions() {
-        Page page = context.newPage();
-        try {
-            loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-            assertThat(page.locator("#diff-map")).isVisible();
-            int width  = (int) page.locator("#diff-map").evaluate("el => el.width");
-            int height = (int) page.locator("#diff-map").evaluate("el => el.height");
-            assertTrue(width  > 0, "minimap canvas width should be > 0");
-            assertTrue(height > 0, "minimap canvas height should be > 0");
-        } finally {
-            page.close();
-        }
+        loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
+        assertThat(page.locator("#diff-map")).isVisible();
+        int width  = (int) page.locator("#diff-map").evaluate("el => el.width");
+        int height = (int) page.locator("#diff-map").evaluate("el => el.height");
+        assertTrue(width  > 0, "minimap canvas width should be > 0");
+        assertTrue(height > 0, "minimap canvas height should be > 0");
     }
 }
