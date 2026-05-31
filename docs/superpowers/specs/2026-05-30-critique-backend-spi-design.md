@@ -166,11 +166,12 @@ public class ReviewerChannelBackendFactory {
 `ReviewerChannelBackendFactory` observes `ChannelInitialisedEvent` (fired on creation and
 on startup recovery) and registers a `ReviewerChannelBackend` for every channel whose name
 starts with `drafthouse/`. **Startup recovery gap (Phase 2 known limitation):** `ChannelInitialisedEvent` fires on
-startup recovery for every persisted channel, so `ReviewerChannelBackend` instances are
-re-registered. However, `ReviewSession` data (SharedData keys, instanceId, personality)
-lives only in-memory. After a JVM restart, the backend is registered but has no session
-state — incoming QUERYs will DECLINE until `start_review` is called again. Persisting
-session state to a DraftHouse-owned store is deferred to Phase 3.
+startup recovery for every persisted channel. `ReviewSession` data (SharedData keys,
+instanceId, personality) lives only in-memory — after a JVM restart there is no session
+in memory for persisted channels. The factory **skips registration** when no session
+exists for a channelId at init time. The channel remains in Qhorus; QUERYs sit unhandled
+until `start_review` is called again. This is acceptable for Phase 2. Persisting session
+state to a DraftHouse-owned store is deferred to Phase 3.
 
 ### ReviewerChannelBackend
 
@@ -258,26 +259,21 @@ public interface DocumentReviewer {
     @SystemMessage("{{personality}}")
     @UserMessage("""
         Document A (original):
-        {documentA}
+        {{documentA}}
 
         Document B (revised):
-        {documentB}
+        {{documentB}}
 
-        {selectionContext}
+        {{selectionContext}}
 
-        User query: {query}
+        User query: {{query}}
 
         If this query is outside the scope of document review (e.g. general knowledge,
         unrelated topics), respond with declined=true and explain why in content.
         Otherwise respond with declined=false and your review in content.
         """)
-    ReviewResult review(
-        @V("personality") String personality,
-        @V("documentA") String documentA,
-        @V("documentB") String documentB,
-        @V("selectionContext") String selectionContext,
-        @V("query") String query
-    );
+    ReviewResult review(String personality, String documentA,
+                        String documentB, String selectionContext, String query);
 }
 
 public record ReviewResult(boolean declined, String content) {
@@ -291,6 +287,19 @@ public record ReviewResult(boolean declined, String content) {
 system prompt is resolved at call time from the `personality` parameter, not at compile
 time. This makes zero behavioral difference for Phase 2 (personality is config-sourced)
 but eliminates an interface refactor when the Phase 6 personality library arrives.
+
+**Template variable syntax:** `{{paramName}}` (double-brace) is the Quarkus LangChain4j
+`@RegisterAiService` convention for parameter substitution — verified against production
+`@AiService` interfaces in `casehub-qhorus/examples/`. No `@V` annotations needed; method
+parameter names map directly. Used consistently across `@SystemMessage` and `@UserMessage`.
+
+**Implementation risk — structured output:** When `@AiService` returns a record type
+(`ReviewResult`) rather than `String`, Quarkus LangChain4j activates its structured output
+pipeline: JSON schema instructions are injected into the prompt and the response is parsed
+as JSON. This is a different code path from `String` return. The natural-language format
+instructions in `@UserMessage` may conflict with LangChain4j's injected schema instructions.
+Mitigation: test `DocumentReviewer` against the mock provider as the first implementation
+step, before any other session integration is wired.
 
 **Personality** is from `application.properties` in Phase 2. Not client-supplied.
 
@@ -352,11 +361,19 @@ DraftHouse adopts the `api/` + `app/` hexagonal split when Qhorus is wired:
 ```
 server/
   api/   — ReviewSession, DocumentSide, ReviewResult, DraftHouseConfig (interface)
+           ReviewSessionRegistry (interface — UUID → ReviewSession lookup + update)
            No Qhorus dependency; no JPA
   app/   — ReviewerChannelBackend, ReviewerChannelBackendFactory
+             (implements ReviewSessionRegistry — owns the in-memory Map<UUID, ReviewSession>)
            DocumentReviewer (@AiService), DraftHouseMcpTools
            Depends on casehub-qhorus, quarkus-langchain4j
 ```
+
+`ReviewSessionRegistry` is a pure-Java interface in `api/` — no Qhorus types. It exposes
+session lookup and selection update. `ReviewerChannelBackendFactory` implements it in
+`app/`. `DraftHouseMcpTools` injects `ReviewSessionRegistry` (the interface), not the
+factory directly. This keeps `DraftHouseMcpTools` free of backend implementation details
+and the `api/` module free of Qhorus types.
 
 ---
 
