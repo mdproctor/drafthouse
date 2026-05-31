@@ -39,16 +39,16 @@ architecture:
 ## Building the Server
 
 ```bash
-cd server && /opt/homebrew/bin/mvn package -DskipTests
+/opt/homebrew/bin/mvn -f server/pom.xml package -DskipTests
 ```
 
-Produces `server/target/drafthouse-server-runner.jar`.
+Produces `server/runtime/target/drafthouse-server-runner.jar`.
 
 ## Running the App
 
 ```bash
 java -Dui.dir=/Users/mdproctor/claude/casehub/drafthouse \
-  -jar server/target/drafthouse-server-runner.jar
+  -jar server/runtime/target/drafthouse-server-runner.jar
 ```
 
 Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in a browser.
@@ -60,15 +60,17 @@ Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in 
 
 **All tests (Java server + Playwright E2E):**
 ```bash
-cd server && /opt/homebrew/bin/mvn test
+/opt/homebrew/bin/mvn -f server/pom.xml install -DskipTests && /opt/homebrew/bin/mvn -f server/pom.xml test -pl runtime
 ```
 
 Run a single E2E class:
 ```bash
-cd server && /opt/homebrew/bin/mvn test -Dtest=ScrollSyncE2ETest
+/opt/homebrew/bin/mvn -f server/pom.xml install -DskipTests && /opt/homebrew/bin/mvn -f server/pom.xml test -pl runtime -Dtest=ScrollSyncE2ETest
 ```
 
-E2E tests live in `server/src/test/java/io/casehub/drafthouse/e2e/`. Fixture files are in `server/src/test/resources/fixtures/`.
+E2E tests live in `server/runtime/src/test/java/io/casehub/drafthouse/e2e/`. Fixture files are in `server/runtime/src/test/resources/fixtures/`.
+
+Note: The `install` step is needed so `runtime` can resolve `api` from the local Maven repository. On a clean checkout, always run the full reactor `install -DskipTests` before selective test runs.
 
 ## Key Directories
 
@@ -76,10 +78,12 @@ E2E tests live in `server/src/test/java/io/casehub/drafthouse/e2e/`. Fixture fil
 |---|---|
 | `index.html` | All UI: HTML, JS, styles.css link — the entire renderer |
 | `styles.css` | Archive Room CSS tokens + panel/diff/minimap styles |
-| `server/` | Quarkus 3.34 Maven project |
-| `server/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, Critique |
-| `server/src/main/resources/application.properties` | Quarkus config |
-| `server/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
+| `server/` | Multi-module Maven parent (api/ + runtime/) |
+| `server/api/` | Pure Java domain model — no Quarkus, no Qhorus |
+| `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, Critique |
+| `server/runtime/src/main/resources/application.properties` | Quarkus config |
+| `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
 | `docs/FEATURES.md` | Feature backlog and DraftHouse MVP roadmap |
 | `docs/superpowers/specs/` | Design specs |
 | `docs/superpowers/plans/` | Implementation plans |
@@ -127,7 +131,7 @@ view type when Claudony's plugin API stabilises.
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3
+- Version: 3.34.3 (quarkus-langchain4j 1.9.1, casehub-qhorus 0.2-SNAPSHOT)
 - Java package: `io.casehub.drafthouse`
 - `ui.dir` JVM property controls where `UiResource` reads static assets from
 - Port: 9001 (default), configurable via `quarkus.http.port`

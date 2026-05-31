@@ -52,3 +52,47 @@ Browser-served Quarkus UI with URL query param initialization.
 
 ### Navigation
 `git log --grep="#15" --oneline`
+
+---
+
+## Layer 0.1 — Multi-Module Maven Restructure + Qhorus/LangChain4j Dependency Wiring
+
+**Started:** 2026-05-31
+**Completed:** 2026-05-31
+**Issue:** #21 (epic #20)
+
+### Summary
+Split the flat `server/` Quarkus app into a multi-module Maven project (`api/` + `runtime/`)
+per the platform module-tier-structure protocol. Added `casehub-qhorus 0.2-SNAPSHOT` and
+`quarkus-langchain4j-anthropic 1.9.1` as dependencies. Wired the Qhorus `qhorus` named
+datasource with H2 in-memory for dev/test.
+
+### Accountability gaps closed
+| Gap | What breaks without it | Closed by |
+|-----|----------------------|-----------|
+| Single-module structure | Can't separate pure-Java domain API from Quarkus runtime | `api/` + `runtime/` split |
+| No Qhorus dependency | Can't use channel messaging, commitments, SharedData | `casehub-qhorus 0.2-SNAPSHOT` |
+| No LangChain4j | Can't define `@AiService` for reviewer | `quarkus-langchain4j-anthropic 1.9.1` |
+| No qhorus datasource | Qhorus extension fails startup without named datasource | H2 `qhorus` datasource + `MODE=PostgreSQL` |
+
+### Key wiring
+- `server/api/` — pure Java, no framework deps; will hold `ReviewSession`, `ReviewResult`, `ReviewSessionRegistry`
+- `server/runtime/` — Quarkus app, depends on `api/`; holds all resources and new reviewer classes
+- `<maven.compiler.parameters>true</maven.compiler.parameters>` in runtime — required by `AiServicesProcessor` (GE-20260525-a8bd9a)
+- `quarkus-langchain4j 0.26.1` rejected — incompatible with Quarkus 3.33+; 1.9.1 (built against 3.33.1) verified on 3.34.3
+- CORS scoped to `%dev` and `%test` profiles — was wildcard in default profile
+
+### Pattern introduced
+Two-module (`api/` + `runtime/`) hexagonal split for CaseHub application-tier projects.
+`api/` is a pure-Java jar with no heavy framework deps; `runtime/` is the Quarkus application.
+
+### Pattern anchor
+`server/api/pom.xml` and `server/runtime/pom.xml`
+
+### Gotchas
+- Build order: `mvn install -DskipTests` on full reactor before running selective `mvn test -pl runtime` — Quarkus generate-code runs before inter-module compile if reactor order not respected
+- `ChannelService.create()` does NOT register in `ChannelGateway` — must call `initChannel()` explicitly after channel creation (GE-20260526-5247f2)
+- `ResponseFormat.JSON` without schema throws on Anthropic — `@AiService` returning a record type must use a full `JsonSchema` (GE-20260528-e9564b)
+
+### Navigation
+`git log --grep="#21" --oneline`
