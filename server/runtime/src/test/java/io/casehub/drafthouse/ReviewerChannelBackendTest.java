@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -46,7 +47,7 @@ class ReviewerChannelBackendTest {
                 CHANNEL_ID, "sess-1", "drafthouse-reviewer-sess-1",
                 "drafthouse/sess-1/doc-a", "drafthouse/sess-1/doc-b",
                 null, null, "You are a reviewer.");
-        backend = new ReviewerChannelBackend(session, dataService, messageService, llm);
+        backend = new ReviewerChannelBackend(session, dataService, messageService, llm, 100_000);
         channelRef = new ChannelRef(CHANNEL_ID, "drafthouse/sess-1");
 
         SharedData docA = new SharedData();
@@ -129,12 +130,40 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryWithNoSelection_passesEmptySelectionContext() {
-        when(llm.review(any(), any(), any(), eq(""), any()))
+        when(llm.review(any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "Looks good."));
 
         backend.post(channelRef, query("Is this clear?"));
 
-        verify(messageService).dispatch(any());
+        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
+        verify(llm).review(any(), any(), any(), eq(""), any());
+    }
+
+    @Test
+    void inReplyToNotFound_skipsDispatch() {
+        when(messageService.findByCorrelationId(CORRELATION_ID.toString()))
+                .thenReturn(Optional.empty());
+
+        backend.post(channelRef, query("Is this clear?"));
+
+        verify(messageService, never()).dispatch(any());
+        verifyNoInteractions(llm);
+    }
+
+    @Test
+    void documentsExceedingMaxSize_dispatchDecline_withoutCallingLlm() {
+        String huge = "x".repeat(100_001);
+        SharedData bigDoc = new SharedData();
+        bigDoc.content = huge;
+        when(dataService.getByKey("drafthouse/sess-1/doc-a")).thenReturn(Optional.of(bigDoc));
+
+        backend.post(channelRef, query("Review this"));
+
+        verifyNoInteractions(llm);
+        ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService).dispatch(captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(MessageType.DECLINE);
+        assertThat(captor.getValue().content()).isEqualTo("Documents exceed the maximum size for review.");
     }
 
     private OutboundMessage query(String content) {
