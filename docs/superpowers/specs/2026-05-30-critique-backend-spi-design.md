@@ -146,20 +146,36 @@ is the correct SPI.
 
 ### Registration (ADR-0008 pattern)
 
+**Registration pattern (verified against ClaudonyChannelBackend):** use deregister-then-register
+for idempotency — `ChannelInitialisedEvent` fires on every `initChannel()` call (including
+repeated calls for the same channel). Startup recovery fires for all persisted channels.
+
 ```java
 @ApplicationScoped
-public class ReviewerChannelBackendFactory {
+public class ReviewerChannelBackendFactory implements ReviewSessionRegistry {
 
+    @Inject ChannelGateway gateway;
     @Inject DataService dataService;
     @Inject MessageService messageService;
     @Inject DocumentReviewer llm;
-    @Inject DraftHouseConfig config;
 
-    void onChannelInit(@Observes ChannelInitialisedEvent event) {
+    private final ConcurrentHashMap<UUID, ReviewSession> sessions = new ConcurrentHashMap<>();
+
+    void onChannelInitialised(@Observes ChannelInitialisedEvent event) {
         if (!event.channelName().startsWith("drafthouse/")) return;
-        // SessionRegistry provides ReviewSession for this channelId
-        // Backend registered with ChannelGateway for this channel
+        ReviewSession session = sessions.get(event.channelId());
+        if (session == null) return;  // startup recovery: no in-memory session, skip
+        ReviewerChannelBackend backend = new ReviewerChannelBackend(
+            session, dataService, messageService, llm);
+        gateway.deregisterBackend(event.channelId(), ReviewerChannelBackend.BACKEND_ID);
+        gateway.registerBackend(event.channelId(), backend, "agent");
     }
+
+    // ReviewSessionRegistry implementation
+    @Override public Optional<ReviewSession> find(UUID channelId) { ... }
+    @Override public void put(ReviewSession session) { sessions.put(session.channelId(), session); }
+    @Override public void remove(UUID channelId) { sessions.remove(channelId); }
+    @Override public void updateSelection(UUID channelId, DocumentSide side, String text) { ... }
 }
 ```
 
@@ -175,40 +191,61 @@ state to a DraftHouse-owned store is deferred to Phase 3.
 
 ### ReviewerChannelBackend
 
+**API note (verified against qhorus source):** `ChannelBackend.post()` signature is
+`post(ChannelRef channel, OutboundMessage message)`. `OutboundMessage.messageId` is a
+delivery-scoped UUID (not the ledger Long). To obtain `inReplyTo` for the reply dispatch,
+look up the original QUERY by `correlationId.toString()` via `MessageService.findByCorrelationId()`.
+`OutboundMessage.correlationId` is UUID and must be converted to String for the dispatch.
+`MessageDispatch.builder()` requires `.actorType()` — use `ActorType.AGENT`.
+
 ```java
 public class ReviewerChannelBackend implements ChannelBackend {
+
+    private static final String BACKEND_ID = "drafthouse-reviewer";
 
     private final ReviewSession session;
     private final DataService dataService;
     private final MessageService messageService;
     private final DocumentReviewer llm;
 
-    @Override
-    public void post(Message msg) {
-        if (msg.messageType() != MessageType.QUERY) return;
+    @Override public String backendId() { return BACKEND_ID; }
+    @Override public ActorType actorType() { return ActorType.AGENT; }
+    @Override public void open(ChannelRef channel, Map<String, String> metadata) {}
+    @Override public void close(ChannelRef channel) {}
 
-        String docA = dataService.getByKey(session.docAKey()).content();
-        String docB = dataService.getByKey(session.docBKey()).content();
+    @Override
+    public void post(ChannelRef channel, OutboundMessage message) {
+        if (message.type() != MessageType.QUERY) return;
+
+        // Resolve inReplyTo: OutboundMessage.messageId is delivery-scoped UUID,
+        // not the ledger Long. Look up the QUERY by correlationId.
+        Long inReplyTo = messageService
+            .findByCorrelationId(message.correlationId().toString())
+            .map(m -> m.id)
+            .orElse(null);
+
+        String docA = dataService.getByKey(session.docAKey())
+            .map(d -> d.content).orElse("");
+        String docB = dataService.getByKey(session.docBKey())
+            .map(d -> d.content).orElse("");
 
         ReviewResult result;
         try {
             result = llm.review(session.personality(), docA, docB,
-                selectionContext(session), msg.content());
-        } catch (RateLimitException e) {
-            result = ReviewResult.decline("Rate limit reached. Try again shortly.");
-        } catch (AuthenticationException e) {
-            result = ReviewResult.decline("LLM authentication failed. Check configuration.");
-        } catch (ContextLengthException e) {
-            result = ReviewResult.decline("Documents exceed context limit.");
+                selectionContext(session), message.content());
         } catch (Exception e) {
             result = ReviewResult.decline("Reviewer encountered an error.");
         }
 
         MessageType type = result.declined() ? MessageType.DECLINE : MessageType.RESPONSE;
-        messageService.dispatch(MessageDispatch
-            .builder(msg.channelId(), session.instanceId(), type, result.content())
-            .inReplyTo(msg.id())
-            .correlationId(msg.correlationId())
+        messageService.dispatch(MessageDispatch.builder()
+            .channelId(channel.id())
+            .sender(session.instanceId())
+            .type(type)
+            .content(result.content())
+            .inReplyTo(inReplyTo)
+            .correlationId(message.correlationId().toString())
+            .actorType(ActorType.AGENT)
             .build());
     }
 }
@@ -216,6 +253,12 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
 Exception messages are never passed to dispatch. Only sanitized, fixed strings reach the
 channel — API keys, stack traces, and endpoint URLs stay out of the tamper-evident ledger.
+
+**Exception specificity note:** The original spec showed three specific catch clauses
+(RateLimitException, AuthenticationException, ContextLengthException). Whether LangChain4j
+Anthropic throws these exact types depends on the version. A single `catch (Exception e)` with
+a sanitized message is always safe. The specific catch clauses can be added if exception types
+are confirmed against the actual LangChain4j Anthropic 1.9.1 source during TDD.
 
 ---
 
@@ -360,14 +403,16 @@ DraftHouse adopts the `api/` + `app/` hexagonal split when Qhorus is wired:
 
 ```
 server/
-  api/   — ReviewSession, DocumentSide, ReviewResult, DraftHouseConfig (interface)
-           ReviewSessionRegistry (interface — UUID → ReviewSession lookup + update)
-           No Qhorus dependency; no JPA
-  app/   — ReviewerChannelBackend, ReviewerChannelBackendFactory
-             (implements ReviewSessionRegistry — owns the in-memory Map<UUID, ReviewSession>)
-           DocumentReviewer (@AiService), DraftHouseMcpTools
-           Depends on casehub-qhorus, quarkus-langchain4j
+  api/     — ReviewSession, DocumentSide, ReviewResult, ReviewSessionRegistry (interface)
+             No Quarkus dependency; no JPA; no Qhorus
+  runtime/ — ReviewerChannelBackend, ReviewerChannelBackendFactory
+               (implements ReviewSessionRegistry — owns the ConcurrentHashMap<UUID, ReviewSession>)
+             DocumentReviewer (@RegisterAiService), DraftHouseMcpTools
+             DraftHouseConfig (@ConfigMapping — Quarkus type, cannot go in api/)
+             Depends on casehub-qhorus, quarkus-langchain4j-anthropic
 ```
+
+Note: the module is named `runtime/` (not `app/`) per the actual Maven structure.
 
 `ReviewSessionRegistry` is a pure-Java interface in `api/` — no Qhorus types. It exposes
 session lookup and selection update. `ReviewerChannelBackendFactory` implements it in
