@@ -82,6 +82,12 @@
       <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>org.assertj</groupId>
+      <artifactId>assertj-core</artifactId>
+      <version>3.27.7</version>
+      <scope>test</scope>
+    </dependency>
     <!-- Qhorus in-memory stores for unit tests (no DB required) -->
     <dependency>
       <groupId>io.casehub</groupId>
