@@ -20,6 +20,7 @@ public class ReviewerChannelBackendFactory implements ReviewSessionRegistry {
     @Inject DataService dataService;
     @Inject MessageService messageService;
     @Inject DocumentReviewer llm;
+    @Inject DraftHouseConfig config;
 
     private final ConcurrentHashMap<UUID, ReviewSession> sessions = new ConcurrentHashMap<>();
 
@@ -28,9 +29,9 @@ public class ReviewerChannelBackendFactory implements ReviewSessionRegistry {
         ReviewSession session = sessions.get(event.channelId());
         if (session == null) return;
         ReviewerChannelBackend backend = new ReviewerChannelBackend(
-                session, dataService, messageService, llm);
+                session, dataService, messageService, llm, config.maxDocChars());
         gateway.deregisterBackend(event.channelId(), ReviewerChannelBackend.BACKEND_ID);
-        gateway.registerBackend(event.channelId(), backend, "agent");
+        gateway.registerBackend(event.channelId(), backend, ReviewerChannelBackend.BACKEND_TYPE);
     }
 
     @Override
