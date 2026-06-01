@@ -105,6 +105,12 @@ Notes:
   distinction — the round is already encoded in the entry ID)
 - `flag-human` uses the raising agent's ID: `[R3-REV-003]` type `flag-human`, not a
   special FLAG identifier
+- **No neutral `respond` type.** Every response must commit to a position:
+  `agree`, `dispute`, or `qualify`. Neutral exchanges ("which endpoint specifically?")
+  are not permitted as responses — if an agent needs clarification, it writes a new
+  `raise` entry with the question; the other agent answers it in the next round.
+  This is deliberate: forcing commitment prevents debates from stalling in
+  non-committal exchanges.
 
 **Classification axes** (on `raise` entries only):
 
@@ -250,13 +256,18 @@ thread still readable). The record of how agreement was reached is preserved.
 ### State Machine
 
 ```
-Open ──► Active ──► Agreed  ✅  (terminal)
+                    qualify/dispute
+                    (exchange continues)
+                         ▲  │
+Open ──► Active ──────────  └──► Agreed  ✅  (terminal)
           │
-          └──► Pending Human ──► Active  (human resolves out-of-band; next agent proceeds)
+          └──► Pending Human ──► Active  (human resolves out-of-band)
 ```
 
 - `Open` → `Active`: any `agree`, `dispute`, or `qualify` response
-- `Active` → `Agreed`: `agree` response with no outstanding counter-position
+- `Active` → `Active`: `qualify` or `dispute` on an already-Active point; exchange
+  continues until one agent agrees
+- `Active` → `Agreed`: `agree` response
 - `Active` → `Pending Human`: `flag-human` entry
 - `Pending Human` → `Active`: human provides direction out-of-band; next agent proceeds
 
@@ -385,7 +396,14 @@ The structural properties map directly:
 
 When #27 is implemented: `debate.md` becomes a rendered serialisation of the
 `DebateChannel` message store; `summary.md` becomes a rendered projection of a
-channel query; the format schema does not change — only the storage backend changes.
+channel query.
+
+The structural identity mapping is preserved: entry ID → message ID, citation →
+correlation ID, entry type → domain message type. Status directive representation
+(currently embedded in response entry content as `→ [ID] Status: 🟡 Active`) is
+TBD in #27 — in Qhorus, status would naturally be a field on the message rather
+than inline content, which may require a format schema adjustment at the status
+line level.
 
 ---
 
