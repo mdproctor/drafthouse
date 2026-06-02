@@ -13,13 +13,17 @@ review rounds, formats entries into `debate.md`, and projects `debate.md` into
 `summary.md`. Layer 3 (DraftHouse UI, Next/Back/Run Until) and Qhorus DebateChannel
 (#27) are explicitly out of scope.
 
-**Qhorus migration honesty:** The domain model (`DebateEvent`, `DebateEntry`,
-`ReviewState`, processing classes, `DebateAgentProvider` SPI) is storage-independent
-and will migrate to the Qhorus DebateChannel model with modest effort. The session
-infrastructure (`ReviewSessionService`, git repo per session) will be substantially
-replaced — this is a deliberate local-first implementation with standalone value,
-not scaffolding. Layer 2 is not pre-designed against the unimplemented DebateChannel
-abstraction (#27).
+**Qhorus alignment:** `SummaryProjector` implements `ChannelProjection<ReviewState>`
+from `casehub-qhorus-api` (qhorus#230 — shipped). `server/api/` gains a compile
+dependency on `casehub-qhorus-api`. The incremental fold cursor from qhorus#231
+(also shipped) is `MessageView.id()` (Long). `SummaryRenderer` stays a local class
+until qhorus#232 (`ProjectionRenderer<S>` SPI + named registry) ships — the
+qhorus#230 javadoc explicitly states rendering is consumer-side.
+
+The session infrastructure (`ReviewSessionService`, git repo per session) will be
+substantially replaced when #27 (DebateChannel) ships. This is a deliberate
+local-first implementation with standalone value. What migrates cleanly: the domain
+model, `SummaryProjector`, `SummaryRenderer`, `DebateAgentProvider` SPI.
 
 ---
 
@@ -151,12 +155,44 @@ Parses the lightweight round-snippet format produced by agents (see Agent Output
 Format below). Lenient — recovers from minor formatting variations. Separate from
 `DebateParser` which targets full accumulated `debate.md`.
 
-**`SummaryProjector`** — `ReviewState project(List<DebateEvent> events)`:
-Pure left-fold (`PP-20260602-b748c9`). Switch on `DebateEvent` type; `AgentMemo`
-is a no-op (not projected). Status authority: last `→ [ID] Status:` directive
-for each point ID in document order wins. Within-round ordering: `DebateEntryFormatter`
-appends raise entries first, responses in sequence, flag-human entries last — so
-document order within a round is deterministic and `SummaryProjector` relies on it.
+**`SummaryProjector` implements `ChannelProjection<ReviewState>`** (qhorus#230):
+Pure left-fold (`PP-20260602-b748c9`). The `apply(ReviewState, MessageView)` method
+switches on `MessageType`:
+
+```java
+return switch (message.type()) {
+    case QUERY   -> handleRaise(state, message);           // debate RAISE
+    case RESPONSE, DECLINE -> handleResponse(state, message); // AGREE/QUALIFY/DISPUTE
+    case HANDOFF -> handleFlagHuman(state, message);       // FLAG_HUMAN
+    case EVENT   -> state;   // AgentMemo — no-op (not delivered to agent context)
+    case COMMAND, STATUS, DONE, FAILURE -> state;          // not expected in DebateChannel
+};
+```
+
+AGREE vs QUALIFY sub-classification (both arrive as `RESPONSE`): convention TBD
+by #27 (DebateChannel). Likely via content prefix or `artefactRefs` field.
+
+For the v1 file-based path, a convenience method `project(List<DebateEvent> events)`
+delegates to `apply()` via synthetic `MessageView` objects:
+- `RaiseEvent` → `MessageView(type=QUERY, sender=agent.name(), content=..., correlationId=null, ...)`
+- `ResponseEvent(AGREE)` → `MessageView(type=RESPONSE, correlationId=targetId, ...)`
+- `ResponseEvent(DISPUTE)` → `MessageView(type=DECLINE, correlationId=targetId, ...)`
+- `ResponseEvent(QUALIFY)` → `MessageView(type=RESPONSE, content="[QUALIFY]"+content, ...)`
+- `FlagHumanEvent` → `MessageView(type=HANDOFF, ...)`
+- `AgentMemo` → `MessageView(type=EVENT, ...)` — folded as no-op
+
+Synthetic `MessageView` objects use `null` for Qhorus-specific fields (`id`, `channelId`,
+`createdAt`, etc.) that are only populated by the real message store.
+
+Incremental fold (qhorus#231): `ReviewSessionService` tracks the count of events
+already folded. After each round, only new events are applied to the existing
+`ReviewState` — no full replay. Cursor = event count in v1 (file-based);
+`MessageView.id()` (Long) when Qhorus-backed.
+
+Status authority: last `→ [ID] Status:` directive for each point ID in document
+order wins. Within-round ordering: `DebateEntryFormatter` appends raise entries
+first, responses in sequence, flag-human entries last — document order within a
+round is deterministic and `SummaryProjector` relies on it.
 
 **`SummaryRenderer`** — `String render(ReviewState state)`:
 Deterministic template rendering. Agreed points rendered with strikethrough headers.
@@ -230,7 +266,8 @@ override by passing an explicit `AgentType` parameter.
 2. Parse returned round snippet via `RoundParser` → `List<DebateEntry>`
 3. Format via `DebateEntryFormatter` → appendable `debate.md` text
 4. Append to `debate.md`
-5. Recompute `ReviewState` via `DebateParser` + `SummaryProjector`
+5. Incremental fold: parse full `debate.md` → `List<DebateEvent>`, apply only
+   events since last cursor via `SummaryProjector.project()`, update cursor
 6. Render via `SummaryRenderer` → rewrite `summary.md`
 7. JGit: `git add -A && git commit -m "round-N: REV|IMP"`
 
@@ -390,6 +427,8 @@ round 1, multi-point with mixed statuses.
 | `event-log-left-fold-projection.md` (PP-20260602-b748c9) | `SummaryProjector` left-fold design |
 | `auth-retrofit-readiness.md` | No auth types in SPI signatures |
 | `reactive-blocking-tier-separation.md` | `ReviewSessionService` `@Blocking`; all git operations on worker thread |
+| qhorus#230 `ChannelProjection<S>` SPI | `SummaryProjector implements ChannelProjection<ReviewState>` |
+| qhorus#231 incremental projection | Cursor-based fold in `ReviewSessionService`; cursor = event count (v1), `MessageView.id()` (v2) |
 
 ---
 
@@ -397,10 +436,11 @@ round 1, multi-point with mixed statuses.
 
 - Layer 3 DraftHouse UI (Next/Back/Run Until) — separate spec; stub REST endpoints
   above are temporary scaffolding
-- Qhorus DebateChannel (#27) — domain model designed to migrate; session infrastructure will be replaced
+- Qhorus DebateChannel (#27) — `SummaryProjector` ready; session infrastructure will be replaced
+- qhorus#232 `ProjectionRenderer<S>` SPI + named registry — `SummaryRenderer` stays local until then
 - Session storage path configurability (#28)
 - Sub-agent / context management (#26)
-- qhorus#230 `ChannelProjection<S>` SPI — implement locally first
+- `DebateAgentProvider` AGREE/QUALIFY sub-classification in `MessageType.RESPONSE` — convention TBD in #27
 - `server/parser/` as a call-path component — in-process only; CLI exists for debugging
 - Transactional round-commit atomicity — v2
 - Session-level concurrency control — v2
