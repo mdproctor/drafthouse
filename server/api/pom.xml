@@ -19,6 +19,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-qhorus-api</artifactId>
+      <version>${casehub.qhorus.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>

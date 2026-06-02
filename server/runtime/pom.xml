@@ -60,6 +60,13 @@
       <artifactId>quarkus-jdbc-h2</artifactId>
     </dependency>
 
+    <!-- JGit — local git history access for review session versioning -->
+    <dependency>
+      <groupId>org.eclipse.jgit</groupId>
+      <artifactId>org.eclipse.jgit</artifactId>
+      <version>6.9.0.202403050737-r</version>
+    </dependency>
+
     <!-- Test dependencies -->
     <dependency>
       <groupId>io.quarkus</groupId>
