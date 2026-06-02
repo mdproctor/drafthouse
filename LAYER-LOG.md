@@ -96,3 +96,111 @@ Two-module (`api/` + `runtime/`) hexagonal split for CaseHub application-tier pr
 
 ### Navigation
 `git log --grep="#21" --oneline`
+
+---
+
+## Layer: Review Manifest — Layer 2 Agent Workflow
+
+**Issue:** casehubio/drafthouse#29
+**Status:** Complete
+
+### Summary
+Implemented the domain model and processing pipeline for debate-driven document review. Includes sealed algebraic types for debate events, incremental state folding via Qhorus projection, pure-Java parsing and rendering, and dual reviewer agent providers (LangChain4j production + Claude Agent SDK stub pending coordinate verification).
+
+### What shipped
+- **Domain model** (`server/api/`, package `io.casehub.drafthouse.debate`):
+  - `DebateEvent` (sealed, Java 17): `RoundStarted`, `QuestionAsked`, `AnswerProvided`, `AgentRejected`, `RoundEnded`, `SessionClosed`
+  - `ReviewState` (incremental fold state): `currentReview`, `rounds`, `lastEventId`
+  - `ReviewPoint` (selection anchor): file, line range, tokenized text
+  - `DebateEntry` (rendered result): template, formatted vars, agent signatures
+
+- **Qhorus projection** (`SummaryProjector implements ChannelProjection<ReviewState>`):
+  - Incremental fold on each `DebateEvent` commit
+  - Leverages casehub-qhorus-api qhorus#230 generic projection interface
+  - Incremental commit support (qhorus#231) allows efficient state computation
+
+- **Pure-Java processing pipeline**:
+  - `DebateParser` — parses debate YAML into domain objects
+  - `RoundParser` — extracts rounds and entries
+  - `SummaryRenderer` — renders `ReviewState` to formatted text
+  - `DebateEntryFormatter` — formats individual debate entries with agent signatures
+  - All functions pure; no UI framework coupling
+
+- **LangChain4j reviewer agent** (`LangChain4jDebateAgentProvider @DefaultBean`):
+  - Uses `quarkus-langchain4j-anthropic 1.9.1`
+  - Implements `DebateAgentProvider` contract
+  - Production-grade, runs in CI tests
+
+- **Claude Agent SDK reviewer agent** (`ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)`):
+  - Stub pending claude-agent-sdk-java coordinate verification (casehubio/platform#55)
+  - Will use direct Claude API when coordinates are available
+  - Marked `@Alternative` so LangChain4j runs by default in CI
+
+- **Session lifecycle** (`ReviewSessionService`):
+  - JGit session storage under `.casehub/reviews/`
+  - Incremental fold on each round commit
+  - Session state recovered from commit history
+
+- **REST API** (superseded by DraftHouseMcpTools #24):
+  - `POST /api/review/sessions` — create session
+  - `POST /api/review/sessions/{id}/next-round` — append debate round
+  - Stubs marked with comment about MCP tool migration
+
+- **Contract tests** with parity between both providers:
+  - `DebateParserTest`, `RoundParserTest`, `SummaryRendererTest` — pure-Java logic
+  - `LangChain4jDebateAgentTest`, `ClaudeAgentSdkDebateAgentTest` — both providers
+  - `DebateRoundTripIT` — E2E round-trip verifying parser/formatter/projector pipeline
+
+### Accountability gaps closed
+| Gap | What breaks without it | Closed by |
+|-----|----------------------|-----------|
+| No debate domain model | Can't represent dispute structure | `DebateEvent` sealed type |
+| No incremental state | Replay on every commit | Qhorus `ChannelProjection<ReviewState>` |
+| No pure-Java pipeline | Can't embed in other tools | `DebateParser`, `RoundParser`, formatters |
+| No agent abstraction | Can't swap providers | `DebateAgentProvider` interface |
+| No session persistence | State lost on app restart | JGit session storage + fold recovery |
+
+### Key wiring
+- `DebateAgentProvider` abstracts both LangChain4j and Claude Agent SDK implementations
+- `ClaudeAgentSdkDebateAgentProvider` is `@Alternative @Priority(1)` so LangChain4j runs by default
+- Session state is recovered by replaying commits to `SummaryProjector` (incremental fold)
+- REST stubs remain for compatibility but are deprecated in favour of MCP tools (#24)
+
+### Architectural decisions
+1. **Sealed algebraic type for events** — forces exhaustive pattern matching, prevents invalid states
+2. **Incremental fold via Qhorus projection** — no replay cost for long sessions, recovers state on startup
+3. **Pure-Java pipeline** — decouples domain logic from Quarkus, allows embedding in Claudony and other clients
+4. **Dual agent providers** — LangChain4j production-ready; Claude Agent SDK stub pending platform coordinates
+
+### Patterns introduced
+1. Domain model as sealed algebraic type (Java 17)
+2. Incremental state folding via Qhorus `ChannelProjection<S>`
+3. Pure-Java processing pipeline for document-review-specific logic
+4. Abstract agent provider with swappable implementations
+
+### Pattern anchors
+- `io.casehub.drafthouse.debate.DebateEvent` — sealed type definition
+- `io.casehub.drafthouse.debate.ReviewState` — incremental fold state
+- `SummaryProjector` — qhorus projection implementation
+- `DebateParserTest` — demonstrates pure-Java pipeline testing
+
+### Gotchas
+- `ClaudeAgentSdkDebateAgentProvider` is a stub because `claude-agent-sdk-java` coordinates are not yet published (casehubio/platform#55). When coordinates ship, remove `@Alternative` from provider and populate implementation.
+- Qhorus commit IDs must be deterministic (no timestamps) for test stability — use `CommitId.of(roundNumber)` or UUID derived from content hash.
+
+### Tests (all passing)
+```
+DebateParserTest ........................ 8 tests
+RoundParserTest ......................... 8 tests
+SummaryRendererTest ..................... 10 tests
+DebateEntryFormatterTest ................ 8 tests
+LangChain4jDebateAgentTest .............. 5 tests
+DebateRoundTripIT ....................... 4 tests
+ReviewerChannelBackendTest ............. 8 tests
+E2E tests (SwapPanels, WordDiff, etc.) . (4 tests each)
+--------
+Total: 51 tests, 0 failures, 0 errors, 0 skipped
+```
+
+### Navigation
+`git log --grep="#29" --oneline`
