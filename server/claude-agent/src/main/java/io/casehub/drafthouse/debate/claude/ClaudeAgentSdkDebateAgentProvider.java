@@ -1,6 +1,8 @@
 package io.casehub.drafthouse.debate.claude;
 
-import io.casehub.drafthouse.debate.*;
+import io.casehub.drafthouse.debate.DebateAgentProvider;
+import io.casehub.drafthouse.debate.DebateEntry;
+import io.casehub.drafthouse.debate.DebateRoundContext;
 import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Alternative;

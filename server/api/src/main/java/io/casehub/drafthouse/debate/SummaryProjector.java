@@ -62,6 +62,7 @@ public class SummaryProjector implements ChannelProjection<ReviewState> {
                 location != null && !location.isBlank() ? location : null);
 
         var thread = new ArrayList<ThreadEntry>();
+        // round=0: MessageView carries no round field in the synthetic v1 path; populated by #27 DebateChannel
         thread.add(new ThreadEntry(entryId, agentType(message.sender()), 0, EntryType.RAISE, message.content()));
 
         var point  = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
@@ -72,7 +73,15 @@ public class SummaryProjector implements ChannelProjection<ReviewState> {
 
     private ReviewState handleResponse(ReviewState state, MessageView message) {
         String targetId = message.correlationId();
-        if (targetId == null || !state.points().containsKey(targetId)) return state;
+        if (targetId == null || !state.points().containsKey(targetId)) {
+            // Log at warn level so agent output issues are diagnosable
+            if (targetId != null) {
+                System.Logger logger = System.getLogger(SummaryProjector.class.getName());
+                logger.log(System.Logger.Level.WARNING,
+                        "Response references unknown point ID: {0} — discarded", targetId);
+            }
+            return state;
+        }
 
         boolean isQualify = message.content() != null
                 && message.content().startsWith("[QUALIFY] ");
@@ -94,6 +103,7 @@ public class SummaryProjector implements ChannelProjection<ReviewState> {
 
         ReviewPoint existing = state.points().get(targetId);
         var thread = new ArrayList<>(existing.thread());
+        // round=0: MessageView carries no round field in the synthetic v1 path; populated by #27 DebateChannel
         thread.add(new ThreadEntry(null, agentType(message.sender()), 0, entryType, content));
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
 
@@ -108,6 +118,7 @@ public class SummaryProjector implements ChannelProjection<ReviewState> {
         if (targetId != null && points.containsKey(targetId)) {
             ReviewPoint p = points.get(targetId);
             var thread = new ArrayList<>(p.thread());
+            // round=0: MessageView carries no round field in the synthetic v1 path; populated by #27 DebateChannel
             thread.add(new ThreadEntry(null, agentType(message.sender()), 0, EntryType.FLAG_HUMAN, message.content()));
             points.put(targetId, new ReviewPoint(p.id(), p.classification(), thread, ReviewStatus.PENDING_HUMAN));
         }

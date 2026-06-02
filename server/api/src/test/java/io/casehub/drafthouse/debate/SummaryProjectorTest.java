@@ -123,6 +123,21 @@ class SummaryProjectorTest {
     }
 
     @Test
+    void applyDoesNotMutateInputState() {
+        ReviewState initial = projector.apply(projector.identity(),
+                raise("R1-REV-001", AgentType.REV, Priority.P1, Scope.ISOLATED, null, "Point A."));
+
+        int originalPointCount = initial.points().size();
+
+        // Apply a response — must not mutate initial
+        projector.apply(initial, agree(AgentType.IMP, "R1-REV-001", "Agreed."));
+
+        // initial must be unchanged
+        assertThat(initial.points()).hasSize(originalPointCount);
+        assertThat(initial.points().get("R1-REV-001").currentStatus()).isEqualTo(ReviewStatus.OPEN);
+    }
+
+    @Test
     void incrementalFoldOnlyProcessesNewEvents() {
         List<DebateEvent> allEvents = List.of(
                 new DebateEvent.RaiseEvent("R1-REV-001", 1, AgentType.REV,

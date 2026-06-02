@@ -34,7 +34,7 @@ public class LangChain4jDebateAgentProvider implements DebateAgentProvider {
     private String summariseOpenPoints(ReviewState state) {
         return state.points().values().stream()
                 .filter(p -> p.currentStatus() != ReviewStatus.AGREED)
-                .map(p -> p.id() + ": " + p.thread().get(0).content()
+                .map(p -> p.id() + ": " + (p.thread().isEmpty() ? "(no content)" : p.thread().get(0).content())
                         + " [" + p.currentStatus() + "]")
                 .collect(Collectors.joining("\n"));
     }

@@ -30,8 +30,12 @@ public class DebateEntryFormatter {
             sb.append("**[").append(entryId).append("]** `").append(typeLabel(entry.type())).append("`");
 
             if (entry.type() == EntryType.RAISE) {
-                sb.append(" · ").append(entry.priority())
-                  .append(" · ").append(scopeLabel(entry.scope()));
+                if (entry.priority() != null) {
+                    sb.append(" · ").append(entry.priority());
+                }
+                if (entry.scope() != null) {
+                    sb.append(" · ").append(scopeLabel(entry.scope()));
+                }
                 if (entry.location() != null) sb.append(" · ").append(entry.location());
             } else if (entry.targetId() != null) {
                 sb.append(" · → [").append(entry.targetId()).append("]");

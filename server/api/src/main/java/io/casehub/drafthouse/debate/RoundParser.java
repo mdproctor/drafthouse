@@ -49,8 +49,14 @@ public class RoundParser {
         };
         if (entryType == null) return null;
 
-        Priority p = priority != null ? Priority.valueOf(priority.toUpperCase()) : null;
-        Scope s    = scope    != null ? Scope.valueOf(scope.toUpperCase())       : null;
+        Priority p = null;
+        if (priority != null) {
+            try { p = Priority.valueOf(priority.toUpperCase()); } catch (IllegalArgumentException ignored) {}
+        }
+        Scope s = null;
+        if (scope != null) {
+            try { s = Scope.valueOf(scope.toUpperCase()); } catch (IllegalArgumentException ignored) {}
+        }
         ReviewStatus rs = status != null ? parseStatus(status) : null;
 
         return new DebateEntry(entryType, target, content, rs, p, s, location);

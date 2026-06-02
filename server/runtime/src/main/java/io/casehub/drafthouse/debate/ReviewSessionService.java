@@ -32,7 +32,6 @@ public class ReviewSessionService {
     private final DebateParser         parser    = new DebateParser();
     private final SummaryProjector     projector = new SummaryProjector();
     private final SummaryRenderer      renderer  = new SummaryRenderer();
-    private final RoundParser          roundParser = new RoundParser();
     private final DebateEntryFormatter formatter = new DebateEntryFormatter();
 
     private final Map<String, ReviewSession> sessions = new ConcurrentHashMap<>();
