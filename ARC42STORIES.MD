@@ -131,7 +131,7 @@ C4Container
   Person(client, "LLM Client", "Claude Code / Claudony / MCP client")
 
   Container_Boundary(b1, "Layer: Scaffold") {
-    Container(quarkus, "Quarkus App", "Java 17 / Quarkus 3.34.3", "Serves UI and file API; SSE file watch")
+    Container(quarkus, "Quarkus App", "Java 21 / Quarkus 3.34.3", "Serves UI and file API; SSE file watch")
     Container(ui, "Browser UI", "HTML/JS — index.html", "Diff renderer, minimap, scroll sync")
   }
 
@@ -455,7 +455,13 @@ Browser-served Quarkus UI with configurable `ui.dir`, relative API URLs, and URL
 
 #### Gotchas
 
-🔲
+**Symptom:** Word-level diff highlights appear on headings only — paragraphs with changed words are silently skipped with no error.
+**Cause:** marked.js paragraph tokens have `rawLines = 0` (the trailing newline lives in the following space token, not the paragraph token itself). The position tracker in `annotateRendered` uses `rawLines` to advance; with `rawLines = 0` it stalls, making the overlap check `c.aStart < tokenEnd` fail for chunks starting at the current position.
+**Fix:** Use `Math.max(tokenEnd, line + 1)` for the overlap check only — `line` still advances by the actual `rawLines` so subsequent tokens remain correctly positioned.
+
+**Symptom:** Native file picker not available in the browser UI; document loading requires typing a path into a modal text box.
+**Cause:** Removing Electron IPC removed access to Node's `dialog.showOpenDialog`. The browser has no equivalent for a locally-served app without `<input type="file">` and a file upload flow. The replacement is `window.prompt()` — synchronous, no picker, no drag-drop.
+**Fix (interim):** URL query params (`?a=<path>&b=<path>`) handle initial document loading from the command line. The intended long-term fix is the MCP tool surface (`start_review`), which passes paths programmatically without user interaction.
 
 #### Pattern to replicate
 
@@ -707,3 +713,9 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 | **@DefaultBean** | Quarkus CDI annotation marking a bean as the default implementation, active when no `@Alternative` with higher priority is present on the classpath |
 | **@Alternative @Priority(N)** | Quarkus CDI annotations that promote a bean above `@DefaultBean`; used to displace `LangChain4jDebateAgentProvider` with `ClaudeAgentSdkDebateAgentProvider` without any configuration change |
 | **Debate Channel** | Planned Qhorus channel type (#27) for routing structured review debates; distinct from the current direct-invocation model |
+
+---
+
+## Arc42Stories Self-Assessment
+
+5. **No DESIGN.md baseline** — The §1–§8 content was adequate for system-level framing but required heavy reliance on `CLAUDE.md` and live codebase inspection to fill in class names, module paths, and Quarkus specifics that a `DESIGN.md` would have captured in one place. What was lost: per-class design rationale (why specific names, why specific method signatures), rejected alternatives (LangChain4j model selection, API path decisions), and the narrative thread between layers. These can be reconstructed from `docs/superpowers/specs/` and git log, but not at the speed of a single document read. Recommendation: for any application-tier harness with more than one layer, start a `DESIGN.md` stub early — even a one-paragraph description per section prevents this reconstruction cost at migration time.
