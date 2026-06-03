@@ -1,21 +1,19 @@
 # Handover — 2026-06-03
 
-**Branch:** `main` (clean)
+**Branch:** `issue-030-arc42stories-bootstrap` (in progress)
 
 ## Last Session
 
-Designed and implemented review manifest Layer 2 (#29): structured agent-to-agent
-spec review loop. `SummaryProjector implements ChannelProjection<ReviewState>` (qhorus#230),
-incremental fold (qhorus#231), `LangChain4jDebateAgentProvider @DefaultBean`,
-`ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` stub,
-`ReviewSessionService` (JGit). 95 tests passing. Delivered to upstream as 3 squashed
-commits (111 → 3). Two universal protocols captured; platform#55 filed.
+Bootstrapped `ARC42STORIES.MD` (#30 closed): 2 Journeys, 5 Chapters (C1–C3 ✅,
+C4–C5 🔲), 3 §9.4 Layer entries migrated from LAYER-LOG. Three-check quality gate
+caught and fixed two path errors (SummaryProjector in api/ not runtime/,
+ClaudeAgentSdkDebateAgentProvider package depth). CLAUDE.md updated; branch pushed
+to both mdproctor and casehubio.
 
 ## Immediate Next Step
 
-```
-/work
-```
+Raise PR for `issue-030-arc42stories-bootstrap` → casehubio/drafthouse, or continue
+directly to #24 (DraftHouseMcpTools).
 
 ## Cross-Module
 
@@ -29,11 +27,9 @@ commits (111 → 3). Two universal protocols captured; platform#55 filed.
 
 ## What's Left
 
-- #24 — DraftHouseMcpTools: `start_review`, `update_selection`, `end_review`
-  (Layer 3 entry point for review sessions) · M · Low
-- #25 — ReviewSessionLifecycleIT: assess whether to close or extend with H2 variant · XS · Low
-- casehubio/parent#145 — PLATFORM.md Cross-Repo Dependency Map + APPLICATIONS.md
-  (server/api now depends on casehub-qhorus-api; DraftHouse status → Active) · S · Low
+- #24 — DraftHouseMcpTools: `start_review`, `update_selection`, `end_review` · M · Low
+- #25 — ReviewSessionLifecycleIT: assess H2 variant · XS · Low
+- casehubio/parent#145 — PLATFORM.md Cross-Repo Dependency Map + APPLICATIONS.md · S · Low
 
 ## What's Next
 
@@ -50,9 +46,10 @@ commits (111 → 3). Two universal protocols captured; platform#55 filed.
 
 | Context | Where |
 |---|---|
+| Architecture record | `ARC42STORIES.MD` (primary) · `LAYER-LOG.md` (source-of-truth draft) |
 | Layer 1 spec | `docs/superpowers/specs/2026-06-01-review-manifest-design.md` |
 | Layer 2 spec | `docs/superpowers/specs/2026-06-02-review-manifest-layer2-impl-design.md` |
 | Epic | casehubio/drafthouse#20 — Phase 2 critique backend (parent) |
-| Latest blog | `blog/2026-06-02-mdp06-two-agents-and-a-fold.md` |
-| Key GEs | GE-20260602-093fea (@Blocking on CDI methods), GE-20260602-f8c7db (claude-agent-sdk not on Central) |
+| Latest blog | `blog/2026-06-03-mdp04-arc42stories-bootstrapped.md` |
+| Key GEs | GE-20260603-7ea359 (ChannelProjection is pure Java SPI, no CDI needed) |
 | Platform issues | casehubio/platform#55 (casehub-platform-agent), casehubio/parent#145 (doc sync) |

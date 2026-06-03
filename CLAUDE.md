@@ -23,7 +23,7 @@ features are Phase 2 (see research spec).
 
 **Goal:** Production-grade MCP-driven document review tool. Any LLM client opens documents, loads before/after versions, initiates reviewer agents, and conducts selection-scoped conversations grounded in specific document regions. Phase 2 wires in Qhorus channels, LangChain4j reviewer agents, and JGit versioning to add structured critique with full CaseHub accountability.
 
-**Architecture record:** `LAYER-LOG.md` tracks integration layer entries. A layer is not complete until its entry is written. Arc42Stories migration planned — layer entries will move to `ARC42STORIES.MD §9.4` when the document is bootstrapped. See `../parent/docs/arc42stories-spec.md` and `../parent/docs/arc42stories-casehub-profile.md`.
+**Architecture record:** `ARC42STORIES.MD` is the primary architecture record (Arc42Stories v0.1, CaseHub Application tier profile). `LAYER-LOG.md` is the source-of-truth draft that fed the migration; do not retire it until `ARC42STORIES.MD` has been reviewed and verified complete. New layer entries go in `ARC42STORIES.MD §9.4` directly. See `../parent/docs/arc42stories-spec.md` and `../parent/docs/arc42stories-casehub-profile.md`.
 
 ## Platform Context
 
@@ -88,7 +88,9 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `docs/FEATURES.md` | Feature backlog and DraftHouse MVP roadmap |
 | `docs/superpowers/specs/` | Design specs |
 | `docs/superpowers/plans/` | Implementation plans |
-| `LAYER-LOG.md` | Architecture layer record |
+| `ARC42STORIES.MD` | Primary architecture record (Arc42Stories v0.1) — §9.4 for layer entries |
+| `LAYER-LOG.md` | Source-of-truth draft feeding ARC42STORIES.MD; retained until migration verified |
+| `design/` | Branch scaffold — JOURNAL.md and .meta per epic branch |
 | `sample-a.md`, `sample-b.md` | Demo content for manual testing |
 | `blog/` | Project diary entries |
 
