@@ -158,11 +158,15 @@ function unwatchFile(filePath) {
   }
 }
 
-function syncPanelDOM(panel) {
+function syncPanelMeta(panel) {
   const s = panels[panel];
   $(`label-${panel}`).value = s.label;
   $(`path-${panel}`).textContent = s.path || 'No file selected';
   $(`path-${panel}`).classList.toggle('loaded', !!s.path);
+}
+
+function syncPanelContent(panel) {
+  const s = panels[panel];
   if (s.content) {
     $(`render-${panel}`).innerHTML = marked.parse(s.content);
     $(`empty-${panel}`).classList.add('hidden');
@@ -189,12 +193,14 @@ async function loadFile(panel, path) {
   const prev = panels[panel].path;
   panels[panel].path = path;
   panels[panel].label = path.split('/').pop();
+  syncPanelMeta(panel);
   if (prev && prev !== path) unwatchFile(prev);
   try {
     const content = await fetchFile(path);
     renderMarkdown(panel, content);
   } catch (err) {
     panels[panel].content = null;
+    syncPanelContent(panel);
     $(`render-${panel}`).innerHTML =
       `<p style="color:var(--error);padding:24px">Could not read file: ${err.message}</p>`;
   }
@@ -211,8 +217,7 @@ function updateSwapButton() {
 function swapPanels() {
   if (!panels.a.path || !panels.b.path) return;
   [panels.a, panels.b] = [panels.b, panels.a];
-  syncPanelDOM('a');
-  syncPanelDOM('b');
+  ['a', 'b'].forEach(p => { syncPanelMeta(p); syncPanelContent(p); });
   $('body-a').scrollTop = 0;
   $('body-b').scrollTop = 0;
   updateDiffMap();
@@ -322,7 +327,7 @@ function prevDiff() {
 
 function renderMarkdown(panel, content) {
   panels[panel].content = content;
-  syncPanelDOM(panel);
+  syncPanelContent(panel);
   updateDiffMap();
 }
 
@@ -668,13 +673,13 @@ document.addEventListener('keydown', e => {
 
 // ── Init ─────────────────────────────────────────────────────────────
 if (isElectron) {
-  window.compare.onInitConfig(cfg => {
+  window.compare.onInitConfig(async cfg => {
     API_PORT = cfg.port;
     if (_pendingFiles) {
       const { a, b } = _pendingFiles;
       _pendingFiles = null;
-      if (a) loadFile('a', a);
-      if (b) loadFile('b', b);
+      if (a) await loadFile('a', a);
+      if (b) await loadFile('b', b);
     }
   });
   window.compare.onInitFiles((a, b) => {
