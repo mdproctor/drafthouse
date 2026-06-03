@@ -114,4 +114,36 @@ class DebateParserTest {
     void emptyDebateReturnsEmptyList() {
         assertThat(parser.parse("# Debate Log\n**Spec:** /spec.md\n")).isEmpty();
     }
+
+    @Test
+    void multiLineContentJoinedWithNewlines() {
+        String debate = """
+                <!-- Round 1 — Reviewer -->
+
+                <a name="R1-REV-001"></a>
+                **[R1-REV-001]** `raise` · P1 · Isolated · §2.1
+                First paragraph of the point.
+                Second line of the same point.
+                Status: 🔴 Open
+                """;
+        List<DebateEvent> events = parser.parse(debate);
+        assertThat(events).hasSize(1);
+        DebateEvent.RaiseEvent raise = (DebateEvent.RaiseEvent) events.get(0);
+        assertThat(raise.content()).isEqualTo("First paragraph of the point.\nSecond line of the same point.");
+    }
+
+    @Test
+    void anchorWithNoHeaderDegradesToAgentMemo() {
+        // An anchor followed by content but no recognisable **[id]** `type` header → AgentMemo, not lost.
+        String debate = """
+                <!-- Round 1 — Reviewer -->
+
+                <a name="R1-REV-001"></a>
+                Some content without a valid header type.
+                """;
+        List<DebateEvent> events = parser.parse(debate);
+        assertThat(events).hasSize(1);
+        assertThat(events.get(0)).isInstanceOf(DebateEvent.AgentMemo.class);
+    }
+
 }

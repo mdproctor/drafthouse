@@ -1,6 +1,6 @@
 package io.casehub.drafthouse.debate;
 
-import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -14,11 +14,9 @@ public class DebateEntryFormatter {
         int nextSeq = nextSequenceNumber(existingDebate != null ? existingDebate : "", round, agent);
 
         // Sort: RAISE first, then AGREE/DISPUTE/QUALIFY, then FLAG_HUMAN
-        List<DebateEntry> sorted = new ArrayList<>();
-        entries.stream().filter(e -> e.type() == EntryType.RAISE).forEach(sorted::add);
-        entries.stream().filter(e -> e.type() == EntryType.AGREE
-                || e.type() == EntryType.DISPUTE || e.type() == EntryType.QUALIFY).forEach(sorted::add);
-        entries.stream().filter(e -> e.type() == EntryType.FLAG_HUMAN).forEach(sorted::add);
+        List<DebateEntry> sorted = entries.stream()
+                .sorted(Comparator.comparingInt(e -> typeOrder(e.type())))
+                .toList();
 
         var sb = new StringBuilder();
         sb.append("\n<!-- Round ").append(round).append(" — ")
@@ -52,6 +50,14 @@ public class DebateEntryFormatter {
             sb.append("\n");
         }
         return sb.toString();
+    }
+
+    private int typeOrder(EntryType type) {
+        return switch (type) {
+            case RAISE -> 0;
+            case AGREE, DISPUTE, QUALIFY -> 1;
+            case FLAG_HUMAN -> 2;
+        };
     }
 
     private int nextSequenceNumber(String existingDebate, int round, AgentType agent) {

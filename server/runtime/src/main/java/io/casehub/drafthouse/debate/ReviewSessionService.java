@@ -37,7 +37,7 @@ public class ReviewSessionService {
     private final Map<String, ReviewSession> sessions = new ConcurrentHashMap<>();
 
     public ReviewSession startSession(String specPath) {
-        String sessionId  = generateSessionId(specPath);
+        String sessionId  = generateSessionId();
         Path sessionPath  = SESSIONS_BASE.resolve(sessionId);
 
         try {
@@ -120,7 +120,7 @@ public class ReviewSessionService {
         }
     }
 
-    private String generateSessionId(String specPath) {
+    private String generateSessionId() {
         String date = LocalDate.now().format(DateTimeFormatter.BASIC_ISO_DATE);
         byte[] bytes = new byte[3];
         new SecureRandom().nextBytes(bytes);

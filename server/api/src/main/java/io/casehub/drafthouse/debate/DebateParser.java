@@ -125,7 +125,8 @@ public class DebateParser {
     private DebateEvent buildEntry(String entryId, String type, String classification,
                                    List<String> contentLines, String targetId,
                                    ReviewStatus statusDirective, int round, AgentType agent) {
-        String content = String.join(" ", contentLines).strip();
+        // Blank lines are dropped during accumulation; \n is inserted between collected lines.
+        String content = String.join("\n", contentLines).strip();
         // Derive agent from entryId (e.g. R1-REV-001 → REV)
         AgentType entryAgent = agent;
         if (entryId != null && entryId.contains("-REV-")) entryAgent = AgentType.REV;
@@ -150,6 +151,8 @@ public class DebateParser {
             case "dispute"    -> new DebateEvent.ResponseEvent(round, entryAgent, targetId, EntryType.DISPUTE,    content, statusDirective);
             case "qualify"    -> new DebateEvent.ResponseEvent(round, entryAgent, targetId, EntryType.QUALIFY,    content, statusDirective);
             case "flag_human" -> new DebateEvent.FlagHumanEvent(round, entryAgent, content, targetId, statusDirective);
+            // "" reaches here only when pendingType was never set (anchor with no entry header);
+            // ENTRY_HEADER only sets pendingType to known keywords so a non-empty unknown type cannot occur.
             default           -> new DebateEvent.AgentMemo(round, entryAgent, content);
         };
     }

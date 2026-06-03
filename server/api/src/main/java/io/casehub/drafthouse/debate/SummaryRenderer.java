@@ -1,13 +1,20 @@
 package io.casehub.drafthouse.debate;
 
 import java.time.Instant;
+import java.util.function.Supplier;
 
 public class SummaryRenderer {
+
+    private Supplier<Instant> clock = Instant::now;
+
+    void setClockForTest(Supplier<Instant> clock) {
+        this.clock = clock;
+    }
 
     public String render(ReviewState state) {
         var sb = new StringBuilder();
         sb.append("# Review Summary\n");
-        sb.append("**Updated:** ").append(Instant.now()).append("\n\n---\n\n");
+        sb.append("**Updated:** ").append(clock.get()).append("\n\n---\n\n");
 
         for (ReviewPoint point : state.points().values()) {
             String statusMarker = switch (point.currentStatus()) {
