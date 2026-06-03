@@ -1,19 +1,23 @@
 # Handover — 2026-06-03
 
-**Branch:** `issue-030-arc42stories-bootstrap` (in progress)
+**Branch:** `main` (clean)
 
 ## Last Session
 
-Bootstrapped `ARC42STORIES.MD` (#30 closed): 2 Journeys, 5 Chapters (C1–C3 ✅,
-C4–C5 🔲), 3 §9.4 Layer entries migrated from LAYER-LOG. Three-check quality gate
-caught and fixed two path errors (SummaryProjector in api/ not runtime/,
-ClaudeAgentSdkDebateAgentProvider package depth). CLAUDE.md updated; branch pushed
-to both mdproctor and casehubio.
+Verified and closed issue #30 (ARC42STORIES.MD bootstrap). Found three gaps the
+bootstrap session had missed: Java 17→21 in the §5 container diagram, Scaffold
+Gotchas still `🔲`, self-assessment section absent. Fixed all three, then ran
+work-end: squashed 6→1 (`git reset --soft` after a filter-repo ancestry failure),
+pushed to fork and upstream, branch marked closed. CLAUDE.md updated — LAYER-LOG.md
+migration now verified complete.
 
 ## Immediate Next Step
 
-Raise PR for `issue-030-arc42stories-bootstrap` → casehubio/drafthouse, or continue
-directly to #24 (DraftHouseMcpTools).
+```
+/work
+```
+
+Start issue #24 — `DraftHouseMcpTools`: `start_review`, `update_selection`, `end_review`.
 
 ## Cross-Module
 
@@ -46,10 +50,10 @@ directly to #24 (DraftHouseMcpTools).
 
 | Context | Where |
 |---|---|
-| Architecture record | `ARC42STORIES.MD` (primary) · `LAYER-LOG.md` (source-of-truth draft) |
+| Architecture record | `ARC42STORIES.MD` (§9.4 for layer entries) |
 | Layer 1 spec | `docs/superpowers/specs/2026-06-01-review-manifest-design.md` |
 | Layer 2 spec | `docs/superpowers/specs/2026-06-02-review-manifest-layer2-impl-design.md` |
-| Epic | casehubio/drafthouse#20 — Phase 2 critique backend (parent) |
+| Epic | casehubio/drafthouse#20 — Phase 2 critique backend |
 | Latest blog | `blog/2026-06-03-mdp04-arc42stories-bootstrapped.md` |
-| Key GEs | GE-20260603-7ea359 (ChannelProjection is pure Java SPI, no CDI needed) |
+| Key GEs | GE-20260520-be8d9e (filter-repo ancestry break + git reset --soft fix) |
 | Platform issues | casehubio/platform#55 (casehub-platform-agent), casehubio/parent#145 (doc sync) |

@@ -23,7 +23,7 @@ features are Phase 2 (see research spec).
 
 **Goal:** Production-grade MCP-driven document review tool. Any LLM client opens documents, loads before/after versions, initiates reviewer agents, and conducts selection-scoped conversations grounded in specific document regions. Phase 2 wires in Qhorus channels, LangChain4j reviewer agents, and JGit versioning to add structured critique with full CaseHub accountability.
 
-**Architecture record:** `ARC42STORIES.MD` is the primary architecture record (Arc42Stories v0.1, CaseHub Application tier profile). `LAYER-LOG.md` is the source-of-truth draft that fed the migration; do not retire it until `ARC42STORIES.MD` has been reviewed and verified complete. New layer entries go in `ARC42STORIES.MD §9.4` directly. See `../parent/docs/arc42stories-spec.md` and `../parent/docs/arc42stories-casehub-profile.md`.
+**Architecture record:** `ARC42STORIES.MD` is the primary architecture record (Arc42Stories v0.1, CaseHub Application tier profile). `LAYER-LOG.md` is the source-of-truth draft that fed the migration; migration verified complete 2026-06-03 — retained for historical reference only. New layer entries go in `ARC42STORIES.MD §9.4` directly. See `../parent/docs/arc42stories-spec.md` and `../parent/docs/arc42stories-casehub-profile.md`.
 
 ## Platform Context
 
