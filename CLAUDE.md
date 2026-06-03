@@ -88,7 +88,9 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `docs/FEATURES.md` | Feature backlog and DraftHouse MVP roadmap |
 | `docs/superpowers/specs/` | Design specs |
 | `docs/superpowers/plans/` | Implementation plans |
-| `LAYER-LOG.md` | Architecture layer record |
+| `ARC42STORIES.MD` | Primary architecture record (Arc42Stories v0.1) — §9.4 for layer entries |
+| `LAYER-LOG.md` | Source-of-truth draft feeding ARC42STORIES.MD; retained until migration verified |
+| `design/` | Branch scaffold — JOURNAL.md and .meta per epic branch |
 | `sample-a.md`, `sample-b.md` | Demo content for manual testing |
 | `blog/` | Project diary entries |
 
