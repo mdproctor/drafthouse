@@ -1,6 +1,7 @@
 package io.casehub.drafthouse.debate;
 
 import org.junit.jupiter.api.Test;
+import java.time.Instant;
 import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
@@ -58,5 +59,13 @@ class SummaryRendererTest {
                 new DebateEvent.AgentMemo(1, AgentType.REV, "Private thought.")));
         String output = renderer.render(state);
         assertThat(output).doesNotContain("Private thought.");
+    }
+
+    @Test
+    void renderTimestampIsControlledByClock() {
+        Instant fixed = Instant.parse("2026-01-15T10:30:00Z");
+        renderer.setClockForTest(() -> fixed);
+        String output = renderer.render(projector.identity());
+        assertThat(output).contains("2026-01-15T10:30:00Z");
     }
 }
