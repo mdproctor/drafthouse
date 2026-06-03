@@ -1,123 +1,217 @@
 # DraftHouseMcpTools Design
 
-**Issue:** drafthouse#24  
-**Date:** 2026-06-04  
-**Status:** Approved
+**Issue:** drafthouse#24
+**Date:** 2026-06-04 (revised after spec review)
+**Status:** Approved v2
 
 ## Context
 
-DraftHouse exposes document review via Qhorus channels and LangChain4j reviewer agents.
-The 501-stub `CritiqueResource` was already removed. This spec adds the MCP tool surface
-(`DraftHouseMcpTools`) through which any LLM client can initiate, update, and close review
-sessions.
+DraftHouse exposes document review via Qhorus channels and a LangChain4j reviewer agent.
+`CritiqueResource` (501 stub) was already removed. `ReviewSessionResource` is `@Deprecated`
+— the REST scaffolding is superseded by this MCP surface. The underlying debate package
+(`ReviewSessionService`, `SummaryProjector`, etc.) is NOT deprecated — it is the structured
+multi-round spec debate system tracked by issues #27 and #31, a separate feature from the
+Qhorus Q&A diff review implemented here.
 
 ## Architecture
 
 ```
-LLM client (Claude Code or similar)
+LLM client (Claude Code or any MCP client)
     │  MCP tool calls
     ▼
-DraftHouseMcpTools @ApplicationScoped   ← new (runtime)
-    │  creates channel, stores docs
+DraftHouseMcpTools @ApplicationScoped           ← new (runtime)
+    │  creates channel, stores session
     │  puts session in registry
-    │  calls initChannel() ──────────────→ ChannelInitialisedEvent (sync CDI)
-    │                                            │
-    │                                            ▼
-    │                               ReviewerChannelBackendFactory
+    │  calls initChannel() ──────────────────→  ChannelInitialisedEvent (sync CDI)
+    │                                                │
+    │                                                ▼
+    │                               ReviewerChannelBackendFactory (existing)
     │                               .onChannelInitialised()
-    │                                 → registers ReviewerChannelBackend
+    │                                 → new ReviewerChannelBackend(registry, channelId, ...)
+    │                                 → gateway.registerBackend(...)
     │
     │  injects
     ▼
-ReviewSessionRegistry (api interface) ← extended with findBySessionId()
-    │  implemented by
-    ▼
-ReviewerChannelBackendFactory @ApplicationScoped (runtime) ← minor change only
+ReviewSessionRegistry (api interface)           ← no findBySessionId needed (see §sessionId)
 ```
 
-`ReviewerChannelBackend.post()` is already implemented and handles QUERY → RESPONSE/DECLINE
-via `DocumentReviewer @AiService`. No changes to the backend or reviewer.
+`ReviewerChannelBackend.post()` must be fixed to read the live session from the registry on
+each invocation — the current `final session` field is a bug: `update_selection` swaps the
+map entry but the backend holds the original snapshot, making selection context permanently
+stale.
 
-## Changes
+## Design Decisions
 
-### api module — ReviewSessionRegistry
+### sessionId — server-generated UUID
 
-Add `findBySessionId(String sessionId)` — needed by `update_selection` and `end_review`
-to resolve a human-readable sessionId to the `ReviewSession` (keyed internally by channelId UUID).
+`start_review` generates `sessionId = UUID.randomUUID().toString()` and returns it to the
+caller. The caller supplies this sessionId to all subsequent tool calls. The registry is
+keyed by `channelId` (a UUID from `channelService.create()`); `sessionId` IS the channelId
+UUID formatted as a string. This eliminates the secondary `findBySessionId` lookup entirely:
+`update_selection` and `end_review` call `registry.find(UUID.fromString(sessionId))` directly.
 
-Implementation in `ReviewerChannelBackendFactory`: linear scan of the `sessions` map.
-Session counts are always small (O(tens)), so no secondary index is needed.
+### Document storage — on ReviewSession, not DataService
 
-### runtime module — DraftHouseMcpTools
+Documents are session-private and ephemeral. `DataService` is a cross-agent shared data bus
+with explicit GC claims — the wrong abstraction. `ReviewSession` gains two fields:
+`docAContent: String` and `docBContent: String`. `docAKey`/`docBKey` fields are removed.
+The backend reads content from the live session on each `post()` call. No DataService
+injection in either `DraftHouseMcpTools` or `ReviewerChannelBackend`.
 
-`@ApplicationScoped`. Injects: `ChannelService`, `ChannelGateway`, `DataService`,
-`InstanceService`, `ReviewSessionRegistry`, `DraftHouseConfig`.
+### Personality — config-only, no client parameter
 
-No `@Tool` method has a public same-name overload (GE-20260430-b015f5 — Jandex silently
-drops the `@Tool` if public overloads exist).
+The `personality` tool parameter is removed. Accepting a personality string from an LLM
+client and passing it to the `@SystemMessage` is a direct prompt injection vector. Always
+use `config.personality()`.
 
-#### start_review(sessionId, docAPath, docBPath, personality?)
+### File path policy — local-only, explicit risk acceptance
 
-1. Read `docAPath` and `docBPath` from local filesystem (`Files.readString`).
-2. If either doc exceeds `config.maxDocChars()`, return an error string immediately.
-3. `channelName = "drafthouse/" + sessionId`
-4. `channel = channelService.create(channelName, "DraftHouse review session", APPEND, null)`
+`Files.readString(Path.of(docAPath))` can read any file the JVM process can access. This is
+intentional for a local-only tool — consistent with the existing `FileResource` and browser
+path behaviour. The risk is accepted and documented here. Before any networked deployment,
+a configurable base-directory restriction must be added (tracked as a future hardening item).
+
+## ReviewSession record changes (api module)
+
+Remove `docAKey`, `docBKey`. Add `docAContent`, `docBContent`.
+
+```java
+public record ReviewSession(
+        UUID channelId,      // = UUID.fromString(sessionId) — registry key
+        String sessionId,    // UUID formatted as string, returned to caller
+        String instanceId,   // "drafthouse-reviewer-{sessionId}"
+        String docAContent,  // full document A text (bounded by maxDocChars)
+        String docBContent,  // full document B text (bounded by maxDocChars)
+        DocumentSide selectionSide,
+        String selectionText,
+        String personality
+)
+```
+
+## ReviewerChannelBackend changes (runtime)
+
+Replace `final ReviewSession session` field with `ReviewSessionRegistry registry` +
+`UUID channelId`. On each `post()` call:
+
+```java
+ReviewSession session = registry.find(channelId).orElse(null);
+if (session == null) return; // session ended, ignore message
+```
+
+Documents are read from `session.docAContent()` and `session.docBContent()` directly.
+No DataService injection.
+
+Constructor arguments change accordingly; `ReviewerChannelBackendFactory.onChannelInitialised()`
+passes `(registry, channelId, ...)` instead of `(session, ...)`.
+
+## MCP Tools
+
+### start_review(docAPath, docBPath) → sessionId
+
+1. Read `docAPath` and `docBPath` with `Files.readString()`.
+2. If either doc exceeds `config.maxDocChars()`, return error string immediately (no Qhorus calls).
+3. Generate `sessionId = UUID.randomUUID().toString()`. `channelName = "drafthouse/" + sessionId`.
+4. `channel = channelService.create(channelName, "DraftHouse review session", APPEND, null)`  
+   → `channel.id` is the UUID; confirm `channel.id.toString().equals(sessionId)` is NOT assumed —
+   sessionId and channelId are separate values. The channelId is `channel.id`, the sessionId
+   is the generated UUID. `update_selection` / `end_review` accept the sessionId string and
+   resolve it via `registry.find(channel.id)` — the lookup key is `channel.id`, not the sessionId.
+   **Correction:** sessionId and channelId are independent. The returned sessionId is the
+   generated UUID string. The registry is keyed by `channel.id`. `update_selection` /
+   `end_review` must carry the channel UUID somehow.
+   **Resolution:** Return `channel.id` formatted as a string as the `sessionId`. The client
+   handle IS the channelId, avoiding any secondary lookup. `registry.find(UUID.fromString(sessionId))`
+   resolves O(1). This is the clean design.
 5. `instanceId = "drafthouse-reviewer-" + sessionId`
-6. `instance = instanceService.register(instanceId, "DraftHouse reviewer for " + sessionId, List.of("document-review"))` → returns `Instance` with `UUID id`
-7. `docAKey = "drafthouse/" + sessionId + "/doc-a"`, `docBKey = "drafthouse/" + sessionId + "/doc-b"`
-8. `SharedData docA = dataService.store(docAKey, "Document A for review session " + sessionId, instanceId, docAContent, false, true)`
-9. `SharedData docB = dataService.store(docBKey, "Document B for review session " + sessionId, instanceId, docBContent, false, true)`
-10. `dataService.claim(docA.id, instance.id)` + `dataService.claim(docB.id, instance.id)` — prevents GC
-11. Resolve personality: param if non-null, else `config.personality()`
-12. `registry.put(new ReviewSession(channel.id, sessionId, instanceId, docAKey, docBKey, null, null, resolvedPersonality))`  
-    **← session MUST be in registry before step 13**
-13. `channelGateway.initChannel(channel.id, new ChannelRef(channel.id, channelName))`  
-    → fires `ChannelInitialisedEvent` synchronously → `ReviewerChannelBackendFactory.onChannelInitialised()` finds session → `ReviewerChannelBackend` registered
-14. Return `"session=" + sessionId + " channel=" + channelName`
+6. `instance = instanceService.register(instanceId, "DraftHouse reviewer " + sessionId, List.of("document-review"))`
+7. Resolve personality from `config.personality()` (no client parameter).
+8. `session = new ReviewSession(channel.id, sessionId, instanceId, docAContent, docBContent, null, null, personality)`
+9. `registry.put(session)` ← **MUST precede initChannel**
+10. `channelGateway.initChannel(channel.id, new ChannelRef(channel.id, channelName))`  
+    → synchronous CDI `ChannelInitialisedEvent` → `onChannelInitialised()` → backend registered
+11. Return JSON: `{"sessionId": "<channelId-as-string>", "channel": "<channelName>"}`
 
-Personality is resolved server-side only — never directly from client input (prompt injection risk).
+**Rollback on failure:** Wrap steps 4–10 in try-finally. On any exception after step 4,
+attempt: `registry.remove(channel.id)`, `channelService.delete(channelName, force=true)`.
+Log failures in the cleanup path but do not suppress the original exception.
 
-#### update_selection(sessionId, side, selectedText?)
+**Duplicate sessionId:** Since sessionId = channelId UUID (server-generated), collisions are
+astronomically unlikely. Guard: if `registry.find(channel.id)` is non-empty after step 4,
+return an error string without proceeding.
 
-1. `registry.findBySessionId(sessionId)` → if empty, return error
-2. `DocumentSide docSide = side != null ? DocumentSide.valueOf(side) : null`
-3. `registry.updateSelection(session.channelId(), docSide, selectedText)` — atomic record swap in factory
+### update_selection(sessionId, side, selectedText?)
 
-Pass `side=null` and `selectedText=null` to clear the active selection.
+1. `UUID channelId = UUID.fromString(sessionId)` — return error string if unparseable.
+2. `Optional<ReviewSession> s = registry.find(channelId)` — return error string if empty.
+3. `DocumentSide docSide` — parse `side` only if non-null; return error string on `IllegalArgumentException`.
+4. `registry.updateSelection(channelId, docSide, selectedText)`
+5. Return `{"sessionId": sessionId, "status": "ok"}`.
 
-#### end_review(sessionId, deleteChannel?)
+Pass `side=null, selectedText=null` to clear the active selection.
 
-1. `registry.findBySessionId(sessionId)` → if empty, return acknowledgment (idempotent)
-2. Release SharedData claims: `dataService.getByKey(session.docAKey())` → UUID, then `release(id, instanceUUID)` + docB (look up instance UUID via `instanceService.findByInstanceId(session.instanceId())`)
-3. `registry.remove(session.channelId())`
-4. If `deleteChannel=true`: `channelService.delete(channelName, force=true)`
-5. Return `"ended session=" + sessionId`
+### query_review(sessionId, question)
+
+1. `UUID channelId = UUID.fromString(sessionId)` — return error string if unparseable.
+2. `registry.find(channelId)` — return error string if no active session.
+3. `messageService.dispatch(MessageDispatch.builder().channelId(channelId).sender("<caller-instanceId>").type(QUERY).content(question).correlationId(UUID.randomUUID().toString()).actorType(ActorType.HUMAN).build())`  
+   → `ReviewerChannelBackend.post()` handles the QUERY and dispatches RESPONSE/DECLINE.
+4. Return `{"sessionId": sessionId, "status": "dispatched"}` — response arrives asynchronously
+   via the channel; the caller must listen for RESPONSE messages or poll the channel.
+5. Caller instanceId: use a fixed `"drafthouse-human"` instance registered once at startup,
+   or accept the caller's instanceId as an optional parameter. **Decision:** fixed
+   `"drafthouse-human"` registered at `@ApplicationScoped` startup — no client parameter.
+
+### end_review(sessionId, deleteChannel?)
+
+Default for `deleteChannel` is `false`. Pass `true` to fully tear down the channel.
+
+1. `UUID channelId = UUID.fromString(sessionId)` — return error string if unparseable.
+2. `registry.find(channelId)` — if empty, return `{"sessionId": sessionId, "status": "not-found"}` (idempotent).
+3. `registry.remove(channelId)`
+4. If `deleteChannel == true`:  
+   `channelService.delete("drafthouse/" + sessionId, force=true)`  
+   → `ChannelGateway.cleanupForDeletion()` is called internally, which calls `backend.close()` on every registered backend. Confirmed in ChannelGateway source — no backend leak.
+5. If `deleteChannel == false`: backend remains in gateway registry until next server restart
+   (in-memory only; not a persistence leak). The channel persists but no session handles it.
+   On restart, `ChannelInitialisedEvent` fires but `registry.find()` returns empty, so no
+   backend is re-registered.
+6. Return `{"sessionId": sessionId, "status": "ended", "channelDeleted": deleteChannel}`.
 
 **Note:** `InstanceService` has no `deregister` method. The registered instance becomes stale
-naturally when Qhorus's periodic `markStaleOlderThan()` runs. This is acceptable — per-session
-instances are ephemeral by design.
+when Qhorus's periodic `markStaleOlderThan()` runs. Acceptable for a local tool.
 
-## Error Handling
+## ReviewSessionRegistry — no changes needed
 
-- File not found or unreadable → return error string (no exception propagation to MCP client)
-- Doc size exceeded → return error string immediately before any Qhorus operations
-- Session not found in `update_selection` / `end_review` → return error string (idempotent calls are safe)
-- Qhorus failures → propagate as runtime exception (MCP server wraps in `isError:true` response)
+`find(UUID channelId)` already exists. `findBySessionId` is not needed because sessionId IS
+the channelId string representation. No new interface methods required.
 
-## Not In Scope
+## Security Summary
 
-- `CritiqueResource` deletion — already done
-- `InstanceService.deregister` — method doesn't exist; stale-instance GC handles it
-- Personality from client input — explicitly rejected (prompt injection risk)
-- `update_selection` with mismatched null/non-null side+text — validated by `ReviewSession` compact constructor
+| Concern | Policy |
+|---|---|
+| File path traversal | Accepted risk for local-only tool. Document read surface is intentional and consistent with FileResource. Harden before networked deployment. |
+| Personality injection | Removed client parameter. Always use `config.personality()`. |
+| Caller identity in query_review | Fixed `"drafthouse-human"` instance; no client-controlled identity. |
 
 ## Testing
 
-Unit tests for each `@Tool` method covering:
-- Happy path (start → update → end)
-- Doc size exceeded (start_review returns error, no Qhorus calls)
-- Session not found (update/end idempotent)
-- Personality fallback to config
+Unit tests (no Quarkus context required):
 
-Integration test (#25, separate issue) covers the full QUERY → Commitment → RESPONSE lifecycle
-with a real H2 Qhorus datasource.
+- `start_review` happy path: channel created, session in registry, initChannel called after put
+- `start_review` doc-too-large: returns error, no Qhorus calls
+- `start_review` file-not-found: returns error, no Qhorus calls
+- `start_review` partial failure: DataService/ChannelService throws → cleanup attempted
+- `update_selection` happy path: registry entry updated with new selection
+- `update_selection` invalid side string: returns error string (not exception)
+- `update_selection` session not found: returns error string
+- `update_selection` null side+text: clears selection (passes invariant check)
+- `query_review` happy path: QUERY dispatched to channel with correct correlationId
+- `query_review` session not found: returns error string
+- `end_review` happy path: session removed from registry
+- `end_review` with deleteChannel=true: channelService.delete called
+- `end_review` session not found: idempotent, returns not-found status
+- `ReviewerChannelBackend.post()` sees updated selection: update selection, post message, verify context contains new text
+- `ReviewerChannelBackend.post()` with ended session (null from registry): no dispatch
+
+Integration test (#25, separate issue) covers the full QUERY → Commitment → RESPONSE
+lifecycle with a real H2 Qhorus datasource.
