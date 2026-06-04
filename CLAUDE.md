@@ -81,7 +81,7 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
 | `server/api/` | Pure Java domain model — no Quarkus, no Qhorus; includes `debate/` package |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
-| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, ReviewerChannelBackend, debate/ |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, DraftHouseMcpTools, ReviewerChannelBackend, ReviewerChannelBackendFactory, debate/ |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (stub, pending platform#55) |
 | `server/runtime/src/main/resources/application.properties` | Quarkus config |
 | `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
@@ -102,7 +102,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/file?path=    ← read any local file
   ├── GET /api/watch?path=   ← SSE file-change stream
   ├── GET /                  ← serve index.html (from -Dui.dir)
-  └── POST /api/critique     ← 501 stub (Phase 2)
+  └── MCP tools              ← start_review, update_selection, query_review, end_review
 
 Browser UI (index.html)
   ├── fetch /api/file              ← load file content (relative URLs)

@@ -68,7 +68,7 @@ C4Context
   System_Ext(qhorus, "Qhorus Channel Mesh", "Agent communication — QUERY/RESPONSE commitment loop")
   System_Ext(anthropic, "Anthropic Claude API", "Reviewer LLM — via LangChain4j")
 
-  Rel(llm_client, drafthouse, "MCP tools — start_review, update_selection, end_review")
+  Rel(llm_client, drafthouse, "MCP tools — start_review, update_selection, query_review, end_review")
   Rel(llm_client, drafthouse, "Browser — ?a=path&b=path")
   Rel(drafthouse, filesystem, "GET /api/file, SSE /api/watch")
   Rel(drafthouse, qhorus, "ChannelProjection<ReviewState>, DebateEvent commits")
@@ -148,7 +148,7 @@ C4Container
     Container(session_svc, "ReviewSessionService", "Quarkus CDI", "JGit session storage; fold recovery on restart")
   }
 
-  Rel(client, quarkus, "MCP tools (pending #24)")
+  Rel(client, quarkus, "MCP tools — DraftHouseMcpTools (#24)")
   Rel(client, ui, "Browser — ?a=&b=")
   Rel(quarkus, api_mod, "compiles against")
   Rel(quarkus, qhorus_dep, "ChannelProjection, event commits")
@@ -186,24 +186,24 @@ sequenceDiagram
   S-->>C: SSE change event → re-fetch + re-render
 ```
 
-**Scenario 2 — Review session (pending MCP tools #24)**
+**Scenario 2 — Review session (DraftHouseMcpTools #24)**
 
-Each round commits a `DebateEvent` to the Qhorus channel; `SummaryProjector` folds the new event into `ReviewState` without replay.
+LLM client opens a review session; `ReviewerChannelBackend` handles QUERY messages via `DocumentReviewer @AiService` and dispatches RESPONSE/DECLINE to the Qhorus channel.
 
 ```mermaid
 sequenceDiagram
   participant L as LLM Client (MCP)
-  participant D as DraftHouse
-  participant Q as Qhorus
-  participant A as LangChain4j Agent
+  participant D as DraftHouseMcpTools
+  participant Q as Qhorus Channel
+  participant A as DocumentReviewer (@AiService)
 
-  L->>D: start_review(a, b) → session_id
-  L->>D: update_selection(session_id, start_line, end_line)
-  D->>A: DebateAgentProvider.runRound(selection, context)
-  A-->>D: DebateEvent (QuestionAsked, AnswerProvided, ...)
-  D->>Q: commit(DebateEvent)
-  Q->>D: SummaryProjector.fold(current, event) → ReviewState
-  L->>D: end_review(session_id) → ReviewState
+  L->>D: start_review(docAPath, docBPath) → sessionId
+  L->>D: update_selection(sessionId, side, text)
+  L->>D: query_review(sessionId, question)
+  D->>Q: dispatch(QUERY, question)
+  Q->>A: ReviewerChannelBackend.post() → llm.review(...)
+  A-->>Q: dispatch(RESPONSE, answer)
+  L->>D: end_review(sessionId, deleteChannel)
 ```
 
 ---
@@ -362,11 +362,11 @@ The review system can model a structured debate — questions, answers, rejectio
 
 #### Chapter 4 — MCP Review Interface
 
-**Journey:** Review | **Sequence:** 4 of 5 | **Status:** 🔲
+**Journey:** Review | **Sequence:** 4 of 5 | **Status:** ✅
 **Issues:** #24 | **Blog:** 🔲 at Chapter 4 close
 
 **What this delivers**
-🔲 at #24 close — `DraftHouseMcpTools`: `start_review`, `update_selection`, `end_review`. Replaces deprecated REST stubs.
+✅ `DraftHouseMcpTools`: `start_review`, `update_selection`, `query_review`, `end_review`. Replaces deprecated REST stubs (`ReviewSessionResource` deleted). `ReviewerChannelBackend` fixed to read live session from registry on each `post()` call.
 
 **Layer Impact**
 | Layer | Delta |
@@ -496,7 +496,7 @@ What this layer adds:
 - **Qhorus channel mesh dependency** — `casehub-qhorus 0.2-SNAPSHOT` on the `runtime/` classpath; `ChannelProjection` SPI resolvable; H2 `qhorus` named datasource wired for dev and test
 - **LangChain4j dependency** — `quarkus-langchain4j-anthropic 1.9.1` on the `runtime/` classpath; `@AiService` annotation available for `DebateAgentProvider` implementations
 
-Not closed here: Review domain model (no `DebateEvent` or agent), MCP tool surface (no `DraftHouseMcpTools`)
+Not closed here: Review domain model (no `DebateEvent` or agent)
 
 #### Accountability gaps closed
 
@@ -586,7 +586,7 @@ What this layer adds:
 - **Provider abstraction** — `DebateAgentProvider` SPI; `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; `ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` displaces it transparently when platform#55 ships
 - **JGit session persistence** — `ReviewSessionService` stores sessions under `~/.drafthouse/reviews/` as Git commits; state recovered on restart by replaying commits through `SummaryProjector`
 
-Not closed here: MCP tool surface (REST stubs remain; `DraftHouseMcpTools` is #24), `ProjectionRenderer` SPI (`SummaryRenderer` renders locally until qhorus#232 ships)
+Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally until qhorus#232 ships)
 
 #### Accountability gaps closed
 
@@ -680,7 +680,7 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 | # | Quality goal | Scenario | Measure |
 |---|---|---|---|
 | 1 | Portability | Domain logic embedded in Claudony without framework changes | `server/api/` has no Quarkus or Qhorus compile-scope dependencies |
-| 2 | MCP-first API | All session control available as MCP tools | `start_review`, `update_selection`, `end_review` exposed (#24) |
+| 2 | MCP-first API | All session control available as MCP tools | `start_review`, `update_selection`, `query_review`, `end_review` exposed (#24 ✅) |
 | 3 | Provider replaceability | LangChain4j replaced with Claude Agent SDK transparently | `@DefaultBean` / `@Alternative` pattern; tests pass with either provider |
 | 4 | Test coverage | Domain pipeline and agent contract tested without UI | Unit and integration tests in `server/runtime/` pass CI; 51 tests passing at C3 close |
 
@@ -693,7 +693,7 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 | `claude-agent-sdk-java` not on Maven Central | `ClaudeAgentSdkDebateAgentProvider` is a permanent stub until resolved | `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; stub is `@Alternative`; no CI impact | platform#55 |
 | `SummaryRenderer` not implementing `ProjectionRenderer` SPI | `project_channel` MCP tool (qhorus#232) can't use local renderer when it ships | Stub design documented; implement `ProjectionRenderer` once qhorus#232 delivers the SPI | qhorus#232 |
 | Session storage path hardcoded to `~/.drafthouse/reviews/` | Can't configure for CI isolation or run multiple instances | Low severity; `ReviewSessionService` accepts path via constructor for test; configurable via #28 | #28 |
-| REST stubs (`POST /api/review/sessions`) in production code | Confusion for any client discovering the REST API | Marked with deprecation comment; removed at #24 close when MCP tools ship | #24 |
+| REST stubs (`POST /api/review/sessions`) in production code | Confusion for any client discovering the REST API | Removed at #24 close — `ReviewSessionResource` deleted, `DraftHouseMcpTools` ships all session control | #24 ✅ |
 
 ---
 
