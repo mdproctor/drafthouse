@@ -192,6 +192,22 @@ class DraftHouseMcpToolsTest {
         assertThat(result).startsWith("error:");
     }
 
+    @Test
+    void updateSelection_halfNullInput_returnsError() {
+        UUID channelId = UUID.randomUUID();
+        when(registry.find(channelId)).thenReturn(Optional.of(minimalSession(channelId)));
+
+        // side provided but no text
+        String result1 = tools.updateSelection(channelId.toString(), "A", null);
+        assertThat(result1).startsWith("error:");
+
+        // text provided but no side
+        String result2 = tools.updateSelection(channelId.toString(), null, "some text");
+        assertThat(result2).startsWith("error:");
+
+        verify(registry, never()).updateSelection(any(), any(), any());
+    }
+
     // ── query_review ──────────────────────────────────────────────────────────
 
     @Test

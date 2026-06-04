@@ -141,6 +141,10 @@ public class DraftHouseMcpTools {
             }
         }
 
+        if ((docSide == null) != (selectedText == null)) {
+            return "error: side and selectedText must both be provided or both be null";
+        }
+
         registry.updateSelection(channelId, docSide, selectedText);
         return "{\"sessionId\":\"" + sessionId + "\",\"status\":\"ok\"}";
     }
