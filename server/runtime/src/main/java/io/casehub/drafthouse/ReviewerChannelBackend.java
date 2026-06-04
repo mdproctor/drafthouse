@@ -1,6 +1,7 @@
 package io.casehub.drafthouse;
 
 import java.util.Map;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 import io.casehub.platform.api.identity.ActorType;
@@ -9,7 +10,6 @@ import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
-import io.casehub.qhorus.runtime.data.DataService;
 import io.casehub.qhorus.runtime.message.MessageService;
 
 public class ReviewerChannelBackend implements ChannelBackend {
@@ -19,17 +19,17 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
     private static final Logger LOG = Logger.getLogger(ReviewerChannelBackend.class.getName());
 
-    private final ReviewSession session;
-    private final DataService dataService;
+    private final ReviewSessionRegistry registry;
+    private final UUID channelId;
     private final MessageService messageService;
     private final DocumentReviewer llm;
     private final int maxDocChars;
 
-    ReviewerChannelBackend(ReviewSession session, DataService dataService,
+    ReviewerChannelBackend(ReviewSessionRegistry registry, UUID channelId,
                            MessageService messageService, DocumentReviewer llm,
                            int maxDocChars) {
-        this.session = session;
-        this.dataService = dataService;
+        this.registry = registry;
+        this.channelId = channelId;
         this.messageService = messageService;
         this.llm = llm;
         this.maxDocChars = maxDocChars;
@@ -44,6 +44,13 @@ public class ReviewerChannelBackend implements ChannelBackend {
     public void post(ChannelRef channel, OutboundMessage message) {
         if (message.type() != MessageType.QUERY) return;
 
+        ReviewSession session = registry.find(channelId).orElse(null);
+        if (session == null) {
+            LOG.warning("ReviewerChannelBackend.post() called but session not found for channel "
+                    + channelId + " — session may have ended");
+            return;
+        }
+
         Long inReplyTo = messageService
                 .findByCorrelationId(message.correlationId().toString())
                 .map(m -> m.id)
@@ -54,11 +61,9 @@ public class ReviewerChannelBackend implements ChannelBackend {
             return;
         }
 
-        String docA = dataService.getByKey(session.docAKey()).map(d -> d.content).orElse("");
-        String docB = dataService.getByKey(session.docBKey()).map(d -> d.content).orElse("");
-
-        if (docA.length() > maxDocChars || docB.length() > maxDocChars) {
-            dispatch(channel, message, inReplyTo,
+        if (session.docAContent().length() > maxDocChars
+                || session.docBContent().length() > maxDocChars) {
+            dispatch(channel, message, inReplyTo, session,
                     ReviewResult.decline("Documents exceed the maximum size for review."));
             return;
         }
@@ -67,15 +72,17 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
         ReviewResult result;
         try {
-            result = llm.review(session.personality(), docA, docB, selectionContext, message.content());
+            result = llm.review(session.personality(), session.docAContent(),
+                    session.docBContent(), selectionContext, message.content());
         } catch (Exception e) {
             result = ReviewResult.decline("Reviewer encountered an error.");
         }
 
-        dispatch(channel, message, inReplyTo, result);
+        dispatch(channel, message, inReplyTo, session, result);
     }
 
-    private void dispatch(ChannelRef channel, OutboundMessage message, Long inReplyTo, ReviewResult result) {
+    private void dispatch(ChannelRef channel, OutboundMessage message,
+                          Long inReplyTo, ReviewSession session, ReviewResult result) {
         MessageType type = result.declined() ? MessageType.DECLINE : MessageType.RESPONSE;
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(channel.id())

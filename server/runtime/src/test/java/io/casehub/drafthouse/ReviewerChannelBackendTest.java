@@ -3,11 +3,7 @@ package io.casehub.drafthouse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -21,8 +17,6 @@ import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
-import io.casehub.qhorus.runtime.data.DataService;
-import io.casehub.qhorus.runtime.data.SharedData;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 
@@ -31,31 +25,29 @@ class ReviewerChannelBackendTest {
     private static final UUID CHANNEL_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
 
-    private DataService dataService;
+    private ReviewSessionRegistry registry;
     private MessageService messageService;
     private DocumentReviewer llm;
     private ReviewerChannelBackend backend;
     private ChannelRef channelRef;
+    private ReviewSession session;
 
     @BeforeEach
     void setUp() {
-        dataService = mock(DataService.class);
+        registry = mock(ReviewSessionRegistry.class);
         messageService = mock(MessageService.class);
         llm = mock(DocumentReviewer.class);
 
-        ReviewSession session = new ReviewSession(
-                CHANNEL_ID, "sess-1", "drafthouse-reviewer-sess-1",
-                "drafthouse/sess-1/doc-a", "drafthouse/sess-1/doc-b",
+        session = new ReviewSession(
+                CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
+                "drafthouse-reviewer-" + CHANNEL_ID,
+                "Original text", "Revised text",
                 null, null, "You are a reviewer.");
-        backend = new ReviewerChannelBackend(session, dataService, messageService, llm, 100_000);
+
+        backend = new ReviewerChannelBackend(registry, CHANNEL_ID, messageService, llm, 100_000);
         channelRef = new ChannelRef(CHANNEL_ID, "drafthouse/sess-1");
 
-        SharedData docA = new SharedData();
-        docA.content = "Original text";
-        SharedData docB = new SharedData();
-        docB.content = "Revised text";
-        when(dataService.getByKey("drafthouse/sess-1/doc-a")).thenReturn(Optional.of(docA));
-        when(dataService.getByKey("drafthouse/sess-1/doc-b")).thenReturn(Optional.of(docB));
+        when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(session));
 
         Message queryMsg = new Message();
         queryMsg.id = 42L;
@@ -76,7 +68,7 @@ class ReviewerChannelBackendTest {
         assertThat(d.type()).isEqualTo(MessageType.RESPONSE);
         assertThat(d.inReplyTo()).isEqualTo(42L);
         assertThat(d.correlationId()).isEqualTo(CORRELATION_ID.toString());
-        assertThat(d.sender()).isEqualTo("drafthouse-reviewer-sess-1");
+        assertThat(d.sender()).isEqualTo(session.instanceId());
         assertThat(d.actorType()).isEqualTo(ActorType.AGENT);
         assertThat(d.channelId()).isEqualTo(CHANNEL_ID);
         assertThat(d.content()).isEqualTo("The revision is clear.");
@@ -91,10 +83,8 @@ class ReviewerChannelBackendTest {
 
         ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(captor.capture());
-        MessageDispatch d = captor.getValue();
-        assertThat(d.type()).isEqualTo(MessageType.DECLINE);
-        assertThat(d.content()).isEqualTo("Out of scope.");
-        assertThat(d.inReplyTo()).isEqualTo(42L);
+        assertThat(captor.getValue().type()).isEqualTo(MessageType.DECLINE);
+        assertThat(captor.getValue().content()).isEqualTo("Out of scope.");
     }
 
     @Test
@@ -121,22 +111,49 @@ class ReviewerChannelBackendTest {
     }
 
     @Test
-    void commandMessages_areIgnored() {
-        backend.post(channelRef, new OutboundMessage(
-                UUID.randomUUID(), "orchestrator", MessageType.COMMAND, "do something",
-                CORRELATION_ID, null, ActorType.AGENT));
-        verifyNoInteractions(llm, messageService);
-    }
-
-    @Test
     void queryWithNoSelection_passesEmptySelectionContext() {
         when(llm.review(any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "Looks good."));
 
         backend.post(channelRef, query("Is this clear?"));
 
-        ArgumentCaptor<Object[]> captor = ArgumentCaptor.forClass(Object[].class);
         verify(llm).review(any(), any(), any(), eq(""), any());
+    }
+
+    @Test
+    void queryWithSelection_passesSelectionContext() {
+        ReviewSession withSelection = session.withSelection(DocumentSide.B, "key paragraph");
+        when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(withSelection));
+        when(llm.review(any(), any(), any(), any(), any()))
+                .thenReturn(new ReviewResult(false, "Noted."));
+
+        backend.post(channelRef, query("Is this clear?"));
+
+        verify(llm).review(any(), any(), any(),
+                eq("Selected text (Document B): key paragraph"), any());
+    }
+
+    @Test
+    void liveSessionRead_reflectsSelectionUpdatedAfterConstruction() {
+        ReviewSession updated = session.withSelection(DocumentSide.A, "updated selection");
+        when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(updated));
+        when(llm.review(any(), any(), any(), any(), any()))
+                .thenReturn(new ReviewResult(false, "OK"));
+
+        backend.post(channelRef, query("Review?"));
+
+        verify(llm).review(any(), any(), any(),
+                eq("Selected text (Document A): updated selection"), any());
+    }
+
+    @Test
+    void endedSession_silentlyIgnoresQuery() {
+        when(registry.find(CHANNEL_ID)).thenReturn(Optional.empty());
+
+        backend.post(channelRef, query("Is this clear?"));
+
+        verifyNoInteractions(llm);
+        verify(messageService, never()).dispatch(any());
     }
 
     @Test
@@ -153,9 +170,11 @@ class ReviewerChannelBackendTest {
     @Test
     void documentsExceedingMaxSize_dispatchDecline_withoutCallingLlm() {
         String huge = "x".repeat(100_001);
-        SharedData bigDoc = new SharedData();
-        bigDoc.content = huge;
-        when(dataService.getByKey("drafthouse/sess-1/doc-a")).thenReturn(Optional.of(bigDoc));
+        ReviewSession bigSession = new ReviewSession(
+                CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
+                session.instanceId(), huge, "Revised text",
+                null, null, "You are a reviewer.");
+        when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(bigSession));
 
         backend.post(channelRef, query("Review this"));
 

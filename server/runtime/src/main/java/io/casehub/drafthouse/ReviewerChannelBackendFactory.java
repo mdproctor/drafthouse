@@ -9,7 +9,6 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 import io.casehub.qhorus.api.gateway.ChannelInitialisedEvent;
-import io.casehub.qhorus.runtime.data.DataService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.message.MessageService;
 
@@ -17,7 +16,6 @@ import io.casehub.qhorus.runtime.message.MessageService;
 public class ReviewerChannelBackendFactory implements ReviewSessionRegistry {
 
     @Inject ChannelGateway gateway;
-    @Inject DataService dataService;
     @Inject MessageService messageService;
     @Inject DocumentReviewer llm;
     @Inject DraftHouseConfig config;
@@ -26,10 +24,9 @@ public class ReviewerChannelBackendFactory implements ReviewSessionRegistry {
 
     void onChannelInitialised(@Observes ChannelInitialisedEvent event) {
         if (!event.channelName().startsWith("drafthouse/")) return;
-        ReviewSession session = sessions.get(event.channelId());
-        if (session == null) return;
+        if (!sessions.containsKey(event.channelId())) return;
         ReviewerChannelBackend backend = new ReviewerChannelBackend(
-                session, dataService, messageService, llm, config.maxDocChars());
+                this, event.channelId(), messageService, llm, config.maxDocChars());
         gateway.deregisterBackend(event.channelId(), ReviewerChannelBackend.BACKEND_ID);
         gateway.registerBackend(event.channelId(), backend, ReviewerChannelBackend.BACKEND_TYPE);
     }
