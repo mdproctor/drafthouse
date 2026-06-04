@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,9 +19,7 @@ import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.channel.Channel;
 import io.casehub.qhorus.runtime.channel.ChannelService;
-import io.casehub.qhorus.runtime.data.DataService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
-import io.casehub.qhorus.runtime.instance.InstanceService;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.quarkus.test.InjectMock;
@@ -35,8 +32,6 @@ class ReviewSessionLifecycleIT {
     @Inject ChannelService channelService;
     @Inject ChannelGateway gateway;
     @Inject MessageService messageService;
-    @Inject DataService dataService;
-    @Inject InstanceService instanceService;
 
     @InjectMock DocumentReviewer documentReviewer;
 
@@ -48,23 +43,18 @@ class ReviewSessionLifecycleIT {
 
     @Test
     void query_dispatchesResponse_andResponseIsFound() {
-        String sessionId = UUID.randomUUID().toString().substring(0, 8);
-        String channelName = "drafthouse/" + sessionId;
+        Channel channel = channelService.create(
+                "drafthouse/" + UUID.randomUUID(), "Test session", ChannelSemantic.APPEND, null);
+        String sessionId = channel.id.toString();
         String instanceId = "drafthouse-reviewer-" + sessionId;
 
-        Channel channel = channelService.create(channelName, "Test session", ChannelSemantic.APPEND, null);
-        instanceService.register(instanceId, "Test reviewer", List.of("document-review"));
-        dataService.store("drafthouse/" + sessionId + "/doc-a", null, instanceId, "Original text", false, true);
-        dataService.store("drafthouse/" + sessionId + "/doc-b", null, instanceId, "Revised text", false, true);
-
         ReviewSession session = new ReviewSession(
-                channel.id, sessionId, instanceId,
-                "drafthouse/" + sessionId + "/doc-a",
-                "drafthouse/" + sessionId + "/doc-b",
+                channel.id, sessionId, channel.name, instanceId,
+                "Original text", "Revised text",
                 null, null, "You are a reviewer.");
         factory.put(session);
 
-        gateway.initChannel(channel.id, new ChannelRef(channel.id, channelName));
+        gateway.initChannel(channel.id, new ChannelRef(channel.id, channel.name));
 
         String correlationId = UUID.randomUUID().toString();
         messageService.dispatch(MessageDispatch.builder()
@@ -76,7 +66,6 @@ class ReviewSessionLifecycleIT {
                 .actorType(ActorType.HUMAN)
                 .build());
 
-        // fanOut runs the backend on a virtual thread — poll until the RESPONSE appears or timeout.
         Optional<Message> response = Optional.empty();
         for (int i = 0; i < 40 && response.isEmpty(); i++) {
             try { Thread.sleep(50); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
@@ -92,7 +81,6 @@ class ReviewSessionLifecycleIT {
     void startupRecovery_skipsChannelWithNoSession() {
         Channel channel = channelService.create(
                 "drafthouse/orphan-" + UUID.randomUUID(), "Orphan", ChannelSemantic.APPEND, null);
-
         gateway.initChannel(channel.id, new ChannelRef(channel.id, channel.name));
 
         String correlationId = UUID.randomUUID().toString();
@@ -105,15 +93,15 @@ class ReviewSessionLifecycleIT {
                 .actorType(ActorType.HUMAN)
                 .build());
 
-        Optional<Message> response = messageService.findResponseByCorrelationId(channel.id, correlationId);
-        assertThat(response).isEmpty();
+        assertThat(messageService.findResponseByCorrelationId(channel.id, correlationId)).isEmpty();
     }
 
     @Test
     void factory_find_returnsSession_afterPut() {
         UUID channelId = UUID.randomUUID();
         ReviewSession session = new ReviewSession(
-                channelId, "s", "i", "k-a", "k-b", null, null, "personality");
+                channelId, channelId.toString(), "drafthouse/test",
+                "iid", "docA", "docB", null, null, "personality");
         factory.put(session);
         assertThat(factory.find(channelId)).contains(session);
     }
@@ -122,7 +110,8 @@ class ReviewSessionLifecycleIT {
     void factory_remove_clearsSession() {
         UUID channelId = UUID.randomUUID();
         ReviewSession session = new ReviewSession(
-                channelId, "s", "i", "k-a", "k-b", null, null, "personality");
+                channelId, channelId.toString(), "drafthouse/test",
+                "iid", "docA", "docB", null, null, "personality");
         factory.put(session);
         factory.remove(channelId);
         assertThat(factory.find(channelId)).isEmpty();
@@ -132,7 +121,8 @@ class ReviewSessionLifecycleIT {
     void factory_updateSelection_replacesSelectionFields() {
         UUID channelId = UUID.randomUUID();
         ReviewSession session = new ReviewSession(
-                channelId, "s", "i", "k-a", "k-b", null, null, "personality");
+                channelId, channelId.toString(), "drafthouse/test",
+                "iid", "docA", "docB", null, null, "personality");
         factory.put(session);
         factory.updateSelection(channelId, DocumentSide.A, "selected text");
         ReviewSession updated = factory.find(channelId).orElseThrow();
