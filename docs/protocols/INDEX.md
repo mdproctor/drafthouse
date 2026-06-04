@@ -8,3 +8,5 @@
 | [playwright-jserrors-in-afterall.md](playwright-jserrors-in-afterall.md) | All describe blocks must destructure jsErrors and guard-assert in afterAll | electron-tests/e2e/*.spec.js |
 | [playwright-page-lifecycle.md](playwright-page-lifecycle.md) | @QuarkusTest Playwright classes must use @WithPlaywright and @BeforeEach/@AfterEach page.close() | server/src/test/java/io/casehub/drafthouse/e2e/ |
 | [playwright-render-complete-signal.md](playwright-render-complete-signal.md) | Wait for [data-diff-chunk] as render-complete signal — not content elements | server/src/test/java/io/casehub/drafthouse/e2e/ |
+| [mcp-tool-error-strings.md](mcp-tool-error-strings.md) | @Tool methods must return "error: ..." strings — never propagate exceptions | DraftHouseMcpTools and any future @Tool class |
+| [mcp-tool-llm-prompt-injection.md](mcp-tool-llm-prompt-injection.md) | @Tool parameters must not flow raw into LLM prompts — use config or server-side allowlist | DraftHouseMcpTools @Tool methods that interact with @AiService |
