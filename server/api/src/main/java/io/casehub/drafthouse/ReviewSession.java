@@ -9,15 +9,20 @@ import java.util.UUID;
  * or both non-null when a selection is active. Mixed state is rejected by the
  * compact constructor.
  *
- * instanceId is the per-session Qhorus instance ID registered at start_review time.
- * docAKey and docBKey are Qhorus SharedData keys: "drafthouse/{sessionId}/doc-a" etc.
+ * channelName is stored explicitly because the naming slug ("drafthouse/{uuid}")
+ * is independent from channel.id — it cannot be reconstructed from sessionId.
+ *
+ * docAContent and docBContent store the full document text. Content is session-private
+ * and ephemeral; using Qhorus DataService (cross-agent shared bus) would be the wrong
+ * abstraction for this use case.
  */
 public record ReviewSession(
-        UUID channelId,
-        String sessionId,
-        String instanceId,
-        String docAKey,
-        String docBKey,
+        UUID channelId,       // registry key; also UUID.fromString(sessionId)
+        String sessionId,     // channel.id.toString() — the caller's stable handle
+        String channelName,   // "drafthouse/{slug}" — needed by end_review for deletion
+        String instanceId,    // "drafthouse-reviewer-{sessionId}"
+        String docAContent,   // full text of document A (bounded by maxDocChars)
+        String docBContent,   // full text of document B (bounded by maxDocChars)
         DocumentSide selectionSide,  // null = no selection active (must match selectionText)
         String selectionText,        // null = no selection active (must match selectionSide)
         String personality
@@ -29,17 +34,10 @@ public record ReviewSession(
         }
     }
 
-    /**
-     * Returns a new ReviewSession with updated selection, preserving all other fields.
-     * Pass null for both arguments to clear the selection.
-     *
-     * @param side null clears the selection; text must also be null when side is null
-     * @param text null clears the selection; side must also be null when text is null
-     */
     public ReviewSession withSelection(final DocumentSide side, final String text) {
         return new ReviewSession(
-                channelId, sessionId, instanceId, docAKey, docBKey,
-                side, text, personality
+                channelId, sessionId, channelName, instanceId,
+                docAContent, docBContent, side, text, personality
         );
     }
 }

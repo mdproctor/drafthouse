@@ -1,9 +1,7 @@
 package io.casehub.drafthouse;
 
 import org.junit.jupiter.api.Test;
-
 import java.util.UUID;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class ReviewSessionTest {
@@ -13,10 +11,11 @@ class ReviewSessionTest {
     private ReviewSession minimal() {
         return new ReviewSession(
                 CHANNEL_ID,
-                "session-1",
-                "drafthouse-reviewer-session-1",
-                "drafthouse/session-1/doc-a",
-                "drafthouse/session-1/doc-b",
+                CHANNEL_ID.toString(),
+                "drafthouse/test-channel",
+                "drafthouse-reviewer-" + CHANNEL_ID,
+                "Content of document A",
+                "Content of document B",
                 null,
                 null,
                 "You are a reviewer."
@@ -25,33 +24,36 @@ class ReviewSessionTest {
 
     @Test
     void constructsWithRequiredFields() {
-        var session = minimal();
-        assertEquals(CHANNEL_ID, session.channelId());
-        assertEquals("session-1", session.sessionId());
-        assertEquals("drafthouse-reviewer-session-1", session.instanceId());
-        assertEquals("drafthouse/session-1/doc-a", session.docAKey());
-        assertEquals("drafthouse/session-1/doc-b", session.docBKey());
-        assertNull(session.selectionSide());
-        assertNull(session.selectionText());
-        assertEquals("You are a reviewer.", session.personality());
+        var s = minimal();
+        assertEquals(CHANNEL_ID, s.channelId());
+        assertEquals(CHANNEL_ID.toString(), s.sessionId());
+        assertEquals("drafthouse/test-channel", s.channelName());
+        assertEquals("drafthouse-reviewer-" + CHANNEL_ID, s.instanceId());
+        assertEquals("Content of document A", s.docAContent());
+        assertEquals("Content of document B", s.docBContent());
+        assertNull(s.selectionSide());
+        assertNull(s.selectionText());
+        assertEquals("You are a reviewer.", s.personality());
     }
 
     @Test
     void constructsWithSelection() {
-        var session = new ReviewSession(
-                CHANNEL_ID, "s", "i", "a", "b",
+        var s = new ReviewSession(
+                CHANNEL_ID, "sid", "cname", "iid", "docA", "docB",
                 DocumentSide.A, "selected text", "persona"
         );
-        assertEquals(DocumentSide.A, session.selectionSide());
-        assertEquals("selected text", session.selectionText());
+        assertEquals(DocumentSide.A, s.selectionSide());
+        assertEquals("selected text", s.selectionText());
     }
 
     @Test
     void halfNullSelectionStateRejected() {
         assertThrows(IllegalArgumentException.class, () ->
-                new ReviewSession(CHANNEL_ID, "s", "i", "a", "b", DocumentSide.A, null, "p"));
+                new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b",
+                        DocumentSide.A, null, "p"));
         assertThrows(IllegalArgumentException.class, () ->
-                new ReviewSession(CHANNEL_ID, "s", "i", "a", "b", null, "text", "p"));
+                new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b",
+                        null, "text", "p"));
     }
 
     @Test
@@ -63,26 +65,24 @@ class ReviewSessionTest {
     void withSelectionReturnsNewRecord() {
         var original = minimal();
         var updated = original.withSelection(DocumentSide.B, "some text");
-        // original unchanged
         assertNull(original.selectionSide());
-        // updated carries selection
         assertEquals(DocumentSide.B, updated.selectionSide());
         assertEquals("some text", updated.selectionText());
-        // all fields preserved
         assertEquals(original.channelId(), updated.channelId());
         assertEquals(original.sessionId(), updated.sessionId());
+        assertEquals(original.channelName(), updated.channelName());
         assertEquals(original.instanceId(), updated.instanceId());
-        assertEquals(original.docAKey(), updated.docAKey());
-        assertEquals(original.docBKey(), updated.docBKey());
+        assertEquals(original.docAContent(), updated.docAContent());
+        assertEquals(original.docBContent(), updated.docBContent());
         assertEquals(original.personality(), updated.personality());
     }
 
     @Test
     void withSelectionClearsSelection() {
-        var withSelection = new ReviewSession(
-                CHANNEL_ID, "s", "i", "a", "b", DocumentSide.A, "text", "p"
+        var withSel = new ReviewSession(
+                CHANNEL_ID, "s", "cn", "i", "a", "b", DocumentSide.A, "text", "p"
         );
-        var cleared = withSelection.withSelection(null, null);
+        var cleared = withSel.withSelection(null, null);
         assertNull(cleared.selectionSide());
         assertNull(cleared.selectionText());
     }
