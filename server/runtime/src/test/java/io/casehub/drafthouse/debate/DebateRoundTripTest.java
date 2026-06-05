@@ -1,6 +1,5 @@
 package io.casehub.drafthouse.debate;
 
-import io.quarkus.test.junit.QuarkusTest;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -11,7 +10,6 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.*;
 
-@QuarkusTest
 class DebateRoundTripTest {
 
     private final RoundParser           roundParser = new RoundParser();
