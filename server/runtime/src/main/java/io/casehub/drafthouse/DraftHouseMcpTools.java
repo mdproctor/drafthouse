@@ -69,11 +69,11 @@ public class DraftHouseMcpTools {
         String docBContent = readFile(docBPath);
         if (docBContent == null) return "error: could not read document B: " + docBPath;
 
-        if (docAContent.length() > config.maxDocChars()) {
-            return "error: document A exceeds maximum size of " + config.maxDocChars() + " characters";
+        if (docAContent.length() > config.reviewer().maxDocChars()) {
+            return "error: document A exceeds maximum size of " + config.reviewer().maxDocChars() + " characters";
         }
-        if (docBContent.length() > config.maxDocChars()) {
-            return "error: document B exceeds maximum size of " + config.maxDocChars() + " characters";
+        if (docBContent.length() > config.reviewer().maxDocChars()) {
+            return "error: document B exceeds maximum size of " + config.reviewer().maxDocChars() + " characters";
         }
 
         String channelSlug = UUID.randomUUID().toString();
@@ -93,7 +93,7 @@ public class DraftHouseMcpTools {
 
             ReviewSession session = new ReviewSession(
                     channel.id, sessionId, resolvedChannelName, instanceId,
-                    docAContent, docBContent, null, null, config.personality());
+                    docAContent, docBContent, null, null, config.reviewer().personality());
 
             // MUST put session in registry before initChannel — onChannelInitialised()
             // reads from the registry synchronously during the CDI event.
