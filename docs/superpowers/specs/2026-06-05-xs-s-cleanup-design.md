@@ -44,9 +44,9 @@ alternative deployments and test isolation.
 #### `DraftHouseConfig` restructure
 
 Change from a flat `@ConfigMapping(prefix = "casehub.drafthouse.reviewer")` to a
-nested design with `@ConfigMapping(prefix = "casehub.drafthouse")`. The config keys
-in `application.properties` are **unchanged** — `casehub.drafthouse.reviewer.personality`
-and `casehub.drafthouse.reviewer.max-doc-chars` resolve identically under the nested
+nested design with `@ConfigMapping(prefix = "casehub.drafthouse")`. The existing
+config keys are **unchanged** — `casehub.drafthouse.reviewer.personality` and
+`casehub.drafthouse.reviewer.max-doc-chars` resolve identically under the nested
 structure.
 
 ```java
@@ -55,23 +55,36 @@ structure.
 public interface DraftHouseConfig {
 
     Reviewer reviewer();
-    Session session();
+    Storage storage();
 
     interface Reviewer {
         String personality();
         @WithDefault("100000") int maxDocChars();
     }
 
-    interface Session {
+    interface Storage {
         /** Storage root for review session files. Defaults to ~/.drafthouse/reviews. */
-        Optional<String> storage();
+        @WithDefault("${user.home}/.drafthouse/reviews")
+        Path storageRoot();
     }
 }
 ```
 
-`Optional<String>` is used instead of `@WithDefault` because the default involves
-`System.getProperty("user.home")`, which must be resolved at runtime in code rather
-than relying on SmallRye expression expansion in annotation strings.
+**Why `@WithDefault` with an expression works here:** SmallRye Config's `@WithDefault`
+in a `@ConfigMapping` is processed through the expression interceptor chain, unlike
+MicroProfile's `@ConfigProperty#defaultValue` which the MicroProfile spec explicitly
+excludes from expression expansion. The expression `${user.home}` resolves from the
+System Properties `ConfigSource` (ordinal 400). SmallRye Config also includes a
+built-in `Path` converter, so the return type is `Path` directly — no
+`Optional<String>` or `@PostConstruct` needed.
+
+**Expression syntax note:** `${sys:user.home}` (single colon) is the *fallback-value*
+syntax — it means "expand property `sys`; if not found, use literal `user.home`" — and
+would produce the wrong result. The correct explicit system-property handler uses double
+colon: `${sys::user.home}`. The plain `${user.home}` is equivalent and preferred.
+
+The config key for the new property is: `casehub.drafthouse.storage.storage-root`
+(SmallRye converts `storageRoot()` to kebab-case).
 
 #### Caller migration (mechanical)
 
@@ -83,50 +96,72 @@ Two production callers of the flat `DraftHouseConfig` methods must update:
 | `DraftHouseMcpTools` | `config.maxDocChars()` | `config.reviewer().maxDocChars()` |
 | `ReviewerChannelBackendFactory` | `config.maxDocChars()` | `config.reviewer().maxDocChars()` |
 
-`DraftHouseMcpToolsTest` mock setup updates from `when(config.personality())` to
-`when(config.reviewer().personality())` and similarly for `maxDocChars()`.
-
 #### `ReviewSessionService` update
 
-Replace the static constant with a CDI-injected config and instance field:
+Drop the static constant entirely. Inject `DraftHouseConfig` and call
+`config.storage().storageRoot()` at the point of use:
 
 ```java
 @Inject DraftHouseConfig config;
-private Path sessionsBase;
 
-@PostConstruct
-void init() {
-    sessionsBase = config.session().storage()
-        .map(Path::of)
-        .orElseGet(() -> Path.of(System.getProperty("user.home"), ".drafthouse", "reviews"));
+public ReviewSession startSession(String specPath) {
+    String sessionId = generateSessionId();
+    Path sessionPath = config.storage().storageRoot().resolve(sessionId);
+    // ...
 }
 ```
 
-All internal references to `SESSIONS_BASE` become `sessionsBase`.
+No `@PostConstruct`, no mutable instance field, no package-private visibility leak.
+SmallRye resolves the path once at config load time; every call to `storageRoot()`
+returns the same cached `Path`.
 
 #### `application.properties` addition
 
 ```properties
-# Review session storage path (defaults to ~/.drafthouse/reviews if not set)
-# casehub.drafthouse.session.storage=/custom/path
+# Review session storage root (defaults to ~/.drafthouse/reviews)
+# casehub.drafthouse.storage.storage-root=/custom/path
+%test.casehub.drafthouse.storage.storage-root=${java.io.tmpdir}/drafthouse-test-sessions
 ```
 
-No test-profile override is added because `ReviewSessionService` is currently a dead
-bean (no callers) — its `@PostConstruct` never fires in tests. When #27 is implemented
-and sessions are exercised in integration tests, a `%test.casehub.drafthouse.session.storage`
-pointing to a temp directory should be added at that time.
+The `%test` override is a failsafe: `ReviewSessionService` is not yet injected by any
+live CDI bean, so its config is validated at Quarkus startup but `startSession()` is
+never called in the current test suite. When #27 wires this service into live MCP
+tooling, integration tests that exercise `startSession()` will need the temp-dir
+override to avoid writing to `~/.drafthouse/reviews`. Adding it now prevents that
+oversight.
 
-### Testing
+**Deferred risk:** If any bean or test starts injecting `ReviewSessionService` before
+#27 is complete, the `%test` override ensures `startSession()` writes to a temp dir
+rather than the real home directory.
 
-A new plain-JUnit test `ReviewSessionServiceStorageTest` (no `@QuarkusTest`) verifies
-the two path-resolution cases:
+#### No dedicated storage test
 
-1. `Optional.empty()` → resolves to `~/.drafthouse/reviews`
-2. `Optional.of("/custom/path")` → resolves to `/custom/path`
+The `@WithDefault` expression resolution is SmallRye Config's behaviour to test, not
+ours. The storage path config is covered by the `%test` override in
+`application.properties` (which exercises the real Quarkus config machinery in
+`ReviewSessionLifecycleTest`) and will gain behavioral test coverage — via
+`startSession()` with a `@TempDir` storage root — when #27 makes
+`ReviewSessionService` live.
 
-This requires `sessionsBase` to be package-private (not `private`) in
-`ReviewSessionService` so the test can assert it directly after calling `init()`
-with a mocked `DraftHouseConfig`.
+#### Mock setup for `DraftHouseMcpToolsTest` (two-level, not deep stubs)
+
+`DraftHouseMcpTools` calls `config.reviewer().personality()` and
+`config.reviewer().maxDocChars()`. A plain `mock(DraftHouseConfig.class)` returns
+`null` from `config.reviewer()`, which causes `NullPointerException` during Mockito
+stub setup — not at test execution time. Deep stubs (`RETURNS_DEEP_STUBS`) hide this
+but produce over-mocked objects that are hard to reason about. The correct pattern is
+explicit two-level mocking:
+
+```java
+config = mock(DraftHouseConfig.class);
+DraftHouseConfig.Reviewer reviewer = mock(DraftHouseConfig.Reviewer.class);
+when(config.reviewer()).thenReturn(reviewer);
+when(reviewer.personality()).thenReturn("You are a reviewer.");
+when(reviewer.maxDocChars()).thenReturn(100_000);
+```
+
+This applies to `setUp()` in `DraftHouseMcpToolsTest`. All 11 existing test methods
+use the shared `setUp()` — updating it once is sufficient.
 
 ---
 
@@ -135,10 +170,17 @@ with a mocked `DraftHouseConfig`.
 | File | Change |
 |------|--------|
 | `server/runtime/.../debate/DebateRoundTripTest.java` | Remove `@QuarkusTest` + import |
-| `server/runtime/.../DraftHouseConfig.java` | Restructure to nested `Reviewer` + `Session` |
+| `server/runtime/.../DraftHouseConfig.java` | Restructure to nested `Reviewer` + `Storage`; add `Storage.storageRoot()` |
 | `server/runtime/.../DraftHouseMcpTools.java` | `config.reviewer().*` call sites |
 | `server/runtime/.../ReviewerChannelBackendFactory.java` | `config.reviewer().maxDocChars()` |
-| `server/runtime/.../debate/ReviewSessionService.java` | Inject config, drop static constant, `@PostConstruct init()` |
-| `server/runtime/src/main/resources/application.properties` | Document session storage key |
-| `server/runtime/.../DraftHouseMcpToolsTest.java` | Mock setup for nested config |
-| `server/runtime/.../debate/ReviewSessionServiceStorageTest.java` | New test for path resolution |
+| `server/runtime/.../debate/ReviewSessionService.java` | `@Inject DraftHouseConfig`; drop static constant; call `config.storage().storageRoot()` inline |
+| `server/runtime/src/main/resources/application.properties` | Document `storage-root` key; add `%test` override |
+| `server/runtime/.../DraftHouseMcpToolsTest.java` | Two-level mock setup for `Reviewer` sub-interface |
+
+## Files verified unchanged
+
+| File | Why unaffected |
+|------|----------------|
+| `server/runtime/.../ReviewerChannelBackendTest.java` | Constructs `ReviewerChannelBackend` directly with `maxDocChars` as a primitive int argument — does not touch `DraftHouseConfig` |
+| `server/runtime/.../ReviewSessionRegistryTest.java` | Tests the registry in isolation with no config dependency |
+| `server/runtime/.../ReviewSessionLifecycleTest.java` | `@QuarkusTest` — Quarkus wires real config from `application.properties`; the `%test` override for `storage-root` means the test profile resolves correctly without any change to the test class itself |
