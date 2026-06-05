@@ -216,7 +216,7 @@ sequenceDiagram
 | Run command | `java -Dui.dir=<project-root> -jar drafthouse-server-runner.jar` |
 | Default port | `9001` — override via `quarkus.http.port` |
 | UI resolution | `-Dui.dir` JVM property → `UiResource` reads `index.html` and `styles.css` |
-| Session storage | `~/.drafthouse/reviews/` (JGit; path configurable via #28) |
+| Session storage | `~/.drafthouse/reviews/` (JGit; override via `casehub.drafthouse.storage.root`) |
 | Qhorus datasource | H2 in-memory with `MODE=PostgreSQL` for dev/test; PostgreSQL named `qhorus` for prod |
 | Build command | `mvn -f server/pom.xml package -DskipTests` |
 
@@ -588,7 +588,7 @@ What this layer adds:
 - **Incremental fold via Qhorus projection** — `SummaryProjector implements ChannelProjection<ReviewState>`; Qhorus calls `fold()` on each new commit; state computation is O(1) per event, not O(n) replay
 - **Pure-Java processing pipeline** — `DebateParser`, `RoundParser`, `SummaryRenderer`, `DebateEntryFormatter` in `server/api/`; no Quarkus or UI coupling; importable in Claudony as a plain JAR
 - **Provider abstraction** — `DebateAgentProvider` SPI; `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; `ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` displaces it transparently when platform#55 ships
-- **JGit session persistence** — `ReviewSessionService` stores sessions under `~/.drafthouse/reviews/` as Git commits; state recovered on restart by replaying commits through `SummaryProjector`
+- **JGit session persistence** — `ReviewSessionService` stores sessions under `~/.drafthouse/reviews/` by default (configurable via `casehub.drafthouse.storage.root`); each session is a Git repo; state recovered on restart by replaying commits through `SummaryProjector`
 
 Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally; qhorus#232 ✅ shipped — migration to `ChannelProjection` SPI tracked in #31)
 
@@ -696,7 +696,7 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 |---|---|---|---|
 | `claude-agent-sdk-java` not on Maven Central | `ClaudeAgentSdkDebateAgentProvider` is a permanent stub until resolved | `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; stub is `@Alternative`; no CI impact | platform#55 |
 | `SummaryRenderer` not implementing `ChannelProjection` SPI | Projection remains local file-parser; deterministic fold via Qhorus SPI unavailable | qhorus#230 ✅ shipped; migration to `ChannelProjection<ReviewState>` tracked in #31 | #31 |
-| Session storage path hardcoded to `~/.drafthouse/reviews/` | Can't configure for CI isolation or run multiple instances | Low severity; `ReviewSessionService` accepts path via constructor for test; configurable via #28 | #28 |
+| Session storage path hardcoded to `~/.drafthouse/reviews/` | Can't configure for CI isolation or run multiple instances | ✅ Closed #28 — `casehub.drafthouse.storage.root` config key; default via `@WithDefault("${user.home}/.drafthouse/reviews")` | #28 ✅ |
 | REST stubs (`POST /api/review/sessions`) in production code | Confusion for any client discovering the REST API | Removed at #24 close — `ReviewSessionResource` deleted, `DraftHouseMcpTools` ships all session control | #24 ✅ |
 
 ---

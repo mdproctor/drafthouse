@@ -1,11 +1,10 @@
 package io.casehub.drafthouse.debate;
 
+import io.casehub.drafthouse.DraftHouseConfig;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -23,10 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @ApplicationScoped
 public class ReviewSessionService {
 
-    private static final Logger log = LoggerFactory.getLogger(ReviewSessionService.class);
-    private static final Path SESSIONS_BASE =
-            Path.of(System.getProperty("user.home"), ".drafthouse", "reviews");
-
+    @Inject DraftHouseConfig config;
     @Inject DebateAgentProvider agentProvider;
 
     private final DebateParser         parser    = new DebateParser();
@@ -38,7 +34,7 @@ public class ReviewSessionService {
 
     public ReviewSession startSession(String specPath) {
         String sessionId  = generateSessionId();
-        Path sessionPath  = SESSIONS_BASE.resolve(sessionId);
+        Path sessionPath  = config.storage().root().resolve(sessionId);
 
         try {
             Files.createDirectories(sessionPath);

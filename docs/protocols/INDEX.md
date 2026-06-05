@@ -10,3 +10,4 @@
 | [playwright-render-complete-signal.md](playwright-render-complete-signal.md) | Wait for [data-diff-chunk] as render-complete signal — not content elements | server/src/test/java/io/casehub/drafthouse/e2e/ |
 | [mcp-tool-error-strings.md](mcp-tool-error-strings.md) | @Tool methods must return "error: ..." strings — never propagate exceptions | DraftHouseMcpTools and any future @Tool class |
 | [mcp-tool-llm-prompt-injection.md](mcp-tool-llm-prompt-injection.md) | @Tool parameters must not flow raw into LLM prompts — use config or server-side allowlist | DraftHouseMcpTools @Tool methods that interact with @AiService |
+| [drafthouse-config-mock-two-level.md](drafthouse-config-mock-two-level.md) | Tests mocking DraftHouseConfig must use two-level mocking — separate mock per sub-interface, stub intermediate first | Any JUnit test mocking DraftHouseConfig |
