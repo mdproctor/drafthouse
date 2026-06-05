@@ -65,7 +65,7 @@ public interface DraftHouseConfig {
     interface Storage {
         /** Storage root for review session files. Defaults to ~/.drafthouse/reviews. */
         @WithDefault("${user.home}/.drafthouse/reviews")
-        Path storageRoot();
+        Path root();
     }
 }
 ```
@@ -80,11 +80,11 @@ built-in `Path` converter, so the return type is `Path` directly — no
 
 **Expression syntax note:** `${sys:user.home}` (single colon) is the *fallback-value*
 syntax — it means "expand property `sys`; if not found, use literal `user.home`" — and
-would produce the wrong result. The correct explicit system-property handler uses double
-colon: `${sys::user.home}`. The plain `${user.home}` is equivalent and preferred.
+would produce the wrong result. Use `${user.home}` directly; it resolves from the System
+Properties ConfigSource without any handler prefix.
 
-The config key for the new property is: `casehub.drafthouse.storage.storage-root`
-(SmallRye converts `storageRoot()` to kebab-case).
+The config key for the new property is: `casehub.drafthouse.storage.root`
+(SmallRye converts the method name `root()` under the `storage` sub-interface).
 
 #### Caller migration (mechanical)
 
@@ -106,33 +106,34 @@ Drop the static constant entirely. Inject `DraftHouseConfig` and call
 
 public ReviewSession startSession(String specPath) {
     String sessionId = generateSessionId();
-    Path sessionPath = config.storage().storageRoot().resolve(sessionId);
+    Path sessionPath = config.storage().root().resolve(sessionId);
     // ...
 }
 ```
 
 No `@PostConstruct`, no mutable instance field, no package-private visibility leak.
-SmallRye resolves the path once at config load time; every call to `storageRoot()`
-returns the same cached `Path`.
+Every call to `config.storage().root()` returns the same `Path` — SmallRye's expression
+expansion is deterministic for system properties.
 
 #### `application.properties` addition
 
 ```properties
 # Review session storage root (defaults to ~/.drafthouse/reviews)
-# casehub.drafthouse.storage.storage-root=/custom/path
-%test.casehub.drafthouse.storage.storage-root=${java.io.tmpdir}/drafthouse-test-sessions
+# casehub.drafthouse.storage.root=/custom/path
+%test.casehub.drafthouse.storage.root=${java.io.tmpdir}/drafthouse-test-sessions
 ```
 
-The `%test` override is a failsafe: `ReviewSessionService` is not yet injected by any
-live CDI bean, so its config is validated at Quarkus startup but `startSession()` is
-never called in the current test suite. When #27 wires this service into live MCP
-tooling, integration tests that exercise `startSession()` will need the temp-dir
-override to avoid writing to `~/.drafthouse/reviews`. Adding it now prevents that
-oversight.
+The `%test` override is a failsafe. `ReviewSessionService` is not yet injected by any
+live CDI bean, so `startSession()` is never called in the current test suite. Quarkus
+does validate the key and Path conversion at startup, catching any property-name or
+expression error before #27 wires in live callers. Adding it now also prevents the
+oversight of writing to `~/.drafthouse/reviews` if any bean starts injecting
+`ReviewSessionService` before #27 is complete.
 
-**Deferred risk:** If any bean or test starts injecting `ReviewSessionService` before
-#27 is complete, the `%test` override ensures `startSession()` writes to a temp dir
-rather than the real home directory.
+**Parallel-build note:** The fixed `${java.io.tmpdir}/drafthouse-test-sessions` path
+creates a collision risk for concurrent CI runs. This is accepted while `startSession()`
+is never called; when #27 adds live session tests, a per-run unique suffix is needed.
+Tracked in [#27 comment](https://github.com/casehubio/drafthouse/issues/27#issuecomment-4635466913).
 
 #### No dedicated storage test
 
@@ -170,11 +171,11 @@ use the shared `setUp()` — updating it once is sufficient.
 | File | Change |
 |------|--------|
 | `server/runtime/.../debate/DebateRoundTripTest.java` | Remove `@QuarkusTest` + import |
-| `server/runtime/.../DraftHouseConfig.java` | Restructure to nested `Reviewer` + `Storage`; add `Storage.storageRoot()` |
+| `server/runtime/.../DraftHouseConfig.java` | Restructure to nested `Reviewer` + `Storage`; add `Storage.root()` |
 | `server/runtime/.../DraftHouseMcpTools.java` | `config.reviewer().*` call sites |
 | `server/runtime/.../ReviewerChannelBackendFactory.java` | `config.reviewer().maxDocChars()` |
-| `server/runtime/.../debate/ReviewSessionService.java` | `@Inject DraftHouseConfig`; drop static constant; call `config.storage().storageRoot()` inline |
-| `server/runtime/src/main/resources/application.properties` | Document `storage-root` key; add `%test` override |
+| `server/runtime/.../debate/ReviewSessionService.java` | `@Inject DraftHouseConfig`; drop static constant; call `config.storage().root()` inline |
+| `server/runtime/src/main/resources/application.properties` | Document `storage.root` key; add `%test` override |
 | `server/runtime/.../DraftHouseMcpToolsTest.java` | Two-level mock setup for `Reviewer` sub-interface |
 
 ## Files verified unchanged
@@ -183,4 +184,4 @@ use the shared `setUp()` — updating it once is sufficient.
 |------|----------------|
 | `server/runtime/.../ReviewerChannelBackendTest.java` | Constructs `ReviewerChannelBackend` directly with `maxDocChars` as a primitive int argument — does not touch `DraftHouseConfig` |
 | `server/runtime/.../ReviewSessionRegistryTest.java` | Tests the registry in isolation with no config dependency |
-| `server/runtime/.../ReviewSessionLifecycleTest.java` | `@QuarkusTest` — Quarkus wires real config from `application.properties`; the `%test` override for `storage-root` means the test profile resolves correctly without any change to the test class itself |
+| `server/runtime/.../ReviewSessionLifecycleTest.java` | `@QuarkusTest` — Quarkus wires real config from `application.properties`; the `%test.casehub.drafthouse.storage.root` override means startup validation passes without any change to the test class itself |
