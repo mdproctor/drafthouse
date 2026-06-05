@@ -25,7 +25,7 @@ public class ReviewerChannelBackendFactory {
         if (!event.channelName().startsWith("drafthouse/")) return;
         if (registry.find(event.channelId()).isEmpty()) return;
         ReviewerChannelBackend backend = new ReviewerChannelBackend(
-                registry, event.channelId(), messageService, llm, config.maxDocChars());
+                registry, event.channelId(), messageService, llm, config.reviewer().maxDocChars());
         gateway.deregisterBackend(event.channelId(), ReviewerChannelBackend.BACKEND_ID);
         gateway.registerBackend(event.channelId(), backend, ReviewerChannelBackend.BACKEND_TYPE);
     }

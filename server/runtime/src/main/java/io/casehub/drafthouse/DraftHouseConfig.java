@@ -5,12 +5,28 @@ import io.quarkus.runtime.annotations.ConfigRoot;
 import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 
-@ConfigMapping(prefix = "casehub.drafthouse.reviewer")
+import java.nio.file.Path;
+
+@ConfigMapping(prefix = "casehub.drafthouse")
 @ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public interface DraftHouseConfig {
 
-    String personality();
+    Reviewer reviewer();
 
-    @WithDefault("100000")
-    int maxDocChars();
+    Storage storage();
+
+    interface Reviewer {
+
+        String personality();
+
+        @WithDefault("100000")
+        int maxDocChars();
+    }
+
+    interface Storage {
+
+        /** Storage root for review session files. Defaults to ~/.drafthouse/reviews. */
+        @WithDefault("${user.home}/.drafthouse/reviews")
+        Path root();
+    }
 }

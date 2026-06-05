@@ -49,6 +49,10 @@ class DraftHouseMcpToolsTest {
         messageService = mock(MessageService.class);
         registry = mock(ReviewSessionRegistry.class);
         config = mock(DraftHouseConfig.class);
+        DraftHouseConfig.Reviewer reviewer = mock(DraftHouseConfig.Reviewer.class);
+        when(config.reviewer()).thenReturn(reviewer);
+        when(reviewer.maxDocChars()).thenReturn(100_000);
+        when(reviewer.personality()).thenReturn("You are a reviewer.");
 
         tools = new DraftHouseMcpTools();
         tools.channelService = channelService;
@@ -57,9 +61,6 @@ class DraftHouseMcpToolsTest {
         tools.messageService = messageService;
         tools.registry = registry;
         tools.config = config;
-
-        when(config.maxDocChars()).thenReturn(100_000);
-        when(config.personality()).thenReturn("You are a reviewer.");
 
         stubChannel = new Channel();
         stubChannel.id = UUID.randomUUID();
