@@ -11,7 +11,6 @@
 
   <modules>
     <module>api</module>
-    <module>claude-agent</module>
     <module>runtime</module>
   </modules>
 
