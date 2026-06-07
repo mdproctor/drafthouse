@@ -22,6 +22,7 @@ public class SummaryRenderer {
                 case ACTIVE        -> "🟡";
                 case AGREED        -> "✅";
                 case PENDING_HUMAN -> "🔵";
+                case DECLINED      -> "🚫";
             };
 
             String firstContent = point.thread().isEmpty() ? "" : point.thread().get(0).content();
@@ -32,7 +33,9 @@ public class SummaryRenderer {
                        ? " · " + point.classification().location() : "")
                     + " — " + firstContent;
 
-            if (point.currentStatus() == ReviewStatus.AGREED) {
+            boolean strikethrough = point.currentStatus() == ReviewStatus.AGREED
+                    || point.currentStatus() == ReviewStatus.DECLINED;
+            if (strikethrough) {
                 sb.append("## ").append(statusMarker).append(" ~~").append(header).append("~~\n");
             } else {
                 sb.append("## ").append(statusMarker).append(" ").append(header).append("\n");
@@ -45,6 +48,7 @@ public class SummaryRenderer {
                     case DISPUTE    -> "dispute";
                     case QUALIFY    -> "qualify";
                     case FLAG_HUMAN -> "flag";
+                    case DECLINED   -> "declined";
                 };
                 sb.append("> **").append(entry.agent()).append(" (").append(typeLabel).append("):** ")
                   .append(entry.content()).append("\n");

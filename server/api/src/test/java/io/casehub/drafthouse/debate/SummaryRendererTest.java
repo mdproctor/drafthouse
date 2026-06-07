@@ -8,20 +8,22 @@ import static org.assertj.core.api.Assertions.*;
 class SummaryRendererTest {
 
     private final SummaryRenderer renderer = new SummaryRenderer();
-    private final SummaryProjector projector = new SummaryProjector();
 
     @Test
     void rendersEmptyStateAsHeader() {
-        String output = renderer.render(projector.identity());
+        String output = renderer.render(new ReviewState(Map.of(), List.of()));
         assertThat(output).contains("# Review Summary");
         assertThat(output).doesNotContain("##");
     }
 
     @Test
     void rendersOpenPoint() {
-        ReviewState state = projector.project(List.of(
-                new DebateEvent.RaiseEvent("R1-REV-001", 1, AgentType.REV,
-                        Priority.P1, Scope.ISOLATED, "§3.2", "Both variants appear.")));
+        var state = new ReviewState(
+            Map.of("R1-REV-001", new ReviewPoint("R1-REV-001",
+                new PointClassification(Priority.P1, Scope.ISOLATED, "§3.2"),
+                List.of(new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Both variants appear.")),
+                ReviewStatus.OPEN)),
+            List.of());
         String output = renderer.render(state);
         assertThat(output).contains("🔴");
         assertThat(output).contains("[R1-REV-001]");
@@ -31,11 +33,14 @@ class SummaryRendererTest {
 
     @Test
     void rendersAgreedPointWithStrikethrough() {
-        ReviewState state = projector.project(List.of(
-                new DebateEvent.RaiseEvent("R1-REV-001", 1, AgentType.REV,
-                        Priority.P1, Scope.ISOLATED, null, "Issue."),
-                new DebateEvent.ResponseEvent(2, AgentType.IMP, "R1-REV-001",
-                        EntryType.AGREE, "Fixed.", ReviewStatus.AGREED)));
+        var state = new ReviewState(
+            Map.of("R1-REV-001", new ReviewPoint("R1-REV-001",
+                new PointClassification(Priority.P1, Scope.ISOLATED, null),
+                List.of(
+                    new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Issue."),
+                    new ThreadEntry(null, AgentType.IMP, 0, EntryType.AGREE, "Fixed.")),
+                ReviewStatus.AGREED)),
+            List.of());
         String output = renderer.render(state);
         assertThat(output).contains("✅");
         assertThat(output).contains("~~");
@@ -43,10 +48,14 @@ class SummaryRendererTest {
 
     @Test
     void rendersFlagSectionAtBottom() {
-        ReviewState state = projector.project(List.of(
-                new DebateEvent.RaiseEvent("R1-REV-001", 1, AgentType.REV,
-                        Priority.P1, Scope.ISOLATED, null, "Issue."),
-                new DebateEvent.FlagHumanEvent(1, AgentType.REV, "Human needed.", "R1-REV-001", ReviewStatus.PENDING_HUMAN)));
+        var state = new ReviewState(
+            Map.of("R1-REV-001", new ReviewPoint("R1-REV-001",
+                new PointClassification(Priority.P1, Scope.ISOLATED, null),
+                List.of(
+                    new ThreadEntry(null, AgentType.REV, 0, EntryType.RAISE, "Issue."),
+                    new ThreadEntry(null, AgentType.REV, 0, EntryType.FLAG_HUMAN, "Human needed.")),
+                ReviewStatus.PENDING_HUMAN)),
+            List.of(new FlagEntry(null, 0, AgentType.REV, "Human needed.")));
         String output = renderer.render(state);
         assertThat(output).contains("⚑");
         assertThat(output).contains("Human needed.");
@@ -55,9 +64,8 @@ class SummaryRendererTest {
 
     @Test
     void memoDoesNotAppearInSummary() {
-        ReviewState state = projector.project(List.of(
-                new DebateEvent.AgentMemo(1, AgentType.REV, "Private thought.")));
-        String output = renderer.render(state);
+        // A memo produces no review points — state stays empty.
+        String output = renderer.render(new ReviewState(Map.of(), List.of()));
         assertThat(output).doesNotContain("Private thought.");
     }
 
@@ -65,7 +73,23 @@ class SummaryRendererTest {
     void renderTimestampIsControlledByClock() {
         Instant fixed = Instant.parse("2026-01-15T10:30:00Z");
         renderer.setClockForTest(() -> fixed);
-        String output = renderer.render(projector.identity());
+        String output = renderer.render(new ReviewState(Map.of(), List.of()));
         assertThat(output).contains("2026-01-15T10:30:00Z");
+    }
+
+    @Test
+    void rendersDeclinedPointWithStrikethrough() {
+        var state = new ReviewState(
+            Map.of("R1-REV-001", new ReviewPoint("R1-REV-001",
+                new PointClassification(Priority.P3, Scope.ISOLATED, null),
+                List.of(
+                    new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Off topic?"),
+                    new ThreadEntry(null, AgentType.IMP, 0, EntryType.DECLINED, "Out of scope.")),
+                ReviewStatus.DECLINED)),
+            List.of());
+        String output = renderer.render(state);
+        assertThat(output).contains("🚫");
+        assertThat(output).contains("~~");
+        assertThat(output).contains("declined");
     }
 }

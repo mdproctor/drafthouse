@@ -55,7 +55,7 @@ public class DebateEntryFormatter {
     private int typeOrder(EntryType type) {
         return switch (type) {
             case RAISE -> 0;
-            case AGREE, DISPUTE, QUALIFY -> 1;
+            case AGREE, DISPUTE, QUALIFY, DECLINED -> 1;
             case FLAG_HUMAN -> 2;
         };
     }
@@ -78,6 +78,7 @@ public class DebateEntryFormatter {
             case DISPUTE    -> "dispute";
             case QUALIFY    -> "qualify";
             case FLAG_HUMAN -> "flag_human";
+            case DECLINED   -> "declined";
         };
     }
 
@@ -94,6 +95,7 @@ public class DebateEntryFormatter {
             case ACTIVE        -> "🟡 Active";
             case AGREED        -> "✅ Agreed";
             case PENDING_HUMAN -> "🔵 Pending Human";
+            case DECLINED      -> "🚫 Declined";
         };
     }
 }
