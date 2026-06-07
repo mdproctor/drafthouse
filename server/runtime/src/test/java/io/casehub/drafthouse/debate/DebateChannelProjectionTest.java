@@ -13,9 +13,15 @@ class DebateChannelProjectionTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static MessageView msg(MessageType type, String correlationId, String artefactRefs, String content) {
+    /**
+     * Build a MessageView with metadata encoded in content as META header.
+     * The projection reads metadata from content (not artefactRefs), because
+     * Qhorus ArtefactRefParser validates artefactRefs as CSV UUIDs.
+     */
+    private static MessageView msg(MessageType type, String correlationId, String metaHeader, String bodyContent) {
+        String encodedContent = "META:" + metaHeader + "\n\n" + bodyContent;
         return new MessageView(null, null, "test-sender", type,
-                content, correlationId, null, null, artefactRefs, ActorType.AGENT, null, null, 0);
+                encodedContent, correlationId, null, null, null, ActorType.AGENT, null, null, 0);
     }
 
     private static String ratefacts(String entryType, String agent, int round) {
@@ -136,12 +142,11 @@ class DebateChannelProjectionTest {
 
     @Test
     void nullActorType_doesNotThrow() {
-        // DebateChannelProjection uses artefactRefs.agent — actorType is irrelevant
+        // DebateChannelProjection uses content META header for agent — actorType is never read
         ReviewState s = proj.apply(proj.identity(),
                 new MessageView(null, null, "test", MessageType.QUERY,
-                        "Content.", "pt-1", null, null,
-                        ratefacts("raise", "REV", 1, "P1", "ISOLATED"),
-                        null, null, null, 0));
+                        "META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nContent.",
+                        "pt-1", null, null, null, null, null, null, 0));
         assertThat(s.points()).containsKey("pt-1");
     }
 

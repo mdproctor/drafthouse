@@ -8,11 +8,13 @@ import java.util.*;
 
 /**
  * Folds debate channel messages into ReviewState.
- * Dispatch is on artefactRefs.entryType — debate channels always carry artefactRefs.
- * Agent classification uses artefactRefs.agent (REV/IMP) — NOT actorType.
+ * Dispatch is on content META header — debate channels encode metadata as:
+ *   META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED|location=§3.2\n\n<body>
+ * Agent classification uses meta.agent (REV/IMP) — NOT actorType.
  *
  * Both REV and IMP agents are ActorType.AGENT; actorType cannot distinguish them.
- * See PP-20260607-508f7b.
+ * artefactRefs is NOT used — Qhorus ArtefactRefParser validates artefactRefs as CSV UUIDs,
+ * so free-form metadata cannot be stored there. See PP-20260607-508f7b.
  */
 @ApplicationScoped
 public class DebateChannelProjection implements RenderableProjection<ReviewState> {
@@ -30,7 +32,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     @Override
     public ReviewState apply(ReviewState state, MessageView message) {
-        Map<String, String> meta = parseArtefacts(message.artefactRefs());
+        Map<String, String> meta = parseMeta(message.content());
         String entryType = meta.get("entryType");
         if (entryType == null) return state;
         return switch (entryType) {
@@ -61,7 +63,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
                 location != null && !location.isBlank() ? location : null);
         int round = parseRound(meta);
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(entryId, agentType(meta), round, EntryType.RAISE, message.content()));
+        thread.add(new ThreadEntry(entryId, agentType(meta), round, EntryType.RAISE, bodyContent(message.content())));
         var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
@@ -86,7 +88,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     private ReviewState handleFlagHuman(ReviewState state, MessageView message, Map<String, String> meta) {
         String targetId = message.correlationId();
-        String content = Objects.requireNonNullElse(message.content(), "");
+        String content = bodyContent(Objects.requireNonNullElse(message.content(), ""));
         int round = parseRound(meta);
         AgentType agent = agentType(meta);
         var points = new LinkedHashMap<>(state.points());
@@ -115,7 +117,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         ReviewPoint existing = state.points().get(targetId);
         int round = parseRound(meta);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(meta), round, type, message.content()));
+        thread.add(new ThreadEntry(null, agentType(meta), round, type, bodyContent(message.content())));
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
@@ -128,7 +130,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         return switch (agent) {
             case "REV" -> AgentType.REV;
             case "IMP" -> AgentType.IMP;
-            default    -> throw new IllegalArgumentException("Unknown agent in debate artefactRefs: " + agent);
+            default    -> throw new IllegalArgumentException("Unknown agent in debate META header: " + agent);
         };
     }
 
@@ -138,14 +140,33 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         try { return Integer.parseInt(r); } catch (NumberFormatException e) { return 0; }
     }
 
-    private Map<String, String> parseArtefacts(String artefacts) {
+    /**
+     * Parses metadata from the META header embedded in message content.
+     * Format: "META:key=value|key=value\n\n<body>"
+     * If no META header is present, returns an empty map.
+     */
+    private Map<String, String> parseMeta(String content) {
         Map<String, String> map = new HashMap<>();
-        if (artefacts == null || artefacts.isBlank()) return map;
-        for (String part : artefacts.split("\\|")) {
+        if (content == null || content.isBlank()) return map;
+        if (!content.startsWith("META:")) return map;
+        int headerEnd = content.indexOf("\n\n");
+        String headerLine = headerEnd > 0 ? content.substring(5, headerEnd) : content.substring(5);
+        for (String part : headerLine.split("\\|")) {
             int eq = part.indexOf('=');
             if (eq > 0) map.put(part.substring(0, eq).strip(), part.substring(eq + 1).strip());
         }
         return map;
+    }
+
+    /**
+     * Strips the META header from encoded content to return only the human-readable body.
+     * If no META header is present, returns the content unchanged.
+     */
+    private String bodyContent(String content) {
+        if (content == null) return null;
+        if (!content.startsWith("META:")) return content;
+        int headerEnd = content.indexOf("\n\n");
+        return headerEnd > 0 ? content.substring(headerEnd + 2) : "";
     }
 
     private Priority parsePriority(String s) {
