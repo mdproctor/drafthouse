@@ -76,7 +76,7 @@ public class DraftHouseMcpTools {
             return "error: document B exceeds maximum size of " + config.reviewer().maxDocChars() + " characters";
         }
 
-        String channelSlug = UUID.randomUUID().toString();
+        String channelSlug = "r-" + UUID.randomUUID();
         String channelName = "drafthouse/" + channelSlug;
 
         Channel channel = null;
