@@ -4,13 +4,17 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+import io.casehub.drafthouse.debate.ReviewConversationRenderer;
+import io.casehub.drafthouse.debate.ReviewState;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelBackend;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
+import io.casehub.qhorus.api.spi.ChannelProjection;
 import io.casehub.qhorus.runtime.message.MessageService;
+import io.casehub.qhorus.runtime.message.ProjectionService;
 
 public class ReviewerChannelBackend implements ChannelBackend {
 
@@ -24,15 +28,21 @@ public class ReviewerChannelBackend implements ChannelBackend {
     private final MessageService messageService;
     private final DocumentReviewer llm;
     private final int maxDocChars;
+    private final ProjectionService projectionService;
+    private final ChannelProjection<ReviewState> projection;
+    private final ReviewConversationRenderer conversationRenderer = new ReviewConversationRenderer();
 
     ReviewerChannelBackend(ReviewSessionRegistry registry, UUID channelId,
                            MessageService messageService, DocumentReviewer llm,
-                           int maxDocChars) {
+                           int maxDocChars, ProjectionService projectionService,
+                           ChannelProjection<ReviewState> projection) {
         this.registry = registry;
         this.channelId = channelId;
         this.messageService = messageService;
         this.llm = llm;
         this.maxDocChars = maxDocChars;
+        this.projectionService = projectionService;
+        this.projection = projection;
     }
 
     @Override public String backendId() { return BACKEND_ID; }
@@ -72,13 +82,14 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
         ReviewResult result;
         try {
+            var historyResult = projectionService.project(channelId, projection);
+            String reviewHistory = conversationRenderer.render(historyResult.state());
             result = llm.review(session.personality(), session.docAContent(),
-                    session.docBContent(), selectionContext, message.content());
+                    session.docBContent(), selectionContext, reviewHistory, message.content());
         } catch (Exception e) {
-            LOG.warning("DocumentReviewer threw on channel " + channel.name() + ": " + e.getMessage());
+            LOG.warning("Backend error on channel " + channel.name() + ": " + e.getMessage());
             result = ReviewResult.decline("Reviewer encountered an error.");
         }
-
         dispatch(channel, message, inReplyTo, session, result);
     }
 

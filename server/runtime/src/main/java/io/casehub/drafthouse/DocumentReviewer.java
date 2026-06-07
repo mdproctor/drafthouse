@@ -17,12 +17,15 @@ public interface DocumentReviewer {
 
             {{selectionContext}}
 
-            User query: {{query}}
+            Review history (prior turns in this session):
+            {{reviewHistory}}
+
+            Current query: {{query}}
 
             If this query is outside the scope of document review (e.g. general knowledge, \
             unrelated topics), respond with declined=true and explain why in content.
             Otherwise respond with declined=false and your review in content.
             """)
-    ReviewResult review(String personality, String documentA,
-                        String documentB, String selectionContext, String query);
+    ReviewResult review(String personality, String documentA, String documentB,
+                        String selectionContext, String reviewHistory, String query);
 }

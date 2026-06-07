@@ -3,6 +3,8 @@ package io.casehub.drafthouse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.channel.ChannelSemantic;
@@ -66,7 +69,7 @@ class ReviewSessionLifecycleTest {
         docB = Files.writeString(tempDir.resolve("b.md"), "Revised text");
         activeSessionId = null;
         orphanedChannel = null;
-        when(documentReviewer.review(any(), any(), any(), any(), any()))
+        when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "Good revision."));
     }
 
@@ -142,7 +145,7 @@ class ReviewSessionLifecycleTest {
 
     @Test
     void query_dispatchesDecline_andDeclinesCommitment_whenReviewerDeclines() {
-        when(documentReviewer.review(any(), any(), any(), any(), any()))
+        when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(ReviewResult.decline("Out of scope."));
 
         final String result = tools.startReview(docA.toString(), docB.toString());
@@ -177,7 +180,7 @@ class ReviewSessionLifecycleTest {
 
     @Test
     void query_dispatchesSanitizedDecline_andDeclinesCommitment_onReviewerException() {
-        when(documentReviewer.review(any(), any(), any(), any(), any()))
+        when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("sk-ant-api03-SECRET-KEY"));
 
         final String result = tools.startReview(docA.toString(), docB.toString());
@@ -207,6 +210,44 @@ class ReviewSessionLifecycleTest {
         assertThat(decline.get().content).doesNotContain("sk-ant-api03-SECRET-KEY");
         assertThat(commitmentStore.findByCorrelationId(correlationId))
                 .hasValueSatisfying(c -> assertThat(c.state).isEqualTo(CommitmentState.DECLINED));
+    }
+
+    // ── Test 5 — Multi-turn history ───────────────────────────────────────────
+
+    @Test
+    void secondQuery_receivesPriorExchangeInHistory() {
+        String result = tools.startReview(docA.toString(), docB.toString());
+        String sessionId = extractSessionId(result);
+        activeSessionId = sessionId;
+        UUID channelId = UUID.fromString(sessionId);
+
+        // First query — @BeforeEach stub returns "Good revision." for any 6-arg call
+        String corrId1 = UUID.randomUUID().toString();
+        messageService.dispatch(MessageDispatch.builder().channelId(channelId)
+                .sender(DraftHouseMcpTools.HUMAN_INSTANCE_ID)
+                .type(MessageType.QUERY).content("First question.")
+                .correlationId(corrId1).actorType(ActorType.HUMAN).build());
+        await().atMost(TIMEOUT).until(() ->
+                messageService.findResponseByCorrelationId(channelId, corrId1).isPresent());
+
+        // Second query
+        String corrId2 = UUID.randomUUID().toString();
+        messageService.dispatch(MessageDispatch.builder().channelId(channelId)
+                .sender(DraftHouseMcpTools.HUMAN_INSTANCE_ID)
+                .type(MessageType.QUERY).content("Second question.")
+                .correlationId(corrId2).actorType(ActorType.HUMAN).build());
+        await().atMost(TIMEOUT).until(() ->
+                messageService.findResponseByCorrelationId(channelId, corrId2).isPresent());
+
+        // Capture reviewHistory from both LLM calls — assert on the second invocation
+        ArgumentCaptor<String> historyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(documentReviewer, times(2))
+                .review(any(), any(), any(), any(), historyCaptor.capture(), any());
+        String secondHistory = historyCaptor.getAllValues().get(1);
+
+        assertThat(secondHistory).contains("First question.");
+        assertThat(secondHistory).contains("Good revision.");         // first answer from @BeforeEach stub
+        assertThat(secondHistory).doesNotContain("Second question."); // OPEN → excluded
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────

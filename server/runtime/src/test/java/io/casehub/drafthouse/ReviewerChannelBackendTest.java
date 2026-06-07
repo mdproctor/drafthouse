@@ -5,20 +5,35 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 
+import io.casehub.drafthouse.debate.AgentType;
+import io.casehub.drafthouse.debate.EntryType;
+import io.casehub.drafthouse.debate.PointClassification;
+import io.casehub.drafthouse.debate.Priority;
+import io.casehub.drafthouse.debate.ReviewPoint;
+import io.casehub.drafthouse.debate.ReviewState;
+import io.casehub.drafthouse.debate.ReviewStatus;
+import io.casehub.drafthouse.debate.Scope;
+import io.casehub.drafthouse.debate.ThreadEntry;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
+import io.casehub.qhorus.api.spi.ChannelProjection;
+import io.casehub.qhorus.api.spi.ProjectionResult;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
+import io.casehub.qhorus.runtime.message.ProjectionService;
 
 class ReviewerChannelBackendTest {
 
@@ -28,6 +43,8 @@ class ReviewerChannelBackendTest {
     private ReviewSessionRegistry registry;
     private MessageService messageService;
     private DocumentReviewer llm;
+    private ProjectionService projectionService;
+    private ChannelProjection<ReviewState> projection;
     private ReviewerChannelBackend backend;
     private ChannelRef channelRef;
     private ReviewSession session;
@@ -37,6 +54,10 @@ class ReviewerChannelBackendTest {
         registry = mock(ReviewSessionRegistry.class);
         messageService = mock(MessageService.class);
         llm = mock(DocumentReviewer.class);
+        projectionService = mock(ProjectionService.class);
+        projection = mock(ChannelProjection.class);
+        when(projectionService.project(CHANNEL_ID, projection))
+                .thenReturn(new ProjectionResult<>(new ReviewState(Map.of(), List.of()), null));
 
         session = new ReviewSession(
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
@@ -44,7 +65,8 @@ class ReviewerChannelBackendTest {
                 "Original text", "Revised text",
                 null, null, "You are a reviewer.");
 
-        backend = new ReviewerChannelBackend(registry, CHANNEL_ID, messageService, llm, 100_000);
+        backend = new ReviewerChannelBackend(registry, CHANNEL_ID, messageService, llm, 100_000,
+                projectionService, projection);
         channelRef = new ChannelRef(CHANNEL_ID, "drafthouse/sess-1");
 
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(session));
@@ -57,7 +79,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryDispatches_response_onSuccess() {
-        when(llm.review(any(), eq("Original text"), eq("Revised text"), any(), eq("Is this clear?")))
+        when(llm.review(any(), eq("Original text"), eq("Revised text"), any(), any(), eq("Is this clear?")))
                 .thenReturn(new ReviewResult(false, "The revision is clear."));
 
         backend.post(channelRef, query("Is this clear?"));
@@ -76,7 +98,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryDispatches_decline_whenReviewerDeclines() {
-        when(llm.review(any(), any(), any(), any(), any()))
+        when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(ReviewResult.decline("Out of scope."));
 
         backend.post(channelRef, query("What is the weather?"));
@@ -89,7 +111,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryDispatches_decline_onLlmException_withSanitizedMessage() {
-        when(llm.review(any(), any(), any(), any(), any()))
+        when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("sk-ant-api03-SECRET-KEY"));
 
         backend.post(channelRef, query("Is this clear?"));
@@ -112,38 +134,38 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryWithNoSelection_passesEmptySelectionContext() {
-        when(llm.review(any(), any(), any(), any(), any()))
+        when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "Looks good."));
 
         backend.post(channelRef, query("Is this clear?"));
 
-        verify(llm).review(any(), any(), any(), eq(""), any());
+        verify(llm).review(any(), any(), any(), eq(""), any(), any());
     }
 
     @Test
     void queryWithSelection_passesSelectionContext() {
         ReviewSession withSelection = session.withSelection(DocumentSide.B, "key paragraph");
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(withSelection));
-        when(llm.review(any(), any(), any(), any(), any()))
+        when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "Noted."));
 
         backend.post(channelRef, query("Is this clear?"));
 
         verify(llm).review(any(), any(), any(),
-                eq("Selected text (Document B): key paragraph"), any());
+                eq("Selected text (Document B): key paragraph"), any(), any());
     }
 
     @Test
     void liveSessionRead_reflectsSelectionUpdatedAfterConstruction() {
         ReviewSession updated = session.withSelection(DocumentSide.A, "updated selection");
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(updated));
-        when(llm.review(any(), any(), any(), any(), any()))
+        when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(new ReviewResult(false, "OK"));
 
         backend.post(channelRef, query("Review?"));
 
         verify(llm).review(any(), any(), any(),
-                eq("Selected text (Document A): updated selection"), any());
+                eq("Selected text (Document A): updated selection"), any(), any());
     }
 
     @Test
@@ -179,15 +201,71 @@ class ReviewerChannelBackendTest {
         backend.post(channelRef, query("Review this"));
 
         verifyNoInteractions(llm);
+        verifyNoInteractions(projectionService);
         ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(captor.capture());
         assertThat(captor.getValue().type()).isEqualTo(MessageType.DECLINE);
         assertThat(captor.getValue().content()).isEqualTo("Documents exceed the maximum size for review.");
     }
 
+    @Test
+    void queryDispatch_callsProjectionBeforeLlm() {
+        when(llm.review(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ReviewResult(false, "Response."));
+
+        backend.post(channelRef, query("Question?"));
+
+        InOrder order = inOrder(projectionService, llm);
+        order.verify(projectionService).project(CHANNEL_ID, projection);
+        order.verify(llm).review(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void queryDispatch_passesRenderedHistoryToLlm() {
+        ReviewState stateWithHistory = buildAgreedState();
+        when(projectionService.project(CHANNEL_ID, projection))
+                .thenReturn(new ProjectionResult<>(stateWithHistory, 42L));
+        when(llm.review(any(), any(), any(), any(), any(), any()))
+                .thenReturn(new ReviewResult(false, "Response."));
+
+        backend.post(channelRef, query("Current question?"));
+
+        ArgumentCaptor<String> historyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(llm).review(any(), any(), any(), any(), historyCaptor.capture(), any());
+        assertThat(historyCaptor.getValue())
+                .contains("Q: Prior question?")
+                .contains("A: Prior answer.");
+    }
+
+    private static ReviewState buildAgreedState() {
+        var thread = new java.util.ArrayList<ThreadEntry>();
+        thread.add(new ThreadEntry("P1", AgentType.REV, 0, EntryType.RAISE, "Prior question?"));
+        thread.add(new ThreadEntry(null, AgentType.IMP, 0, EntryType.AGREE, "Prior answer."));
+        var point = new ReviewPoint(
+                "P1",
+                new PointClassification(Priority.P3, Scope.ISOLATED, null),
+                thread,
+                ReviewStatus.AGREED);
+        return new ReviewState(Map.of("P1", point), List.of());
+    }
+
+    @Test
+    void nonQueryMessage_doesNotCallProjectionOrLlm() {
+        OutboundMessage eventMsg = outboundMessage(MessageType.EVENT, "Some event", CORRELATION_ID);
+        backend.post(channelRef, eventMsg);
+        verifyNoInteractions(projectionService);
+        verifyNoInteractions(llm);
+    }
+
     private OutboundMessage query(String content) {
         return new OutboundMessage(
                 UUID.randomUUID(), "human:tester", MessageType.QUERY, content,
                 CORRELATION_ID, null, ActorType.HUMAN);
+    }
+
+    private OutboundMessage outboundMessage(MessageType type, String content, UUID correlationId) {
+        return new OutboundMessage(
+                UUID.randomUUID(), "user", type, content,
+                correlationId, null, ActorType.HUMAN);
     }
 }
