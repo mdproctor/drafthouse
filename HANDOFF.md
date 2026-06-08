@@ -1,12 +1,10 @@
-# Handover — 2026-06-06
+# Handover — 2026-06-08
 
 **Branch:** `main` (clean)
 
 ## Last Session
 
-Closed #34 (removed `@QuarkusTest` from `DebateRoundTripTest`) and #28 (configurable session storage path via `casehub.drafthouse.storage.root` — `@WithDefault("${user.home}/.drafthouse/reviews")` on `Path root()` in `DraftHouseConfig.Storage`). Restructured `DraftHouseConfig` to nested `Reviewer` + `Storage` sub-interfaces. Also closed stale epics #1 and #20 on GitHub and stamped `EPIC-CLOSED.md` on five previously unclosed branches. Filed #35 (UUID channel slug starts-with-digit flaky test) and #37 (CritiqueResourceTest missing API key at startup).
-
-Garden: GE-20260606-bc1b15 (`${sys:user.home}` fallback trap), GE-20260606-1c20a7 (`@WithDefault`+`Path` technique), GE-20260606-668cee (nested `@ConfigMapping` mock NPE). Protocol: PP-20260606-f15545 (DraftHouseConfig two-level mock rule).
+Shipped #27 (debate channel write path): `DebateMcpTools` (6 tools), `DebateChannelProjection` (META: content header dispatch), `ReviewChannelProjection` (renamed from old `DebateChannelProjection`), `ReviewStatus.DISPUTED` (non-terminal), `EntryType.COUNTER`. Key runtime discovery: Qhorus `artefactRefs` validates UUID-only at dispatch time despite String API — debate metadata moved to `META:key=value|...\n\n<body>` content prefix (GE-20260608-757be3, #39 tracks cleanup). #27 closed.
 
 ## Immediate Next Step
 
@@ -14,27 +12,30 @@ Garden: GE-20260606-bc1b15 (`${sys:user.home}` fallback trap), GE-20260606-1c20a
 /work
 ```
 
-Pick up #35 (XS, quick fix — prefix UUID slug with letter) or #31 (M/Med, main chapter work — ChannelProjection SPI migration, unblocked).
+Pick up #39 (S/Low — safer META: prefix sentinel) or #26 (L/High — sub-agent architecture design).
 
 ## What's Left
 
-- #35 — UUID channel slug starts with digit → Qhorus validation fails intermittently · XS · Low
-- #37 — CritiqueResourceTest fails at Quarkus startup (missing API key in test profile) · XS · Low
-- #36 — ReviewSessionService unit test (deferred to #27 when service gains live callers) · S · Low
+- **#33** — Orphaned reviewer instance on `start_review` partial failure · S · Med — blocked: needs `InstanceService.deregister()` from platform
+- **#38** — Retire `[QUALIFY]` prefix from `ReviewChannelProjection` — requires `DocumentReviewer @AiService` change · S · Med
+- **#39** — Replace `META:` sentinel with something agents won't generate (current prefix can collide with text starting "META:") · S · Low
 
 ## What's Next
 
 | # | Description | Scale | Complexity | Notes |
 |---|-------------|-------|------------|-------|
-| #31 | Migrate to ChannelProjection SPI — replaces local file-parser | M | Med | Unblocked: qhorus#230 ✅ |
-| #27 | Qhorus DebateChannel — type + AGREE/QUALIFY sub-classification | M | Med | C5 chapter |
-| #33 | Orphaned reviewer instance on start_review partial failure | S | Med | Blocked: needs InstanceService.deregister() from platform |
+| #39 | Safer debate content-header sentinel | S | Low | Quick fix; unblocks confidence in debate correctness |
+| #38 | Retire [QUALIFY] from ReviewChannelProjection | S | Med | Requires changing DocumentReviewer response format |
+| #26 | Review loop: session continuity, sub-agent architecture | L | High | Design issue; needs brainstorm before any code |
+| #33 | Orphaned reviewer instance cleanup | S | Med | Hard-blocked: needs InstanceService.deregister() from platform |
 
 ## References
 
 | Context | Where |
 |---|---|
-| Architecture record | `ARC42STORIES.MD` (§9.4 for layer entries) |
-| Latest blog | `wksp/blog/2026-06-06-mdp07-the-config-default-that-collapsed.md` |
-| Key GEs | GE-20260606-bc1b15 (`${sys:}` trap), GE-20260606-1c20a7 (`@WithDefault`+`Path`), GE-20260606-668cee (nested mock NPE) |
-| Protocol | `docs/protocols/drafthouse-config-mock-two-level.md` (PP-20260606-f15545) |
+| Architecture record | `ARC42STORIES.MD` (C5 complete, §9.4 Debate Channel layer entry) |
+| Design spec | `docs/superpowers/specs/2026-06-07-debate-channel-design.md` |
+| Garden entry | GE-20260608-757be3 (artefactRefs UUID-only runtime constraint) |
+| Latest blog | `wksp/blog/2026-06-08-mdp09-naming-debt-silent-rollback.md` |
+| GitHub | `casehubio/drafthouse` |
+| PLATFORM.md update pending | casehubio/parent#196 |
