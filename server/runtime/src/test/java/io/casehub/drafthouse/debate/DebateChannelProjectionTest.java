@@ -5,6 +5,7 @@ import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ProjectionResult;
 import org.junit.jupiter.api.Test;
+import static io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL;
 import static org.assertj.core.api.Assertions.*;
 
 class DebateChannelProjectionTest {
@@ -19,7 +20,7 @@ class DebateChannelProjectionTest {
      * Qhorus ArtefactRefParser validates artefactRefs as CSV UUIDs.
      */
     private static MessageView msg(MessageType type, String correlationId, String metaHeader, String bodyContent) {
-        String encodedContent = "META:" + metaHeader + "\n\n" + bodyContent;
+        String encodedContent = META_SENTINEL + metaHeader + "\n\n" + bodyContent;
         return new MessageView(null, null, "test-sender", type,
                 encodedContent, correlationId, null, null, null, ActorType.AGENT, null, null, 0);
     }
@@ -145,7 +146,7 @@ class DebateChannelProjectionTest {
         // DebateChannelProjection uses content META header for agent — actorType is never read
         ReviewState s = proj.apply(proj.identity(),
                 new MessageView(null, null, "test", MessageType.QUERY,
-                        "META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nContent.",
+                        META_SENTINEL + "entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nContent.",
                         "pt-1", null, null, null, null, null, null, 0));
         assertThat(s.points()).containsKey("pt-1");
     }
@@ -157,6 +158,24 @@ class DebateChannelProjectionTest {
         proj.apply(after_raise,
                 msg(MessageType.DONE, "pt-1", ratefacts("agree", "IMP", 2), "Done."));
         assertThat(after_raise.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
+    }
+
+    @Test
+    void apply_oldMetaSentinel_treatedAsPlainContent_notParsed() {
+        // "META:" without the SOH prefix is no longer recognised as structured content
+        ReviewState s = proj.apply(proj.identity(),
+                new MessageView(null, null, "test", MessageType.QUERY,
+                        "META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nBody.",
+                        "pt-old", null, null, null, ActorType.AGENT, null, null, 0));
+        assertThat(s.points()).isEmpty();
+    }
+
+    @Test
+    void apply_newSentinelWithUnknownEntryType_stateUnchanged() {
+        // Sentinel present but entryType value is unknown → state unchanged
+        ReviewState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-y", "entryType=unknown|agent=REV|round=1", "?"));
+        assertThat(s.points()).isEmpty();
     }
 
     @Test
