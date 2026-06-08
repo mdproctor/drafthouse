@@ -188,7 +188,7 @@ sequenceDiagram
 
 **Scenario 2 — Review session (DraftHouseMcpTools #24)**
 
-LLM client opens a review session; `ReviewerChannelBackend` handles QUERY messages via `DocumentReviewer @AiService` and dispatches RESPONSE/DECLINE to the Qhorus channel.
+LLM client opens a review session; `ReviewerChannelBackend` handles QUERY messages via `DocumentReviewer @AiService` and dispatches DONE (agree), RESPONSE (qualify), or DECLINE to the Qhorus channel based on `ReviewResult.Outcome`.
 
 ```mermaid
 sequenceDiagram
@@ -393,7 +393,7 @@ Key architectural decisions shipped:
 - `DebateChannelProjection` (new) — dispatches on `META:` header in message content; uses `content.META.agent` for REV/IMP classification rather than `actorType` (both debate agents are `ActorType.AGENT`)
 - `ReviewStatus.DISPUTED` — non-terminal dispute state, distinct from terminal `ReviewStatus.DECLINED`; renders as ⚡ without strikethrough in `SummaryRenderer`
 - `EntryType.COUNTER` — new entry type preserving the qualify/counter distinction in the domain model
-- Qhorus `artefactRefs` runtime constraint: the field accepts only CSV UUIDs at dispatch time despite its String API type; debate metadata moved to `META:entryType=...|agent=...|round=...\n\n<body>` content prefix to avoid this constraint (see #39 for a follow-up to use a safer prefix sentinel)
+- Qhorus `artefactRefs` runtime constraint: the field accepts only CSV UUIDs at dispatch time despite its String API type; debate metadata moved to `DebateProtocol.META_SENTINEL + "entryType=...|agent=...|round=...\n\n<body>"` content prefix to avoid this constraint — sentinel is SOH (U+0001) + `DHMETA:` to prevent collision with natural LLM output (#39)
 
 **Layer Impact**
 | Layer | Delta |
@@ -674,23 +674,22 @@ Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally; qh
 #### Layer — Debate Channel
 
 **Participates in chapters:** C5
-**Architectural patterns:** No-op `ChannelBackend` as registration fence, `META:` content-header encoding for application metadata, two-projection split (`ChannelProjection` vs `RenderableProjection`), `ReviewStatus.DISPUTED` as non-terminal state
+**Architectural patterns:** No-op `ChannelBackend` as registration fence, sentinel content-header encoding for debate metadata (`DebateProtocol.META_SENTINEL`), two-projection split (`ChannelProjection` vs `RenderableProjection`), `ReviewStatus.DISPUTED` as non-terminal state
 **Key protocols:** `docs/protocols/channel-projection-actor-type.md` (PP-20260607-508f7b)
 **Design refs:** `docs/superpowers/specs/2026-06-07-debate-channel-design.md`
-**Issues:** #27, #39 (META: prefix collision follow-up)
+**Issues:** #27, #33, #38, #39
 **Navigation:** `git log --grep="#27" --oneline`
 **Blog:** 🔲
-**Improvement refs:** #38 (retire `[QUALIFY]` prefix from `ReviewChannelProjection` — requires `DocumentReviewer` change), #39 (safer META sentinel)
 **Completed:** 2026-06-08
 
 #### What it adds
 
 **Before:** Two agents (REV, IMP) have no write path into the Qhorus channel. `DebateChannelProjection` (now renamed `ReviewChannelProjection`) folds review Q&A state but cannot distinguish two `ActorType.AGENT` actors.
 
-**After:** `DebateMcpTools` with 6 tools (`start_debate`, `raise_point`, `respond_to`, `flag_human`, `get_debate_summary`, `end_debate`). `DebateChannelBackend` (no-op) fences debate channels from the LLM backend. `DebateChannelProjection` folds `META:` content headers into `ReviewState` with correct REV/IMP attribution and `ReviewStatus.DISPUTED` for active disputes.
+**After:** `DebateMcpTools` with 6 tools (`start_debate`, `raise_point`, `respond_to`, `flag_human`, `get_debate_summary`, `end_debate`). `DebateChannelBackend` (no-op) fences debate channels from the LLM backend. `DebateChannelProjection` folds `DebateProtocol.META_SENTINEL` content headers into `ReviewState` with correct REV/IMP attribution and `ReviewStatus.DISPUTED` for active disputes.
 
 What this layer adds:
-- **`DebateChannelProjection` — new class** — `RenderableProjection<ReviewState>` dispatching on `META:entryType=...` prefix in message content; `META.agent` for REV/IMP classification; `META.round` populates `ThreadEntry.round` and `FlagEntry.round`
+- **`DebateChannelProjection` — new class** — `RenderableProjection<ReviewState>` dispatching on `DebateProtocol.META_SENTINEL + entryType=...` prefix in message content; `META.agent` for REV/IMP classification; `META.round` populates `ThreadEntry.round` and `FlagEntry.round`
 - **`ReviewChannelProjection` — renamed from `DebateChannelProjection`** — retains `message.type()` dispatch and `actorType`-based classification for review Q&A channels; narrows from `RenderableProjection` to `ChannelProjection<ReviewState>` (no dead `render()`)
 - **`ReviewStatus.DISPUTED`** — non-terminal status for active debate disputes; `SummaryRenderer` renders as ⚡ without strikethrough
 - **`EntryType.COUNTER`** — new entry type preserving qualify/counter distinction in the domain model; `SummaryRenderer.typeLabel` switch updated
@@ -698,7 +697,7 @@ What this layer adds:
 - **`DebateChannelBackendFactory`** — observes `ChannelInitialisedEvent`; deregister-then-register pattern for `drafthouse/debate/` channels; idempotent on restart
 - **`DraftHouseInstances`** — package-private constants class; `HUMAN_INSTANCE_ID` extracted from `DraftHouseMcpTools` for cross-class reference by `DebateMcpTools`
 
-Not closed here: retiring `[QUALIFY]` prefix from `ReviewChannelProjection` (#38 — requires `DocumentReviewer` change); safer `META:` sentinel (#39)
+Closed in follow-up session (#33 #38 #39): instance deregistration on session end, `[QUALIFY]` prefix retired (replaced by `ReviewResult.Outcome` enum + DONE/RESPONSE dispatch), `META:` sentinel replaced by `DebateProtocol.META_SENTINEL`.
 
 #### Accountability gaps closed
 
@@ -715,11 +714,12 @@ Not closed here: retiring `[QUALIFY]` prefix from `ReviewChannelProjection` (#38
 - `server/api/src/main/java/io/casehub/drafthouse/DebateSessionRegistry.java` — SPI interface; find/put/remove keyed on UUID
 - `server/api/src/main/java/io/casehub/drafthouse/debate/EntryType.java` — enum with new COUNTER value
 - `server/api/src/main/java/io/casehub/drafthouse/debate/ReviewStatus.java` — enum with new DISPUTED value
-- `server/runtime/src/main/java/io/casehub/drafthouse/debate/DebateChannelProjection.java` — `RenderableProjection<ReviewState>`; `META:` header dispatch
-- `server/runtime/src/main/java/io/casehub/drafthouse/debate/ReviewChannelProjection.java` — `ChannelProjection<ReviewState>`; `message.type()` dispatch (renamed from `DebateChannelProjection`)
+- `server/runtime/src/main/java/io/casehub/drafthouse/debate/DebateProtocol.java` — sentinel constant `META_SENTINEL` (SOH + `DHMETA:`); shared by `DebateMcpTools` and `DebateChannelProjection`
+- `server/runtime/src/main/java/io/casehub/drafthouse/debate/DebateChannelProjection.java` — `RenderableProjection<ReviewState>`; `DebateProtocol.META_SENTINEL` header dispatch with WARNING log on unknown entryType
+- `server/runtime/src/main/java/io/casehub/drafthouse/debate/ReviewChannelProjection.java` — `ChannelProjection<ReviewState>`; DONE→AGREE, RESPONSE→QUALIFY, DECLINE→DECLINED, HANDOFF→PENDING_HUMAN dispatch (renamed from `DebateChannelProjection`)
 - `server/runtime/src/main/java/io/casehub/drafthouse/DebateChannelBackend.java` — no-op backend; `BACKEND_ID="drafthouse-debate"`
 - `server/runtime/src/main/java/io/casehub/drafthouse/DebateChannelBackendFactory.java` — observes `ChannelInitialisedEvent` for `drafthouse/debate/` prefix
-- `server/runtime/src/main/java/io/casehub/drafthouse/DebateMcpTools.java` — 6 MCP tools; `sender()` switch; session precondition; `META:` encoding
+- `server/runtime/src/main/java/io/casehub/drafthouse/DebateMcpTools.java` — 6 MCP tools; `sender()` switch; session precondition; `DebateProtocol.META_SENTINEL` encoding; instance deregistration on end/partial-failure
 - `server/runtime/src/main/java/io/casehub/drafthouse/DraftHouseInstances.java` — `HUMAN_INSTANCE_ID` constant
 
 #### Key wiring
