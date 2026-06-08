@@ -70,7 +70,7 @@ class ReviewSessionLifecycleTest {
         activeSessionId = null;
         orphanedChannel = null;
         when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "Good revision."));
+                .thenReturn(ReviewResult.agree("Good revision."));
     }
 
     @AfterEach
@@ -88,7 +88,7 @@ class ReviewSessionLifecycleTest {
     // ── Test 1 — Happy path ───────────────────────────────────────────────────
 
     @Test
-    void query_dispatchesResponse_andFulfillsCommitment() {
+    void query_dispatchesDone_andFulfillsCommitment_whenReviewerAgrees() {
         final String result = tools.startReview(docA.toString(), docB.toString());
         final String sessionId = extractSessionId(result);
         activeSessionId = sessionId;
@@ -105,13 +105,13 @@ class ReviewSessionLifecycleTest {
                 .build());
 
         await().atMost(TIMEOUT).until(() ->
-                messageService.findResponseByCorrelationId(channelId, correlationId).isPresent());
+                messageService.findDoneByCorrelationId(channelId, correlationId).isPresent());
 
-        final var response = messageService.findResponseByCorrelationId(channelId, correlationId);
-        assertThat(response).isPresent();
-        assertThat(response.get().messageType).isEqualTo(MessageType.RESPONSE);
-        assertThat(response.get().content).isEqualTo("Good revision.");
-        assertThat(response.get().sender).isEqualTo("drafthouse-reviewer-" + sessionId);
+        final var done = messageService.findDoneByCorrelationId(channelId, correlationId);
+        assertThat(done).isPresent();
+        assertThat(done.get().messageType).isEqualTo(MessageType.DONE);
+        assertThat(done.get().content).isEqualTo("Good revision.");
+        assertThat(done.get().sender).isEqualTo("drafthouse-reviewer-" + sessionId);
     }
 
     // ── Test 2 — Orphaned channel drops query ─────────────────────────────────
@@ -228,7 +228,7 @@ class ReviewSessionLifecycleTest {
                 .type(MessageType.QUERY).content("First question.")
                 .correlationId(corrId1).actorType(ActorType.HUMAN).build());
         await().atMost(TIMEOUT).until(() ->
-                messageService.findResponseByCorrelationId(channelId, corrId1).isPresent());
+                messageService.findDoneByCorrelationId(channelId, corrId1).isPresent());
 
         // Second query
         String corrId2 = UUID.randomUUID().toString();
@@ -237,7 +237,7 @@ class ReviewSessionLifecycleTest {
                 .type(MessageType.QUERY).content("Second question.")
                 .correlationId(corrId2).actorType(ActorType.HUMAN).build());
         await().atMost(TIMEOUT).until(() ->
-                messageService.findResponseByCorrelationId(channelId, corrId2).isPresent());
+                messageService.findDoneByCorrelationId(channelId, corrId2).isPresent());
 
         // Capture reviewHistory from both LLM calls — assert on the second invocation
         ArgumentCaptor<String> historyCaptor = ArgumentCaptor.forClass(String.class);

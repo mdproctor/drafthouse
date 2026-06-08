@@ -25,6 +25,11 @@ class ReviewChannelProjectionTest {
                 content, correlationId, null, null, null, actorType, null, null, 0);
     }
 
+    private static MessageView done(String correlationId, ActorType actorType, String content) {
+        return new MessageView(null, null, "test", MessageType.DONE,
+                content, correlationId, null, null, null, actorType, null, null, 0);
+    }
+
     private static MessageView decline(String correlationId, ActorType actorType, String content) {
         return new MessageView(null, null, "test", MessageType.DECLINE,
                 content, correlationId, null, null, null, actorType, null, null, 0);
@@ -65,23 +70,36 @@ class ReviewChannelProjectionTest {
     }
 
     @Test
-    void apply_response_agree_transitionsToAgreed_agentMapsToImp() {
+    void apply_done_agrees_point_agentMapsToImp() {
         ReviewState s0 = proj.apply(proj.identity(),
                 query("R1", ActorType.HUMAN, Priority.P1, Scope.ISOLATED, null, "Q?"));
-        ReviewState s1 = proj.apply(s0, respond("R1", ActorType.AGENT, "Answer."));
+        ReviewState s1 = proj.apply(s0, done("R1", ActorType.AGENT, "Answer."));
         assertThat(s1.points().get("R1").currentStatus()).isEqualTo(ReviewStatus.AGREED);
         assertThat(s1.points().get("R1").thread().get(1).agent()).isEqualTo(AgentType.IMP);
         assertThat(s1.points().get("R1").thread().get(1).type()).isEqualTo(EntryType.AGREE);
+        assertThat(s1.points().get("R1").thread().get(1).content()).isEqualTo("Answer.");
     }
 
     @Test
-    void apply_response_qualify_transitionsToActive_stripsPrefix() {
+    void apply_response_qualifies_point() {
         ReviewState s0 = proj.apply(proj.identity(),
                 query("R1", ActorType.HUMAN, Priority.P1, Scope.ISOLATED, null, "Q?"));
-        ReviewState s1 = proj.apply(s0, respond("R1", ActorType.AGENT, "[QUALIFY] Partial."));
+        ReviewState s1 = proj.apply(s0, respond("R1", ActorType.AGENT, "Partial."));
         assertThat(s1.points().get("R1").currentStatus()).isEqualTo(ReviewStatus.ACTIVE);
         assertThat(s1.points().get("R1").thread().get(1).type()).isEqualTo(EntryType.QUALIFY);
         assertThat(s1.points().get("R1").thread().get(1).content()).isEqualTo("Partial.");
+    }
+
+    @Test
+    void apply_response_noLongerAgreesViaPrefix() {
+        ReviewState s0 = proj.apply(proj.identity(),
+                query("R1", ActorType.HUMAN, Priority.P1, Scope.ISOLATED, null, "Q?"));
+        // RESPONSE always means QUALIFY now — the old "[QUALIFY] " prefix is dead
+        ReviewState s1 = proj.apply(s0, respond("R1", ActorType.AGENT, "[QUALIFY] Old prefix."));
+        assertThat(s1.points().get("R1").currentStatus()).isEqualTo(ReviewStatus.ACTIVE);
+        assertThat(s1.points().get("R1").thread().get(1).type()).isEqualTo(EntryType.QUALIFY);
+        // Content is passed through verbatim — no prefix stripping
+        assertThat(s1.points().get("R1").thread().get(1).content()).isEqualTo("[QUALIFY] Old prefix.");
     }
 
     @Test
@@ -145,7 +163,7 @@ class ReviewChannelProjectionTest {
     void apply_doesNotMutateInputState() {
         ReviewState initial = proj.apply(proj.identity(),
                 query("R1", ActorType.HUMAN, Priority.P1, Scope.ISOLATED, null, "Q?"));
-        proj.apply(initial, respond("R1", ActorType.AGENT, "A."));
+        proj.apply(initial, done("R1", ActorType.AGENT, "A."));
         assertThat(initial.points().get("R1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
     }
 

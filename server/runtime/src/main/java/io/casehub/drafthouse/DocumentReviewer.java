@@ -23,8 +23,10 @@ public interface DocumentReviewer {
             Current query: {{query}}
 
             If this query is outside the scope of document review (e.g. general knowledge, \
-            unrelated topics), respond with declined=true and explain why in content.
-            Otherwise respond with declined=false and your review in content.
+            unrelated topics): outcome=DECLINE, explain why in content.
+            Otherwise: outcome=AGREE if you agree and this point is resolved (discussion concludes); \
+            outcome=QUALIFY if you qualify your position (discussion continues, you have more to say). \
+            Provide your review in content.
             """)
     ReviewResult review(String personality, String documentA, String documentB,
                         String selectionContext, String reviewHistory, String query);

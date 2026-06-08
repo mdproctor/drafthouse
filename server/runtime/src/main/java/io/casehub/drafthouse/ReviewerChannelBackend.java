@@ -95,7 +95,11 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
     private void dispatch(ChannelRef channel, OutboundMessage message,
                           Long inReplyTo, ReviewSession session, ReviewResult result) {
-        MessageType type = result.declined() ? MessageType.DECLINE : MessageType.RESPONSE;
+        MessageType type = switch (result.outcome()) {
+            case AGREE   -> MessageType.DONE;
+            case QUALIFY -> MessageType.RESPONSE;
+            case DECLINE -> MessageType.DECLINE;
+        };
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(channel.id())
                 .sender(session.instanceId())

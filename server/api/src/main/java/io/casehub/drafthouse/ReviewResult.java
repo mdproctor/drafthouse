@@ -5,19 +5,29 @@ import java.util.Objects;
 /**
  * Result returned by DocumentReviewer.review().
  *
- * declined=false → dispatch RESPONSE on the review channel.
- * declined=true  → dispatch DECLINE on the review channel (covers both out-of-scope
- *                  queries and LLM errors — FAILURE is reserved for COMMAND obligations only,
- *                  per Qhorus ADR-0005 speech-act taxonomy).
+ * AGREE   → dispatch DONE on the review channel (point resolved, discussion concludes).
+ * QUALIFY → dispatch RESPONSE on the review channel (reviewer qualifies position, discussion continues).
+ * DECLINE → dispatch DECLINE on the review channel (out-of-scope or LLM error — FAILURE is reserved
+ *            for COMMAND obligations only per Qhorus ADR-0005 speech-act taxonomy).
  */
-public record ReviewResult(boolean declined, String content) {
+public record ReviewResult(Outcome outcome, String content) {
+
+    public enum Outcome { AGREE, QUALIFY, DECLINE }
 
     public ReviewResult {
+        Objects.requireNonNull(outcome, "outcome must not be null");
         Objects.requireNonNull(content, "content must not be null");
     }
 
-    /** Convenience factory — both out-of-scope and error paths produce a DECLINE. */
+    public static ReviewResult agree(final String content) {
+        return new ReviewResult(Outcome.AGREE, content);
+    }
+
+    public static ReviewResult qualify(final String content) {
+        return new ReviewResult(Outcome.QUALIFY, content);
+    }
+
     public static ReviewResult decline(final String reason) {
-        return new ReviewResult(true, reason);
+        return new ReviewResult(Outcome.DECLINE, reason);
     }
 }

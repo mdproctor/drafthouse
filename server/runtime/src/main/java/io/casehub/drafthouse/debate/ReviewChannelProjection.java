@@ -27,7 +27,8 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
     public ReviewState apply(ReviewState state, MessageView message) {
         return switch (message.type()) {
             case QUERY    -> handleRaise(state, message);
-            case RESPONSE -> handleResponse(state, message);
+            case RESPONSE -> handleQualify(state, message);
+            case DONE     -> handleAgree(state, message);
             case DECLINE  -> handleDecline(state, message);
             case HANDOFF  -> handleFlagHuman(state, message);
             default       -> state;
@@ -54,7 +55,16 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
         return new ReviewState(points, new ArrayList<>(state.humanFlags()));
     }
 
-    private ReviewState handleResponse(ReviewState state, MessageView message) {
+    private ReviewState handleQualify(ReviewState state, MessageView message) {
+        return appendToPoint(state, message, EntryType.QUALIFY, ReviewStatus.ACTIVE);
+    }
+
+    private ReviewState handleAgree(ReviewState state, MessageView message) {
+        return appendToPoint(state, message, EntryType.AGREE, ReviewStatus.AGREED);
+    }
+
+    private ReviewState appendToPoint(ReviewState state, MessageView message,
+                                       EntryType entryType, ReviewStatus newStatus) {
         String targetId = message.correlationId();
         if (targetId == null) return state;
         if (!state.points().containsKey(targetId)) {
@@ -62,16 +72,9 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
                     "Response references unknown point ID: {0} — discarded", targetId);
             return state;
         }
-        boolean isQualify = message.content() != null
-                && message.content().startsWith("[QUALIFY] ");
-        String content = isQualify
-                ? message.content().substring("[QUALIFY] ".length())
-                : message.content();
-        EntryType entryType = isQualify ? EntryType.QUALIFY : EntryType.AGREE;
-        ReviewStatus newStatus = isQualify ? ReviewStatus.ACTIVE : ReviewStatus.AGREED;
         ReviewPoint existing = state.points().get(targetId);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(message), 0, entryType, content));
+        thread.add(new ThreadEntry(null, agentType(message), 0, entryType, message.content()));
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);

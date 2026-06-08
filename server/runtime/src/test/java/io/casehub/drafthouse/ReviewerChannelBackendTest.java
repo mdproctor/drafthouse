@@ -78,22 +78,35 @@ class ReviewerChannelBackendTest {
     }
 
     @Test
-    void queryDispatches_response_onSuccess() {
+    void queryDispatches_done_whenReviewerAgrees() {
         when(llm.review(any(), eq("Original text"), eq("Revised text"), any(), any(), eq("Is this clear?")))
-                .thenReturn(new ReviewResult(false, "The revision is clear."));
+                .thenReturn(ReviewResult.agree("The revision is clear."));
 
         backend.post(channelRef, query("Is this clear?"));
 
         ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(captor.capture());
         MessageDispatch d = captor.getValue();
-        assertThat(d.type()).isEqualTo(MessageType.RESPONSE);
+        assertThat(d.type()).isEqualTo(MessageType.DONE);
         assertThat(d.inReplyTo()).isEqualTo(42L);
         assertThat(d.correlationId()).isEqualTo(CORRELATION_ID.toString());
         assertThat(d.sender()).isEqualTo(session.instanceId());
         assertThat(d.actorType()).isEqualTo(ActorType.AGENT);
         assertThat(d.channelId()).isEqualTo(CHANNEL_ID);
         assertThat(d.content()).isEqualTo("The revision is clear.");
+    }
+
+    @Test
+    void queryDispatches_response_whenReviewerQualifies() {
+        when(llm.review(any(), any(), any(), any(), any(), any()))
+                .thenReturn(ReviewResult.qualify("I partially agree but have concerns."));
+
+        backend.post(channelRef, query("Is this clear?"));
+
+        ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService).dispatch(captor.capture());
+        assertThat(captor.getValue().type()).isEqualTo(MessageType.RESPONSE);
+        assertThat(captor.getValue().content()).isEqualTo("I partially agree but have concerns.");
     }
 
     @Test
@@ -135,7 +148,7 @@ class ReviewerChannelBackendTest {
     @Test
     void queryWithNoSelection_passesEmptySelectionContext() {
         when(llm.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "Looks good."));
+                .thenReturn(ReviewResult.agree("Looks good."));
 
         backend.post(channelRef, query("Is this clear?"));
 
@@ -147,7 +160,7 @@ class ReviewerChannelBackendTest {
         ReviewSession withSelection = session.withSelection(DocumentSide.B, "key paragraph");
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(withSelection));
         when(llm.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "Noted."));
+                .thenReturn(ReviewResult.agree("Noted."));
 
         backend.post(channelRef, query("Is this clear?"));
 
@@ -160,7 +173,7 @@ class ReviewerChannelBackendTest {
         ReviewSession updated = session.withSelection(DocumentSide.A, "updated selection");
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(updated));
         when(llm.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "OK"));
+                .thenReturn(ReviewResult.agree("OK"));
 
         backend.post(channelRef, query("Review?"));
 
@@ -211,7 +224,7 @@ class ReviewerChannelBackendTest {
     @Test
     void queryDispatch_callsProjectionBeforeLlm() {
         when(llm.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "Response."));
+                .thenReturn(ReviewResult.agree("Response."));
 
         backend.post(channelRef, query("Question?"));
 
@@ -226,7 +239,7 @@ class ReviewerChannelBackendTest {
         when(projectionService.project(CHANNEL_ID, projection))
                 .thenReturn(new ProjectionResult<>(stateWithHistory, 42L));
         when(llm.review(any(), any(), any(), any(), any(), any()))
-                .thenReturn(new ReviewResult(false, "Response."));
+                .thenReturn(ReviewResult.agree("Response."));
 
         backend.post(channelRef, query("Current question?"));
 

@@ -2,33 +2,49 @@ package io.casehub.drafthouse;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static io.casehub.drafthouse.ReviewResult.Outcome.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 class ReviewResultTest {
 
     @Test
-    void responseCarriesContent() {
-        var result = new ReviewResult(false, "Looks good.");
-        assertFalse(result.declined());
-        assertEquals("Looks good.", result.content());
+    void agree_outcome_isAgree_notDeclineNotQualify() {
+        var r = ReviewResult.agree("Looks good.");
+        assertThat(r.outcome()).isEqualTo(AGREE);
+        assertThat(r.content()).isEqualTo("Looks good.");
     }
 
     @Test
-    void declineFactorySetsDeclinesTrue() {
-        var result = ReviewResult.decline("Out of scope.");
-        assertTrue(result.declined());
-        assertEquals("Out of scope.", result.content());
+    void qualify_outcome_isQualify() {
+        var r = ReviewResult.qualify("Still in dialogue.");
+        assertThat(r.outcome()).isEqualTo(QUALIFY);
+        assertThat(r.content()).isEqualTo("Still in dialogue.");
+    }
+
+    @Test
+    void decline_outcome_isDecline() {
+        var r = ReviewResult.decline("Out of scope.");
+        assertThat(r.outcome()).isEqualTo(DECLINE);
+        assertThat(r.content()).isEqualTo("Out of scope.");
     }
 
     @Test
     void nullContentRejected() {
-        assertThrows(NullPointerException.class, () -> new ReviewResult(false, null));
-        assertThrows(NullPointerException.class, () -> ReviewResult.decline(null));
+        assertThatNullPointerException().isThrownBy(() -> ReviewResult.agree(null));
+        assertThatNullPointerException().isThrownBy(() -> ReviewResult.qualify(null));
+        assertThatNullPointerException().isThrownBy(() -> ReviewResult.decline(null));
+    }
+
+    @Test
+    void nullOutcomeRejected() {
+        assertThatNullPointerException().isThrownBy(() -> new ReviewResult(null, "content"));
     }
 
     @Test
     void equalityByValue() {
-        assertEquals(ReviewResult.decline("x"), ReviewResult.decline("x"));
-        assertNotEquals(ReviewResult.decline("x"), ReviewResult.decline("y"));
+        assertThat(ReviewResult.decline("x")).isEqualTo(ReviewResult.decline("x"));
+        assertThat(ReviewResult.decline("x")).isNotEqualTo(ReviewResult.decline("y"));
+        assertThat(ReviewResult.agree("x")).isNotEqualTo(ReviewResult.qualify("x"));
     }
 }
