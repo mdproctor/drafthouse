@@ -36,6 +36,13 @@ architecture:
 ../parent/docs/APPLICATIONS.md
 ```
 
+## Reference Documents (casehub-parent)
+
+| Document | What it covers |
+|----------|---------------|
+| `../garden/docs/protocols/casehub/HARNESS-INDEX.md` | CaseHub app protocols |
+| `../garden/docs/protocols/universal/INDEX.md` | Universal Java/Quarkus protocols |
+
 ## Building the Server
 
 ```bash
