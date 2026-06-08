@@ -60,9 +60,11 @@ public Uni<Void> deregister(String instanceId) {
 }
 ```
 
-`ReactiveInstanceStore.delete(UUID) → Uni<Void>` already exists. Drafthouse does not
-currently call the reactive service, but parity is maintained per the reactive-service
-build-gating protocol.
+`Uni.createFrom().voidItem()` is correct for the no-op branch — both branches of the
+ternary already return `Uni<Void>`, so `.replaceWithVoid()` does not apply here (it
+transforms a non-Void `Uni`, not a `Uni<Void>`). `ReactiveInstanceStore.delete(UUID) →
+Uni<Void>` already exists. Drafthouse does not currently call the reactive service, but
+parity is maintained per the reactive-service build-gating protocol.
 
 After adding, run `mvn install` on qhorus to make the updated SNAPSHOT available to
 drafthouse.
@@ -291,7 +293,7 @@ Add tests for the new enum:
 3. **Add** `apply_response_message_qualifies_point()` — RESPONSE message →
    `ReviewStatus.ACTIVE`, `EntryType.QUALIFY`.
 
-**`ReviewerChannelBackendTest` (existing or new):**
+**`ReviewerChannelBackendTest` (existing):**
 
 Verify `DONE` dispatched for `ReviewResult.agree(...)`, `RESPONSE` for
 `ReviewResult.qualify(...)`, `DECLINE` for `ReviewResult.decline(...)`.
@@ -316,15 +318,16 @@ A new class `io.casehub.drafthouse.debate.DebateProtocol` in the runtime module
 ```java
 public final class DebateProtocol {
     /** SOH (U+0001) prefix guarantees no LLM output ever begins with this sequence. */
-    public static final String META_SENTINEL = "DHMETA:";
+    public static final String META_SENTINEL = "\u0001DHMETA:";
     private DebateProtocol() {}
 }
 ```
 
-The constant **must** use the Java Unicode escape `"DHMETA:"`. Do not use a literal
-SOH character in source — editors, copy-paste, and version-control systems can silently
-drop or corrupt it. The `DHMETA` suffix is human-identifiable in hex dumps.
-`"DHMETA:"` has length 8.
+The value is the six-character Java Unicode escape `\u0001` (SOH, U+0001) followed by
+`DHMETA:` — eight characters total. The escape **must** be written as the six visible
+ASCII characters `\u0001` in source, never as a literal SOH byte. Editors, copy-paste,
+and version-control systems can silently drop or corrupt the invisible byte. The `DHMETA`
+suffix is human-identifiable in hex dumps. `"\u0001DHMETA:".length()` is 8.
 
 ### DebateChannelProjection — parseMeta()
 
@@ -356,8 +359,9 @@ private Map<String, String> parseMeta(String content) {
 }
 ```
 
-The hardcoded `5` was `"META:".length()`. After the change, `"DHMETA:".length()` is
-`8`. Using the constant prevents the offset from drifting again.
+The hardcoded `5` was `"META:".length()`. After the change, `"\u0001DHMETA:".length()`
+is `8`. Using the constant prevents the offset from drifting again if the sentinel ever
+changes.
 
 ### DebateChannelProjection — bodyContent()
 
