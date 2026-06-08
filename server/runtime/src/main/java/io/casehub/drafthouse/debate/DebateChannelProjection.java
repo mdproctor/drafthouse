@@ -141,30 +141,37 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
     }
 
     /**
-     * Parses metadata from the META header embedded in message content.
-     * Format: "META:key=value|key=value\n\n<body>"
-     * If no META header is present, returns an empty map.
+     * Parses metadata from the structured sentinel header embedded in message content.
+     * Format: META_SENTINEL + "key=value|key=value\n\n<body>"
+     * If the sentinel is absent, returns an empty map (plain content — not an error).
      */
     private Map<String, String> parseMeta(String content) {
         Map<String, String> map = new HashMap<>();
         if (content == null || content.isBlank()) return map;
-        if (!content.startsWith("META:")) return map;
+        if (!content.startsWith(DebateProtocol.META_SENTINEL)) return map;
         int headerEnd = content.indexOf("\n\n");
-        String headerLine = headerEnd > 0 ? content.substring(5, headerEnd) : content.substring(5);
+        String headerLine = headerEnd > 0
+                ? content.substring(DebateProtocol.META_SENTINEL.length(), headerEnd)
+                : content.substring(DebateProtocol.META_SENTINEL.length());
         for (String part : headerLine.split("\\|")) {
             int eq = part.indexOf('=');
             if (eq > 0) map.put(part.substring(0, eq).strip(), part.substring(eq + 1).strip());
+        }
+        if (map.get("entryType") == null) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Structured debate message (sentinel present) has no entryType — discarded. Header: {0}",
+                    headerLine.length() > 80 ? headerLine.substring(0, 80) + "..." : headerLine);
         }
         return map;
     }
 
     /**
-     * Strips the META header from encoded content to return only the human-readable body.
-     * If no META header is present, returns the content unchanged.
+     * Strips the sentinel header from encoded content to return only the human-readable body.
+     * If the sentinel is absent, returns the content unchanged.
      */
     private String bodyContent(String content) {
         if (content == null) return null;
-        if (!content.startsWith("META:")) return content;
+        if (!content.startsWith(DebateProtocol.META_SENTINEL)) return content;
         int headerEnd = content.indexOf("\n\n");
         return headerEnd > 0 ? content.substring(headerEnd + 2) : "";
     }
