@@ -202,24 +202,34 @@ final class DraftHouseInstances {
 
 ## Message Encoding
 
+> **Implementation note (discovered during #27):** `MessageDispatch.Builder.artefactRefs(String)` is a String at the API level, but the Qhorus runtime (`ArtefactRefParser`) validates the value as CSV UUIDs at dispatch time. Free-form key=value strings cause a transaction rollback. Debate metadata is therefore encoded in the `content` field using a `META:` header prefix, not in `artefactRefs`. See `#39` for a follow-up to use a safer sentinel.
+
 Every debate message uses two fields:
 
 - **Qhorus `MessageType`** — commitment lifecycle (what obligation does this create or close?)
-- **`artefactRefs`** — debate-domain metadata (what does this mean in the debate?)
+- **`content`** — structured `META:` header (debate metadata) + `\n\n` separator + human-readable body text
 
-### `artefactRefs` schema
+`artefactRefs` is NOT used for debate metadata.
+
+### `content` encoding schema
 
 ```
-entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED|location=§3.2
-entryType=raise|agent=IMP|round=2|priority=P2|scope=SYSTEMIC
-entryType=agree|agent=IMP|round=2
-entryType=dispute|agent=REV|round=3
-entryType=qualify|agent=IMP|round=2
-entryType=counter|agent=REV|round=3
-entryType=flag-human|agent=REV|round=3
+META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED|location=§3.2
+
+The API contract is ambiguous.
 ```
 
-`entryType`, `agent`, `round` always present. `priority`, `scope` on `raise` entries. `location` optional even on `raise`; omit the key when blank or null.
+```
+META:entryType=agree|agent=IMP|round=2
+
+Agreed — will clarify the contract in §3.2.
+```
+
+The `META:` prefix acts as a sentinel. `DebateChannelProjection.parseMeta()` splits on the first `\n\n` and parses the header as `key=value|...` pairs. `bodyContent()` returns everything after `\n\n` as the human-readable text stored in `ThreadEntry.content`.
+
+**Known limitation:** If agent-generated debate text begins with `META:` (e.g., "META: the spec says..."), the prefix is misread as metadata. This is low-probability given agent-controlled input, but not impossible. Tracked in #39.
+
+`entryType`, `agent`, `round` always present in header. `priority`, `scope` on `raise` entries. `location` optional; omit the key when blank or null.
 
 ### Qhorus type mapping
 

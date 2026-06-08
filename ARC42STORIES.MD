@@ -268,7 +268,7 @@ DraftHouse deploys as a single JVM process. No container or orchestration config
 | 2 | Platform Wiring | Review | Platform Wiring | High | ✅ |
 | 3 | Review Manifest Domain | Review | Review Domain | High | ✅ |
 | 4 | MCP Review Interface | Review | MCP Surface | High | ✅ |
-| 5 | Debate Channel | Review | Debate Channel | Medium | 🔲 |
+| 5 | Debate Channel | Review | Debate Channel | Medium | ✅ |
 
 **Layer × Chapter matrix**
 
@@ -297,7 +297,7 @@ flowchart LR
   style C2 fill:#90EE90,color:#000
   style C3 fill:#90EE90,color:#000
   style C4 fill:#90EE90,color:#000
-  style C5 fill:#D3D3D3,color:#000
+  style C5 fill:#90EE90,color:#000
 ```
 
 ### §9.3 Chapter Entries
@@ -381,11 +381,19 @@ The review system can model a structured debate — questions, answers, rejectio
 
 #### Chapter 5 — Debate Channel
 
-**Journey:** Review | **Sequence:** 5 of 5 | **Status:** 🔲
-**Issues:** #27 | **Blog:** 🔲 at Chapter 5 close
+**Journey:** Review | **Sequence:** 5 of 5 | **Status:** ✅
+**Delivered:** 2026-06-08 | **Issues:** #27 | **Blog:** 🔲
 
 **What this delivers**
-🔲 at #27 close — Qhorus `DebateChannel` type; AGREE/QUALIFY sub-classification; `SummaryRenderer` implements `ProjectionRenderer` SPI (qhorus#232 ✅ shipped; migration tracked in #31).
+
+Peer-to-peer MCP debate channel for two LLM agents (REV reviewer, IMP implementer). Agents post structured debate entries — raise points, respond with agree/dispute/qualify/counter, escalate to human via flag — into a Qhorus APPEND channel. State is folded by `DebateChannelProjection` into `ReviewState`; `DebateMcpTools.get_debate_summary` renders the current state as markdown.
+
+Key architectural decisions shipped:
+- `ReviewChannelProjection` (renamed from `DebateChannelProjection`) — preserves existing review Q&A fold over `message.type()`; implements `ChannelProjection<ReviewState>` only (no `render()`)
+- `DebateChannelProjection` (new) — dispatches on `META:` header in message content; uses `content.META.agent` for REV/IMP classification rather than `actorType` (both debate agents are `ActorType.AGENT`)
+- `ReviewStatus.DISPUTED` — non-terminal dispute state, distinct from terminal `ReviewStatus.DECLINED`; renders as ⚡ without strikethrough in `SummaryRenderer`
+- `EntryType.COUNTER` — new entry type preserving the qualify/counter distinction in the domain model
+- Qhorus `artefactRefs` runtime constraint: the field accepts only CSV UUIDs at dispatch time despite its String API type; debate metadata moved to `META:entryType=...|agent=...|round=...\n\n<body>` content prefix to avoid this constraint (see #39 for a follow-up to use a safer prefix sentinel)
 
 **Layer Impact**
 | Layer | Delta |
@@ -663,6 +671,87 @@ Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally; qh
 
 ---
 
+#### Layer — Debate Channel
+
+**Participates in chapters:** C5
+**Architectural patterns:** No-op `ChannelBackend` as registration fence, `META:` content-header encoding for application metadata, two-projection split (`ChannelProjection` vs `RenderableProjection`), `ReviewStatus.DISPUTED` as non-terminal state
+**Key protocols:** `docs/protocols/channel-projection-actor-type.md` (PP-20260607-508f7b)
+**Design refs:** `docs/superpowers/specs/2026-06-07-debate-channel-design.md`
+**Issues:** #27, #39 (META: prefix collision follow-up)
+**Navigation:** `git log --grep="#27" --oneline`
+**Blog:** 🔲
+**Improvement refs:** #38 (retire `[QUALIFY]` prefix from `ReviewChannelProjection` — requires `DocumentReviewer` change), #39 (safer META sentinel)
+**Completed:** 2026-06-08
+
+#### What it adds
+
+**Before:** Two agents (REV, IMP) have no write path into the Qhorus channel. `DebateChannelProjection` (now renamed `ReviewChannelProjection`) folds review Q&A state but cannot distinguish two `ActorType.AGENT` actors.
+
+**After:** `DebateMcpTools` with 6 tools (`start_debate`, `raise_point`, `respond_to`, `flag_human`, `get_debate_summary`, `end_debate`). `DebateChannelBackend` (no-op) fences debate channels from the LLM backend. `DebateChannelProjection` folds `META:` content headers into `ReviewState` with correct REV/IMP attribution and `ReviewStatus.DISPUTED` for active disputes.
+
+What this layer adds:
+- **`DebateChannelProjection` — new class** — `RenderableProjection<ReviewState>` dispatching on `META:entryType=...` prefix in message content; `META.agent` for REV/IMP classification; `META.round` populates `ThreadEntry.round` and `FlagEntry.round`
+- **`ReviewChannelProjection` — renamed from `DebateChannelProjection`** — retains `message.type()` dispatch and `actorType`-based classification for review Q&A channels; narrows from `RenderableProjection` to `ChannelProjection<ReviewState>` (no dead `render()`)
+- **`ReviewStatus.DISPUTED`** — non-terminal status for active debate disputes; `SummaryRenderer` renders as ⚡ without strikethrough
+- **`EntryType.COUNTER`** — new entry type preserving qualify/counter distinction in the domain model; `SummaryRenderer.typeLabel` switch updated
+- **`DebateChannelBackend @ApplicationScoped`** — stateless no-op backend; registration fence preventing `ReviewerChannelBackendFactory` from attaching the LLM reviewer to debate channels
+- **`DebateChannelBackendFactory`** — observes `ChannelInitialisedEvent`; deregister-then-register pattern for `drafthouse/debate/` channels; idempotent on restart
+- **`DraftHouseInstances`** — package-private constants class; `HUMAN_INSTANCE_ID` extracted from `DraftHouseMcpTools` for cross-class reference by `DebateMcpTools`
+
+Not closed here: retiring `[QUALIFY]` prefix from `ReviewChannelProjection` (#38 — requires `DocumentReviewer` change); safer `META:` sentinel (#39)
+
+#### Accountability gaps closed
+
+| Gap | What breaks without it | Closed by |
+|---|---|---|
+| No debate write path | Agents cannot post to the debate channel | `DebateMcpTools` with 6 MCP tools |
+| `actorType` misclassification | Both REV and IMP are `ActorType.AGENT`; old heuristic produced wrong attribution | `META.agent` field in content header |
+| Terminal `DECLINED` for dispute | Disputed points rendered as closed (🚫, strikethrough) while still live | `ReviewStatus.DISPUTED` (⚡, no strikethrough) |
+| LLM backend on debate channel | `ReviewerChannelBackendFactory` would trigger LLM for every QUERY (raise_point) | `DebateChannelBackend` registration fence + guard in `ReviewerChannelBackendFactory` |
+
+#### Key files
+
+- `server/api/src/main/java/io/casehub/drafthouse/DebateSession.java` — session record: channelId, debateSessionId, channelName, revInstanceId, impInstanceId
+- `server/api/src/main/java/io/casehub/drafthouse/DebateSessionRegistry.java` — SPI interface; find/put/remove keyed on UUID
+- `server/api/src/main/java/io/casehub/drafthouse/debate/EntryType.java` — enum with new COUNTER value
+- `server/api/src/main/java/io/casehub/drafthouse/debate/ReviewStatus.java` — enum with new DISPUTED value
+- `server/runtime/src/main/java/io/casehub/drafthouse/debate/DebateChannelProjection.java` — `RenderableProjection<ReviewState>`; `META:` header dispatch
+- `server/runtime/src/main/java/io/casehub/drafthouse/debate/ReviewChannelProjection.java` — `ChannelProjection<ReviewState>`; `message.type()` dispatch (renamed from `DebateChannelProjection`)
+- `server/runtime/src/main/java/io/casehub/drafthouse/DebateChannelBackend.java` — no-op backend; `BACKEND_ID="drafthouse-debate"`
+- `server/runtime/src/main/java/io/casehub/drafthouse/DebateChannelBackendFactory.java` — observes `ChannelInitialisedEvent` for `drafthouse/debate/` prefix
+- `server/runtime/src/main/java/io/casehub/drafthouse/DebateMcpTools.java` — 6 MCP tools; `sender()` switch; session precondition; `META:` encoding
+- `server/runtime/src/main/java/io/casehub/drafthouse/DraftHouseInstances.java` — `HUMAN_INSTANCE_ID` constant
+
+#### Key wiring
+
+**`DebateChannelBackendFactory` and `ReviewerChannelBackendFactory` guard:** Both observe `ChannelInitialisedEvent`. `ReviewerChannelBackendFactory` returns early if channel name starts with `drafthouse/debate/`. `DebateChannelBackendFactory` returns early if channel name does NOT start with `drafthouse/debate/`. The two factories are mutually exclusive by channel prefix.
+
+**`META:` content encoding:** Qhorus `artefactRefs` validates UUID-only content at dispatch time despite its String API type. Debate metadata (entryType, agent, round, priority, scope, location) is encoded as `META:key=value|...\n\n<body>` in the message content field. `DebateChannelProjection.parseMeta()` strips and parses the header; `bodyContent()` returns the human-readable text for thread entries.
+
+**`start_debate` ordering:** `registry.put()` before `channelGateway.initChannel()` — `DebateChannelBackendFactory` reads from the registry during the synchronous `ChannelInitialisedEvent` CDI event. Same constraint as `start_review`.
+
+#### Architectural decisions
+
+**Why `ChannelProjection` (not `RenderableProjection`) for `ReviewChannelProjection`:** `ReviewerChannelBackend` calls `conversationRenderer.render()` directly — `projection.render()` is never invoked on review channels. Narrowing the interface eliminates dead code and makes the contract explicit.
+
+**Why metadata in content rather than `artefactRefs`:** Qhorus `ArtefactRefParser` validates UUID-only content at dispatch time. The `MessageDispatch.Builder.artefactRefs(String)` API is a String, but the runtime rejects non-UUID comma-separated tokens. Using a `META:` header in content is the available escape hatch without requiring a Qhorus API change.
+
+**Why `ReviewStatus.DISPUTED` instead of reusing `DECLINED`:** In the review channel, `DECLINED` is terminal (LLM declined to answer; point closed). In the debate channel, dispute is non-terminal (thread continues with counter/qualify/agree). Using the same status would incorrectly render disputed debate points as closed (strikethrough) while the debate is live.
+
+#### Gotchas
+
+**Symptom:** `MessageService.dispatch()` throws or rolls back when `artefactRefs` contains `key=value` strings.
+**Cause:** Qhorus `ArtefactRefParser` validates artefactRefs as CSV UUIDs. Despite the String API type, non-UUID content fails at dispatch time.
+**Fix:** Never put free-form metadata in `artefactRefs`. Use `META:` content header encoding for application-layer metadata.
+
+**Symptom:** `DebateChannelProjection` discards a debate entry silently (state unchanged, no exception).
+**Cause 1:** Message content does not start with `META:` — no entryType parsed, switch falls through to default.
+**Cause 2:** Message content starts with `META:` but `entryType` value is unknown.
+**Cause 3:** `META.agent` is present but value is not `REV` or `IMP`.
+**Fix:** Verify the `DebateMcpTools` dispatch is encoding the header correctly; check logs for `WARNING` entries from the projection.
+
+---
+
 ## §10 Architectural Decisions
 
 Cross-cutting decisions not captured inline in layer or Chapter entries.
@@ -716,7 +805,10 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 | **DH** | DraftHouse artifact prefix — used in `DH-NNN` improvement log entries |
 | **@DefaultBean** | Quarkus CDI annotation marking a bean as the default implementation, active when no `@Alternative` with higher priority is present on the classpath |
 | **@Alternative @Priority(N)** | Quarkus CDI annotations that promote a bean above `@DefaultBean`; used to displace `LangChain4jDebateAgentProvider` with `ClaudeAgentSdkDebateAgentProvider` without any configuration change |
-| **Debate Channel** | Planned Qhorus channel type (#27) for routing structured review debates; distinct from the current direct-invocation model |
+| **Debate Channel** | Qhorus APPEND channel for peer-to-peer structured debate between two LLM agents (REV and IMP). Agents post via `DebateMcpTools`; state is folded by `DebateChannelProjection`. Delivered in C5 / #27. |
+| **ReviewChannelProjection** | `ChannelProjection<ReviewState>` that folds review Q&A channel messages using `message.type()` dispatch and `actorType`-based agent classification. Renamed from the original `DebateChannelProjection` in C5. |
+| **DebateChannelProjection** | `RenderableProjection<ReviewState>` that folds debate channel messages using `META:` content header dispatch and explicit `META.agent` classification. Created in C5. |
+| **ReviewStatus.DISPUTED** | Non-terminal review point status for active debate disputes; rendered as ⚡ without strikethrough (contrast with terminal `DECLINED` which renders as 🚫 with strikethrough). Added in C5. |
 
 ---
 
