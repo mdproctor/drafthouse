@@ -24,6 +24,7 @@ import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.casehub.qhorus.runtime.message.ProjectionService;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
+import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.drafthouse.debate.ReviewState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -148,7 +149,7 @@ class DebateMcpToolsTest {
         assertThat(d.correlationId()).isNotBlank();
         // Metadata encoded in content as META header; artefactRefs is null (Qhorus parses it as CSV UUIDs)
         assertThat(d.artefactRefs()).isNull();
-        assertThat(d.content()).startsWith("META:");
+        assertThat(d.content()).startsWith(DebateProtocol.META_SENTINEL);
         assertThat(d.content()).contains("entryType=raise");
         assertThat(d.content()).contains("agent=REV");
         assertThat(d.content()).contains("round=1");
@@ -347,5 +348,33 @@ class DebateMcpToolsTest {
         assertThat(result).contains("not-found");
         assertThat(result).doesNotStartWith("error:");
         verifyNoInteractions(channelService);
+    }
+
+    @Test
+    void endDebate_deregistersRevAndImpInstances() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = new DebateSession(channelId, channelId.toString(),
+                stubChannel.name,
+                "drafthouse-rev-" + channelId,
+                "drafthouse-imp-" + channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        tools.endDebate(channelId.toString(), false);
+
+        verify(instanceService).deregister(session.revInstanceId());
+        verify(instanceService).deregister(session.impInstanceId());
+    }
+
+    @Test
+    void startDebate_partialFailure_deregistersRegisteredInstancesWhenInitFails() {
+        doThrow(new RuntimeException("init failed"))
+                .when(channelGateway).initChannel(any(), any());
+
+        String result = tools.startDebate("spec.md");
+
+        assertThat(result).startsWith("error:");
+        String debateSessionId = stubChannel.id.toString();
+        verify(instanceService).deregister("drafthouse-rev-" + debateSessionId);
+        verify(instanceService).deregister("drafthouse-imp-" + debateSessionId);
     }
 }

@@ -19,6 +19,7 @@ import io.casehub.qhorus.runtime.instance.InstanceService;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.casehub.qhorus.runtime.message.ProjectionService;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
+import io.casehub.drafthouse.debate.DebateProtocol;
 import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 
@@ -51,6 +52,8 @@ public class DebateMcpTools {
         String debateSlug = "d-" + UUID.randomUUID();
         String channelName = "drafthouse/debate/" + debateSlug;
 
+        String revInstanceId = null;
+        String impInstanceId = null;
         Channel channel = null;
         try {
             channel = channelService.create(channelName, "DraftHouse debate session",
@@ -58,8 +61,8 @@ public class DebateMcpTools {
 
             String debateSessionId = channel.id.toString();
             String resolvedName = channel.name;
-            String revInstanceId = "drafthouse-rev-" + debateSessionId;
-            String impInstanceId = "drafthouse-imp-" + debateSessionId;
+            revInstanceId = "drafthouse-rev-" + debateSessionId;
+            impInstanceId = "drafthouse-imp-" + debateSessionId;
 
             instanceService.register(revInstanceId, "DraftHouse debate reviewer " + debateSessionId,
                     List.of("document-debate-rev"));
@@ -78,6 +81,12 @@ public class DebateMcpTools {
         } catch (Exception e) {
             LOG.warning("start_debate failed: " + e.getMessage() + " — attempting cleanup");
             if (channel != null) {
+                if (revInstanceId != null) {
+                    try { instanceService.deregister(revInstanceId); } catch (Exception ce) { LOG.warning("cleanup rev instance: " + ce.getMessage()); }
+                }
+                if (impInstanceId != null) {
+                    try { instanceService.deregister(impInstanceId); } catch (Exception ce) { LOG.warning("cleanup imp instance: " + ce.getMessage()); }
+                }
                 try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 try { channelService.delete(channel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
@@ -104,7 +113,8 @@ public class DebateMcpTools {
         }
 
         String pointId = UUID.randomUUID().toString();
-        StringBuilder meta = new StringBuilder("META:entryType=raise|agent=").append(agentRole)
+        StringBuilder meta = new StringBuilder(DebateProtocol.META_SENTINEL)
+                .append("entryType=raise|agent=").append(agentRole)
                 .append("|round=").append(round)
                 .append("|priority=").append(priority)
                 .append("|scope=").append(scope);
@@ -155,8 +165,8 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = "META:entryType=" + entryType + "|agent=" + agentRole + "|round=" + round
-                + "\n\n" + content;
+        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=" + entryType
+                + "|agent=" + agentRole + "|round=" + round + "\n\n" + content;
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
@@ -190,8 +200,8 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = "META:entryType=flag-human|agent=" + agentRole + "|round=" + round
-                + "\n\n" + reason;
+        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=flag-human|agent=" + agentRole
+                + "|round=" + round + "\n\n" + reason;
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
@@ -238,6 +248,11 @@ public class DebateMcpTools {
         }
 
         registry.remove(channelId);
+
+        try { instanceService.deregister(session.revInstanceId()); }
+        catch (Exception e) { LOG.warning("end_debate: rev instance deregister failed: " + e.getMessage()); }
+        try { instanceService.deregister(session.impInstanceId()); }
+        catch (Exception e) { LOG.warning("end_debate: imp instance deregister failed: " + e.getMessage()); }
 
         if (deleteChannel) {
             try {

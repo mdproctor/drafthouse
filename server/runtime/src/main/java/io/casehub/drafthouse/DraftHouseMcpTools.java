@@ -77,6 +77,7 @@ public class DraftHouseMcpTools {
         String channelSlug = "r-" + UUID.randomUUID();
         String channelName = "drafthouse/" + channelSlug;
 
+        String instanceId = null;
         Channel channel = null;
         try {
             channel = channelService.create(channelName, "DraftHouse review session",
@@ -85,7 +86,7 @@ public class DraftHouseMcpTools {
             String sessionId = channel.id.toString();
             // Use channel.name from the returned Channel — Qhorus is the canonical owner of the name.
             String resolvedChannelName = channel.name;
-            String instanceId = "drafthouse-reviewer-" + sessionId;
+            instanceId = "drafthouse-reviewer-" + sessionId;
             instanceService.register(instanceId, "DraftHouse reviewer " + sessionId,
                     List.of("document-review"));
 
@@ -103,6 +104,9 @@ public class DraftHouseMcpTools {
         } catch (Exception e) {
             LOG.warning("start_review failed: " + e.getMessage() + " — attempting cleanup");
             if (channel != null) {
+                if (instanceId != null) {
+                    try { instanceService.deregister(instanceId); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
+                }
                 try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 try { channelService.delete(channel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
@@ -198,6 +202,9 @@ public class DraftHouseMcpTools {
 
         ReviewSession session = sessionOpt.get();
         registry.remove(channelId);
+
+        try { instanceService.deregister(session.instanceId()); }
+        catch (Exception e) { LOG.warning("end_review: instance deregister failed: " + e.getMessage()); }
 
         if (deleteChannel) {
             try {

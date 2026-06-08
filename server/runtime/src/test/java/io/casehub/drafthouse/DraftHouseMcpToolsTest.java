@@ -291,6 +291,31 @@ class DraftHouseMcpToolsTest {
         assertThat(result).startsWith("error:");
     }
 
+    @Test
+    void endReview_deregistersInstance() {
+        UUID channelId = UUID.randomUUID();
+        ReviewSession session = minimalSession(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        tools.endReview(channelId.toString(), false);
+
+        verify(instanceService).deregister(session.instanceId());
+    }
+
+    @Test
+    void startReview_partialFailure_deregistersInstanceWhenChannelInitFails() throws IOException {
+        Path docA = Files.writeString(tempDir.resolve("a.md"), "A");
+        Path docB = Files.writeString(tempDir.resolve("b.md"), "B");
+        doThrow(new RuntimeException("init failed"))
+                .when(channelGateway).initChannel(any(), any());
+
+        String result = tools.startReview(docA.toString(), docB.toString());
+
+        assertThat(result).startsWith("error:");
+        String expectedInstanceId = "drafthouse-reviewer-" + stubChannel.id;
+        verify(instanceService).deregister(expectedInstanceId);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private ReviewSession minimalSession(UUID channelId) {
