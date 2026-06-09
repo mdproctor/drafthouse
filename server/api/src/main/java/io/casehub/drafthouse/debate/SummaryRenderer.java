@@ -101,7 +101,7 @@ public class SummaryRenderer {
             case PENDING  -> "  ⏳ **" + f.taskType() + "** pending...\n";
             case ERROR    -> "  ✗ **" + f.taskType() + "** failed: " + f.errorReason() + "\n";
             case COMPLETE -> "  ⊕ **" + f.taskType() + "** _(fresh context — no prior round knowledge)_\n"
-                           + "  " + f.finding() + "\n";
+                           + "  " + java.util.Objects.requireNonNullElse(f.finding(), "(no finding)") + "\n";
         };
     }
 }

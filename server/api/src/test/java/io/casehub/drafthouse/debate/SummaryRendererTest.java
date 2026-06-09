@@ -64,9 +64,10 @@ class SummaryRendererTest {
     }
 
     @Test
-    void memoDoesNotAppearInSummary() {
-        // A memo produces no review points — state stays empty.
+    void emptyMemosProduceNoOutput() {
+        // An empty memos list produces no Agent Memos section.
         String output = renderer.render(new ReviewState(Map.of(), List.of(), List.of(), Map.of()));
+        assertThat(output).doesNotContain("Agent Memos");
         assertThat(output).doesNotContain("Private thought.");
     }
 
