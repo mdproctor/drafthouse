@@ -11,9 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
@@ -21,7 +20,6 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 class ChannelAgentDispatcherTest {
 
     @Mock DebateAgentProvider debateAgentProvider;
@@ -47,18 +45,19 @@ class ChannelAgentDispatcherTest {
 
     @BeforeEach
     void setUp() {
-        when(outboundMessage.content()).thenReturn(
+        // lenient: these stubs are only used on error paths, not by handler_found_dispatches_finding
+        lenient().when(outboundMessage.content()).thenReturn(
                 io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL
                 + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n");
-        when(outboundMessage.correlationId()).thenReturn(null);
-        when(debateAgentProvider.analyse(any())).thenReturn("LLM finding text.");
-        when(messageService.findByCorrelationId(any())).thenReturn(java.util.Optional.empty());
+        lenient().when(messageService.findByCorrelationId(any())).thenReturn(java.util.Optional.empty());
+        // instanceService null — @PostConstruct is never called in unit tests
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
-                java.util.List.of(matchingHandler));
+                List.of(matchingHandler), null);
     }
 
     @Test
     void handler_found_dispatches_finding() {
+        when(debateAgentProvider.analyse(any())).thenReturn("LLM finding text.");
         dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
         verify(messageService).dispatch(argThat(d -> d.content().contains("FINDING:")));
     }
@@ -76,6 +75,7 @@ class ChannelAgentDispatcherTest {
 
     @Test
     void parse_exception_dispatches_distinct_error() {
+        when(debateAgentProvider.analyse(any())).thenReturn("raw output");
         ChannelAgentHandler throwingHandler = new ChannelAgentHandler() {
             public boolean handles(ChannelAgentRequest r) { return true; }
             public AgentTask prepareTask(ChannelAgentRequest r) { return new AgentTask("s", "u"); }
@@ -85,24 +85,28 @@ class ChannelAgentDispatcherTest {
             }
         };
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
-                java.util.List.of(throwingHandler));
+                List.of(throwingHandler), null);
         dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
         ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().content()).contains("Sub-agent returned an unreadable result.");
+        assertThat(cap.getValue().content()).doesNotContain("bad format");
     }
 
     @Test
-    void no_handler_dispatches_error() {
+    void no_handler_dispatches_error_with_correct_content() {
         ChannelAgentHandler noMatch = new ChannelAgentHandler() {
             public boolean handles(ChannelAgentRequest r) { return false; }
             public AgentTask prepareTask(ChannelAgentRequest r) { throw new UnsupportedOperationException(); }
             public MessageDispatch buildResponse(UUID c, String s, String o, ChannelAgentRequest t) { throw new UnsupportedOperationException(); }
         };
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
-                java.util.List.of(noMatch));
+                List.of(noMatch), null);
         dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
-        verify(messageService).dispatch(any());
+        ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService).dispatch(cap.capture());
+        assertThat(cap.getValue().type()).isEqualTo(MessageType.STATUS);
+        assertThat(cap.getValue().content()).contains("No handler matched this sub-task request.");
         verify(debateAgentProvider, never()).analyse(any());
     }
 }

@@ -24,7 +24,8 @@ import java.util.logging.Logger;
  * ChannelAgentHandler, invokes the DebateAgentProvider, and posts the result.
  *
  * Production: instantiated by CDI via the @Inject constructor.
- * Tests: use the package-private Iterable constructor directly (no CDI required).
+ * Tests: use the package-private Iterable constructor directly (pass null for instanceService;
+ * @PostConstruct is never called in tests so the null is never dereferenced).
  */
 @ApplicationScoped
 public class ChannelAgentDispatcher {
@@ -35,28 +36,31 @@ public class ChannelAgentDispatcher {
     private final DebateAgentProvider debateAgentProvider;
     private final MessageService messageService;
     private final Iterable<ChannelAgentHandler> handlers;
+    private final InstanceService instanceService;
 
-    @Inject InstanceService instanceService;
-
-    /** CDI constructor — delegates to the test-visible constructor. */
+    /** CDI constructor — all dependencies injected. */
     @Inject
     ChannelAgentDispatcher(DebateAgentProvider debateAgentProvider,
                            MessageService messageService,
-                           @Any Instance<ChannelAgentHandler> handlers) {
-        this(debateAgentProvider, messageService, (Iterable<ChannelAgentHandler>) handlers);
+                           @Any Instance<ChannelAgentHandler> handlers,
+                           InstanceService instanceService) {
+        this(debateAgentProvider, messageService, (Iterable<ChannelAgentHandler>) handlers, instanceService);
     }
 
-    /** Test constructor — CDI is not required. */
+    /** Test constructor — instanceService may be null (PostConstruct not called in tests). */
     ChannelAgentDispatcher(DebateAgentProvider debateAgentProvider,
                            MessageService messageService,
-                           Iterable<ChannelAgentHandler> handlers) {
+                           Iterable<ChannelAgentHandler> handlers,
+                           InstanceService instanceService) {
         this.debateAgentProvider = debateAgentProvider;
         this.messageService = messageService;
         this.handlers = handlers;
+        this.instanceService = instanceService;
     }
 
     @PostConstruct
     void registerSenderInstance() {
+        // InstanceService.register() is an upsert — idempotent on restart, no prior deregister needed
         instanceService.register(SUBAGENT_INSTANCE_ID,
                 "DraftHouse sub-agent (focused analysis)",
                 List.of("document-debate-subagent"));
@@ -97,6 +101,7 @@ public class ChannelAgentDispatcher {
         }
     }
 
+    // NEVER pass exception messages — see qhorus-dispatch-exception-sanitization.md
     private void dispatchError(ChannelAgentRequest request, String fixedReason) {
         Map<String, String> meta = DebateProtocol.parseMeta(request.message().content());
         String encoded = DebateProtocol.META_SENTINEL
