@@ -9,7 +9,8 @@ import java.util.*;
 /**
  * Folds debate channel messages into ReviewState.
  * Dispatch is on content META header — debate channels encode metadata as:
- *   META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED|location=§3.2\n\n<body>
+ *   META:entryType=RAISE|agent=REV|round=1|priority=P1|scope=ISOLATED|location=§3.2\n\n<body>
+ * entryType values must match EntryType enum names exactly (uppercase, underscores).
  * Agent classification uses meta.agent (REV/IMP) — NOT actorType.
  *
  * Both REV and IMP agents are ActorType.AGENT; actorType cannot distinguish them.
@@ -33,16 +34,29 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
     @Override
     public ReviewState apply(ReviewState state, MessageView message) {
         Map<String, String> meta = DebateProtocol.parseMeta(message.content());
-        String entryType = meta.get("entryType");
-        if (entryType == null) return state;
+        String entryTypeStr = meta.get("entryType");
+        if (entryTypeStr == null) return state;
+
+        EntryType entryType;
+        try {
+            entryType = EntryType.valueOf(entryTypeStr);
+        } catch (IllegalArgumentException e) {
+            LOG.log(System.Logger.Level.WARNING, "Unknown entryType ''{0}'' — discarded", entryTypeStr);
+            return state;
+        }
+
         return switch (entryType) {
-            case "raise"      -> handleRaise(state, message, meta);
-            case "agree"      -> handleAgree(state, message, meta);
-            case "dispute"    -> handleDispute(state, message, meta);
-            case "qualify"    -> handleQualify(state, message, meta);
-            case "counter"    -> handleCounter(state, message, meta);
-            case "flag-human" -> handleFlagHuman(state, message, meta);
-            default           -> state;
+            case RAISE            -> handleRaise(state, message, meta);
+            case AGREE            -> handleAgree(state, message, meta);
+            case COUNTER          -> handleCounter(state, message, meta);
+            case DISPUTE          -> handleDispute(state, message, meta);
+            case QUALIFY          -> handleQualify(state, message, meta);
+            case FLAG_HUMAN       -> handleFlagHuman(state, message, meta);
+            case DECLINED         -> state;
+            case MEMO             -> handleMemo(state, message, meta);
+            case SUB_TASK_REQUEST -> handleSubTaskRequest(state, message, meta);
+            case SUB_TASK_FINDING -> handleSubTaskFinding(state, message, meta);
+            case SUB_TASK_ERROR   -> handleSubTaskError(state, message, meta);
         };
     }
 
@@ -149,5 +163,63 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     private Scope parseScope(String s) {
         try { return Scope.valueOf(s.toUpperCase()); } catch (Exception e) { return Scope.ISOLATED; }
+    }
+
+    private ReviewState handleMemo(ReviewState state, MessageView message, Map<String, String> meta) {
+        String agent = meta.getOrDefault("agent", "UNKNOWN");
+        int round = parseRound(meta);
+        String content = DebateProtocol.bodyContent(message.content());
+        var memos = new ArrayList<>(state.memos());
+        memos.add(new RoundMemo(agent, round, content));
+        return new ReviewState(state.points(), new ArrayList<>(state.humanFlags()),
+                memos, new LinkedHashMap<>(state.subTaskFindings()));
+    }
+
+    private ReviewState handleSubTaskRequest(ReviewState state, MessageView message, Map<String, String> meta) {
+        String subTaskId = meta.getOrDefault("subTaskId",
+                message.correlationId() != null ? message.correlationId() : "unknown");
+        SubTaskType taskType = parseSubTaskType(meta.getOrDefault("taskType", "CUSTOM"));
+        String requestingAgent = meta.getOrDefault("agent", "UNKNOWN");
+        String pointId = meta.get("pointId");
+        var findings = new LinkedHashMap<>(state.subTaskFindings());
+        findings.put(subTaskId, new SubTaskFinding(subTaskId, taskType, requestingAgent,
+                pointId, null, null, SubTaskStatus.PENDING));
+        return new ReviewState(state.points(), new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), findings);
+    }
+
+    private ReviewState handleSubTaskFinding(ReviewState state, MessageView message, Map<String, String> meta) {
+        String subTaskId = meta.getOrDefault("subTaskId",
+                message.correlationId() != null ? message.correlationId() : "unknown");
+        SubTaskType taskType = parseSubTaskType(meta.getOrDefault("taskType", "CUSTOM"));
+        String agent = meta.getOrDefault("agent", "UNKNOWN");
+        String pointId = meta.get("pointId");
+        String finding = DebateProtocol.bodyContent(message.content());
+        var findings = new LinkedHashMap<>(state.subTaskFindings());
+        SubTaskFinding existing = findings.get(subTaskId);
+        String resolvedPointId = existing != null && existing.pointId() != null ? existing.pointId() : pointId;
+        findings.put(subTaskId, new SubTaskFinding(subTaskId, taskType, agent,
+                resolvedPointId, finding, null, SubTaskStatus.COMPLETE));
+        return new ReviewState(state.points(), new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), findings);
+    }
+
+    private ReviewState handleSubTaskError(ReviewState state, MessageView message, Map<String, String> meta) {
+        String subTaskId = meta.getOrDefault("subTaskId",
+                message.correlationId() != null ? message.correlationId() : "unknown");
+        SubTaskType taskType = parseSubTaskType(meta.getOrDefault("taskType", "CUSTOM"));
+        String agent = meta.getOrDefault("agent", "UNKNOWN");
+        String reason = DebateProtocol.bodyContent(message.content());
+        var findings = new LinkedHashMap<>(state.subTaskFindings());
+        SubTaskFinding existing = findings.get(subTaskId);
+        String resolvedPointId = existing != null ? existing.pointId() : null;
+        findings.put(subTaskId, new SubTaskFinding(subTaskId, taskType, agent,
+                resolvedPointId, null, reason, SubTaskStatus.ERROR));
+        return new ReviewState(state.points(), new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), findings);
+    }
+
+    private SubTaskType parseSubTaskType(String s) {
+        try { return SubTaskType.valueOf(s); } catch (IllegalArgumentException e) { return SubTaskType.CUSTOM; }
     }
 }
