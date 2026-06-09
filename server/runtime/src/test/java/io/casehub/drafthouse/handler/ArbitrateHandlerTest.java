@@ -29,20 +29,19 @@ class ArbitrateHandlerTest {
     ArbitrateHandler handler;
     UUID channelId = UUID.randomUUID();
 
+    private void setField(String name, Object value) throws Exception {
+        var f = AbstractDebateSubAgentHandler.class.getDeclaredField(name);
+        f.setAccessible(true);
+        f.set(handler, value);
+    }
+
     @BeforeEach
     void setUp() throws Exception {
         handler = new ArbitrateHandler();
-        for (var name : List.of("projectionService", "debateProjection", "registry", "messageService")) {
-            var f = AbstractDebateSubAgentHandler.class.getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(handler, switch (name) {
-                case "projectionService" -> projectionService;
-                case "debateProjection" -> debateProjection;
-                case "registry" -> registry;
-                case "messageService" -> messageService;
-                default -> throw new IllegalStateException();
-            });
-        }
+        setField("projectionService", projectionService);
+        setField("debateProjection", debateProjection);
+        setField("registry", registry);
+        setField("messageService", messageService);
         lenient().when(outboundMessage.content()).thenReturn(DebateProtocol.META_SENTINEL
                 + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1\n\n");
         lenient().when(outboundMessage.correlationId()).thenReturn(null);

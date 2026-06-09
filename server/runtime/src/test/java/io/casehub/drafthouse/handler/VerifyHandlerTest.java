@@ -96,14 +96,17 @@ class VerifyHandlerTest {
         var state = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
         assertThatThrownBy(() -> handler.prepareTask(requestFor(null)))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("pointId");
     }
 
     @Test
-    void spec_content_absent_does_not_include_extraneous_context() {
-        // VERIFY must not include any thread history beyond the single claim
+    void does_not_include_thread_history_beyond_raise(@TempDir Path dir) throws IOException {
+        // Invariant: VERIFY must include only the raise content, not any subsequent thread entries
+        Path specFile = dir.resolve("spec.md");
+        java.nio.file.Files.writeString(specFile, "# The Spec");
         when(registry.find(channelId)).thenReturn(Optional.of(new DebateSession(
-                channelId, channelId.toString(), "ch", "rev", "imp", "/nonexistent/spec.md")));
+                channelId, channelId.toString(), "ch", "rev", "imp", specFile.toString())));
         var thread = List.of(
                 new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "The claim."),
                 new ThreadEntry(null, AgentType.IMP, 2, EntryType.DISPUTE, "Other agent content.")
@@ -116,4 +119,5 @@ class VerifyHandlerTest {
         assertThat(task.assembledInput()).contains("The claim.");
         assertThat(task.assembledInput()).doesNotContain("Other agent content.");
     }
+
 }

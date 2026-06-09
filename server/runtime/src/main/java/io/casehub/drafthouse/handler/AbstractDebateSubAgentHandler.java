@@ -82,14 +82,18 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
         return session.specPath();
     }
 
-    protected String requirePointRaiseContent(ReviewState state, String pointId) {
+    protected ReviewPoint requirePoint(ReviewState state, String pointId) {
         if (pointId == null)
             throw new IllegalArgumentException(taskType() + " requires a pointId");
         ReviewPoint p = state.points().get(pointId);
         if (p == null)
             throw new IllegalArgumentException(taskType() + ": pointId " + pointId
                     + " not found in projected state");
-        return p.thread().get(0).content();
+        return p;
+    }
+
+    protected String requirePointRaiseContent(ReviewState state, String pointId) {
+        return requirePoint(state, pointId).thread().get(0).content();
     }
 
     protected String readSpec(String specPath) {

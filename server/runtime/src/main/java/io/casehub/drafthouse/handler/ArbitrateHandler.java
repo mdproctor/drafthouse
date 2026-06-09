@@ -9,7 +9,6 @@ import io.casehub.drafthouse.debate.SubTaskType;
 import io.casehub.drafthouse.debate.ThreadEntry;
 import jakarta.enterprise.context.ApplicationScoped;
 
-import java.util.List;
 import java.util.Map;
 
 @ApplicationScoped
@@ -23,10 +22,9 @@ class ArbitrateHandler extends AbstractDebateSubAgentHandler {
         Map<String, String> meta = metaFrom(request);
         String pointId = meta.get("pointId");
         ReviewState state = currentState(request.channelId());
-        String raiseContent = requirePointRaiseContent(state, pointId);
-        ReviewPoint point = state.points().get(pointId);
-        List<ThreadEntry> thread = point.thread();
-        String lastResponse = thread.stream()
+        ReviewPoint point = requirePoint(state, pointId);   // validates pointId; returns point
+        String raiseContent = point.thread().get(0).content();
+        String lastResponse = point.thread().stream()
                 .filter(e -> e.type() == EntryType.DISPUTE
                           || e.type() == EntryType.QUALIFY
                           || e.type() == EntryType.COUNTER)
