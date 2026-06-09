@@ -229,7 +229,7 @@ public class SubAgentOrchestrator {
 | `ARBITRATE` | Original `raise` content + most recent `dispute`/`qualify`/`counter` on that point — nothing else | "You are a neutral arbitrator. You have not seen this debate before. Assess these two positions on their merits only." |
 | `DEEP_ANALYSIS` | Full spec content + `location` field from the `pointId` message as a focus hint | "You are a spec analyst. Read this spec with fresh eyes. Focus on the indicated section. Identify issues." |
 | `CONSISTENCY_CHECK` | All `AGREED` points from `ProjectionService.project()` as a compact list + `customInput` (proposed resolution) | "You have no memory of this debate. Determine only whether the proposed resolution contradicts any of these prior agreements." |
-| `NEUTRAL_SUMMARY` | All entries from the current round, extracted from projected `ReviewState` | "Summarise this debate round neutrally. You have not participated in this debate." |
+| `NEUTRAL_SUMMARY` | All entries whose `round` metadata matches the round number in the `SUB_TASK_REQUEST` message, extracted from projected `ReviewState` | "Summarise this debate round neutrally. You have not participated in this debate." |
 | `CUSTOM` | `customInput` verbatim | "You are a focused analyst. Answer only the question posed. You have no knowledge of the broader debate." |
 
 ### Finding and error dispatch
@@ -342,7 +342,7 @@ Retry is caller responsibility per MCP contract. Silence is intentional.
 
 | Module | Changes |
 |---|---|
-| `api/` | Add `MEMO`/`SUB_TASK_REQUEST`/`SUB_TASK_FINDING`/`SUB_TASK_ERROR` to `EntryType`; add `SubTaskType`, `SubTaskStatus`, `SubTaskFinding`, `RoundMemo` records; add `SubAgentProvider` SPI + `SubAgentTask` record |
+| `api/` | Add `MEMO`/`SUB_TASK_REQUEST`/`SUB_TASK_FINDING`/`SUB_TASK_ERROR` to `EntryType`; add `SubTaskType`, `SubTaskStatus`, `SubTaskFinding`, `RoundMemo` records; add `SubAgentProvider` SPI + `SubAgentTask` record; add `specPath` field to `DebateSession` (required for VERIFY/DEEP_ANALYSIS input assembly — `start_debate` already receives it, just not stored) |
 | `runtime/` | Add `SubAgentOrchestrator`, `SubAgentRequest` CDI event record, `LangChain4jSubAgentProvider @DefaultBean`; update `DebateChannelBackend.post()` (fire CDI event for SUB_TASK_REQUEST); update `DebateChannelProjection` (new dispatch cases + render); update `ReviewState` (add memos, subTaskFindings); add `post_memo` and `request_subagent` to `DebateMcpTools` |
 | `claude-agent/` | Add `ClaudeSubAgentProvider @ApplicationScoped` (gated on platform#55 — stub until then) |
 
