@@ -32,7 +32,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     @Override
     public ReviewState apply(ReviewState state, MessageView message) {
-        Map<String, String> meta = parseMeta(message.content());
+        Map<String, String> meta = DebateProtocol.parseMeta(message.content());
         String entryType = meta.get("entryType");
         if (entryType == null) return state;
         return switch (entryType) {
@@ -63,7 +63,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
                 location != null && !location.isBlank() ? location : null);
         int round = parseRound(meta);
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(entryId, agentType(meta), round, EntryType.RAISE, bodyContent(message.content())));
+        thread.add(new ThreadEntry(entryId, agentType(meta), round, EntryType.RAISE, DebateProtocol.bodyContent(message.content())));
         var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
@@ -89,7 +89,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     private ReviewState handleFlagHuman(ReviewState state, MessageView message, Map<String, String> meta) {
         String targetId = message.correlationId();
-        String content = bodyContent(Objects.requireNonNullElse(message.content(), ""));
+        String content = DebateProtocol.bodyContent(Objects.requireNonNullElse(message.content(), ""));
         int round = parseRound(meta);
         AgentType agent = agentType(meta);
         var points = new LinkedHashMap<>(state.points());
@@ -119,7 +119,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         ReviewPoint existing = state.points().get(targetId);
         int round = parseRound(meta);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(meta), round, type, bodyContent(message.content())));
+        thread.add(new ThreadEntry(null, agentType(meta), round, type, DebateProtocol.bodyContent(message.content())));
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
@@ -141,42 +141,6 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         String r = meta.get("round");
         if (r == null) return 0;
         try { return Integer.parseInt(r); } catch (NumberFormatException e) { return 0; }
-    }
-
-    /**
-     * Parses metadata from the structured sentinel header embedded in message content.
-     * Format: META_SENTINEL + "key=value|key=value\n\n<body>"
-     * If the sentinel is absent, returns an empty map (plain content — not an error).
-     */
-    private Map<String, String> parseMeta(String content) {
-        Map<String, String> map = new HashMap<>();
-        if (content == null || content.isBlank()) return map;
-        if (!content.startsWith(DebateProtocol.META_SENTINEL)) return map;
-        int headerEnd = content.indexOf("\n\n");
-        String headerLine = headerEnd > 0
-                ? content.substring(DebateProtocol.META_SENTINEL.length(), headerEnd)
-                : content.substring(DebateProtocol.META_SENTINEL.length());
-        for (String part : headerLine.split("\\|")) {
-            int eq = part.indexOf('=');
-            if (eq > 0) map.put(part.substring(0, eq).strip(), part.substring(eq + 1).strip());
-        }
-        if (map.get("entryType") == null) {
-            LOG.log(System.Logger.Level.WARNING,
-                    "Structured debate message (sentinel present) has no entryType — discarded. Header: {0}",
-                    headerLine.length() > 80 ? headerLine.substring(0, 80) + "..." : headerLine);
-        }
-        return map;
-    }
-
-    /**
-     * Strips the sentinel header from encoded content to return only the human-readable body.
-     * If the sentinel is absent, returns the content unchanged.
-     */
-    private String bodyContent(String content) {
-        if (content == null) return null;
-        if (!content.startsWith(DebateProtocol.META_SENTINEL)) return content;
-        int headerEnd = content.indexOf("\n\n");
-        return headerEnd > 0 ? content.substring(headerEnd + 2) : "";
     }
 
     private Priority parsePriority(String s) {
