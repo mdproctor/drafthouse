@@ -1,6 +1,7 @@
 package io.casehub.drafthouse.debate;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.function.Supplier;
 
 public class SummaryRenderer {
@@ -57,6 +58,11 @@ public class SummaryRenderer {
                 sb.append("> **").append(entry.agent()).append(" (").append(typeLabel).append("):** ")
                   .append(entry.content()).append("\n");
             }
+
+            state.subTaskFindings().values().stream()
+                    .filter(f -> point.id().equals(f.pointId()))
+                    .forEach(f -> sb.append(renderFinding(f)));
+
             sb.append("\n---\n\n");
         }
 
@@ -66,6 +72,36 @@ public class SummaryRenderer {
                 sb.append("- ").append(flag.content()).append("\n");
             }
         }
+
+        // Sub-task findings with null pointId (NEUTRAL_SUMMARY, CUSTOM) — standalone section
+        List<SubTaskFinding> standaloneFindings = state.subTaskFindings().values().stream()
+                .filter(f -> f.pointId() == null)
+                .toList();
+        if (!standaloneFindings.isEmpty()) {
+            sb.append("\n---\n\n**Sub-task findings**\n\n");
+            for (SubTaskFinding f : standaloneFindings) {
+                sb.append(renderFinding(f));
+            }
+        }
+
+        // Memos section
+        if (!state.memos().isEmpty()) {
+            sb.append("\n---\n\n**Agent Memos**\n\n");
+            for (RoundMemo memo : state.memos()) {
+                sb.append("**").append(memo.agentRole()).append(" memo — Round ").append(memo.round())
+                  .append(":** ").append(memo.content()).append("\n\n");
+            }
+        }
+
         return sb.toString();
+    }
+
+    private String renderFinding(SubTaskFinding f) {
+        return switch (f.status()) {
+            case PENDING  -> "  ⏳ **" + f.taskType() + "** pending...\n";
+            case ERROR    -> "  ✗ **" + f.taskType() + "** failed: " + f.errorReason() + "\n";
+            case COMPLETE -> "  ⊕ **" + f.taskType() + "** _(fresh context — no prior round knowledge)_\n"
+                           + "  " + f.finding() + "\n";
+        };
     }
 }

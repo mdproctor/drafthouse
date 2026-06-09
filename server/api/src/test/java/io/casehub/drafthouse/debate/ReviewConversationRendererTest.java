@@ -11,7 +11,7 @@ class ReviewConversationRendererTest {
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static ReviewState emptyState() {
-        return new ReviewState(Map.of(), List.of());
+        return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
     }
 
     /** Builds a ReviewPoint with one RAISE thread entry and optionally one response entry. */
@@ -28,7 +28,7 @@ class ReviewConversationRendererTest {
     private static ReviewState stateWith(ReviewPoint... points) {
         var map = new LinkedHashMap<String, ReviewPoint>();
         for (ReviewPoint p : points) map.put(p.id(), p);
-        return new ReviewState(map, List.of());
+        return new ReviewState(map, List.of(), List.of(), Map.of());
     }
 
     // ── tests ─────────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ class ReviewConversationRendererTest {
         var point = new ReviewPoint("R1",
                 new PointClassification(Priority.P3, Scope.ISOLATED, null),
                 thread, ReviewStatus.AGREED);
-        ReviewState s = new ReviewState(Map.of("R1", point), List.of());
+        ReviewState s = new ReviewState(Map.of("R1", point), List.of(), List.of(), Map.of());
 
         String output = renderer.render(s);
         assertThat(output).contains("A: Agreed after clarification."); // last entry wins

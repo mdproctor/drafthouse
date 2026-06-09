@@ -179,6 +179,13 @@ class DebateChannelProjectionTest {
     }
 
     @Test
+    void identity_hasEmptyMemosAndSubTaskFindings() {
+        ReviewState s = new DebateChannelProjection().identity();
+        assertThat(s.memos()).isEmpty();
+        assertThat(s.subTaskFindings()).isEmpty();
+    }
+
+    @Test
     void projectionName_returnsDebateSummary() {
         assertThat(proj.projectionName()).isEqualTo("debate-summary");
     }

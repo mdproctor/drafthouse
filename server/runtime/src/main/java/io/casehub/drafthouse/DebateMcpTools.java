@@ -70,7 +70,7 @@ public class DebateMcpTools {
                     List.of("document-debate-imp"));
 
             DebateSession session = new DebateSession(
-                    channel.id, debateSessionId, resolvedName, revInstanceId, impInstanceId);
+                    channel.id, debateSessionId, resolvedName, revInstanceId, impInstanceId, specPath);
 
             registry.put(session);
             channelGateway.initChannel(channel.id, new ChannelRef(channel.id, resolvedName));

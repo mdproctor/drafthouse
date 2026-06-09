@@ -27,7 +27,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
 
     @Override
     public ReviewState identity() {
-        return new ReviewState(Map.of(), List.of());
+        return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
     }
 
     @Override
@@ -67,7 +67,8 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()));
+        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     private ReviewState handleAgree(ReviewState state, MessageView message, Map<String, String> meta) {
@@ -100,7 +101,8 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         }
         var flags = new ArrayList<>(state.humanFlags());
         flags.add(new FlagEntry(null, round, agent, content));
-        return new ReviewState(points, flags);
+        return new ReviewState(points, flags,
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -121,7 +123,8 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()));
+        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     private AgentType agentType(Map<String, String> meta) {

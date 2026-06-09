@@ -131,7 +131,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         String result = tools.raisePoint(channelId.toString(), "REV", 1,
@@ -165,7 +165,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         tools.raisePoint(channelId.toString(), "IMP", 2, "content", "P2", "SYSTEMIC", null);
@@ -184,7 +184,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message();
         stubMsg.id = 99L;
@@ -212,7 +212,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message();
         stubMsg.id = 42L;
@@ -229,7 +229,7 @@ class DebateMcpToolsTest {
     void respondTo_qualify_dispatchesResponse() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 1L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -244,7 +244,7 @@ class DebateMcpToolsTest {
     void respondTo_counter_dispatchesResponse() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 1L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -260,7 +260,7 @@ class DebateMcpToolsTest {
     @Test
     void respondTo_unknownPointId_returnsError() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         when(messageService.findByCorrelationId(anyString())).thenReturn(Optional.empty());
 
@@ -277,7 +277,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 7L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -300,7 +300,7 @@ class DebateMcpToolsTest {
     @Test
     void flagHuman_unknownPointId_returnsError() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         when(messageService.findByCorrelationId(anyString())).thenReturn(Optional.empty());
 
@@ -313,9 +313,9 @@ class DebateMcpToolsTest {
     @Test
     void getDebateSummary_delegatesToProjectionAndRenders() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of());
+        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
         ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary\n...");
@@ -329,7 +329,7 @@ class DebateMcpToolsTest {
     @Test
     void endDebate_removesSessionAndReturnsEnded() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i");
+        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         String result = tools.endDebate(channelId.toString(), false);
@@ -356,7 +356,7 @@ class DebateMcpToolsTest {
         DebateSession session = new DebateSession(channelId, channelId.toString(),
                 stubChannel.name,
                 "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId);
+                "drafthouse-imp-" + channelId, null);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         tools.endDebate(channelId.toString(), false);

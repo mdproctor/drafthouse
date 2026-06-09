@@ -20,7 +20,7 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
 
     @Override
     public ReviewState identity() {
-        return new ReviewState(Map.of(), List.of());
+        return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
     }
 
     @Override
@@ -52,7 +52,8 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
         var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()));
+        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     private ReviewState handleQualify(ReviewState state, MessageView message) {
@@ -78,7 +79,8 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()));
+        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     private ReviewState handleDecline(ReviewState state, MessageView message) {
@@ -96,7 +98,8 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, ReviewStatus.DECLINED);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()));
+        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     private ReviewState handleFlagHuman(ReviewState state, MessageView message) {
@@ -111,7 +114,8 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
         }
         var flags = new ArrayList<>(state.humanFlags());
         flags.add(new FlagEntry(null, 0, agentType(message), content));
-        return new ReviewState(points, flags);
+        return new ReviewState(points, flags,
+                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

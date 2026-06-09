@@ -57,7 +57,7 @@ class ReviewerChannelBackendTest {
         projectionService = mock(ProjectionService.class);
         projection = mock(ChannelProjection.class);
         when(projectionService.project(CHANNEL_ID, projection))
-                .thenReturn(new ProjectionResult<>(new ReviewState(Map.of(), List.of()), null));
+                .thenReturn(new ProjectionResult<>(new ReviewState(Map.of(), List.of(), List.of(), Map.of()), null));
 
         session = new ReviewSession(
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
@@ -259,7 +259,7 @@ class ReviewerChannelBackendTest {
                 new PointClassification(Priority.P3, Scope.ISOLATED, null),
                 thread,
                 ReviewStatus.AGREED);
-        return new ReviewState(Map.of("P1", point), List.of());
+        return new ReviewState(Map.of("P1", point), List.of(), List.of(), Map.of());
     }
 
     @Test

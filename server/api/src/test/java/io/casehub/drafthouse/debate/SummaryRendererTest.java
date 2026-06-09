@@ -11,7 +11,7 @@ class SummaryRendererTest {
 
     @Test
     void rendersEmptyStateAsHeader() {
-        String output = renderer.render(new ReviewState(Map.of(), List.of()));
+        String output = renderer.render(new ReviewState(Map.of(), List.of(), List.of(), Map.of()));
         assertThat(output).contains("# Review Summary");
         assertThat(output).doesNotContain("##");
     }
@@ -23,7 +23,7 @@ class SummaryRendererTest {
                 new PointClassification(Priority.P1, Scope.ISOLATED, "§3.2"),
                 List.of(new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Both variants appear.")),
                 ReviewStatus.OPEN)),
-            List.of());
+            List.of(), List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("🔴");
         assertThat(output).contains("[R1-REV-001]");
@@ -40,7 +40,7 @@ class SummaryRendererTest {
                     new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Issue."),
                     new ThreadEntry(null, AgentType.IMP, 0, EntryType.AGREE, "Fixed.")),
                 ReviewStatus.AGREED)),
-            List.of());
+            List.of(), List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("✅");
         assertThat(output).contains("~~");
@@ -55,7 +55,8 @@ class SummaryRendererTest {
                     new ThreadEntry(null, AgentType.REV, 0, EntryType.RAISE, "Issue."),
                     new ThreadEntry(null, AgentType.REV, 0, EntryType.FLAG_HUMAN, "Human needed.")),
                 ReviewStatus.PENDING_HUMAN)),
-            List.of(new FlagEntry(null, 0, AgentType.REV, "Human needed.")));
+            List.of(new FlagEntry(null, 0, AgentType.REV, "Human needed.")),
+            List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("⚑");
         assertThat(output).contains("Human needed.");
@@ -65,7 +66,7 @@ class SummaryRendererTest {
     @Test
     void memoDoesNotAppearInSummary() {
         // A memo produces no review points — state stays empty.
-        String output = renderer.render(new ReviewState(Map.of(), List.of()));
+        String output = renderer.render(new ReviewState(Map.of(), List.of(), List.of(), Map.of()));
         assertThat(output).doesNotContain("Private thought.");
     }
 
@@ -73,7 +74,7 @@ class SummaryRendererTest {
     void renderTimestampIsControlledByClock() {
         Instant fixed = Instant.parse("2026-01-15T10:30:00Z");
         renderer.setClockForTest(() -> fixed);
-        String output = renderer.render(new ReviewState(Map.of(), List.of()));
+        String output = renderer.render(new ReviewState(Map.of(), List.of(), List.of(), Map.of()));
         assertThat(output).contains("2026-01-15T10:30:00Z");
     }
 
@@ -86,7 +87,7 @@ class SummaryRendererTest {
                     new ThreadEntry("R1-REV-001", AgentType.REV, 0, EntryType.RAISE, "Off topic?"),
                     new ThreadEntry(null, AgentType.IMP, 0, EntryType.DECLINED, "Out of scope.")),
                 ReviewStatus.DECLINED)),
-            List.of());
+            List.of(), List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("🚫");
         assertThat(output).contains("~~");
@@ -100,7 +101,7 @@ class SummaryRendererTest {
                 new PointClassification(Priority.P2, Scope.ISOLATED, null),
                 List.of(new ThreadEntry("R1-IMP-001", AgentType.IMP, 1, EntryType.RAISE, "Counter point.")),
                 ReviewStatus.DISPUTED)),
-            List.of());
+            List.of(), List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("⚡");
         assertThat(output).doesNotContain("~~");
@@ -115,7 +116,7 @@ class SummaryRendererTest {
                     new ThreadEntry("R1-REV-001", AgentType.REV, 1, EntryType.RAISE, "Issue."),
                     new ThreadEntry(null, AgentType.IMP, 2, EntryType.COUNTER, "My counter.")),
                 ReviewStatus.ACTIVE)),
-            List.of());
+            List.of(), List.of(), Map.of());
         String output = renderer.render(state);
         assertThat(output).contains("counter");
         assertThat(output).contains("My counter.");
