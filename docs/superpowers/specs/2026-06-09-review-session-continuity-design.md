@@ -3,7 +3,7 @@
 **Status:** Approved
 **Issue:** #26
 **Deferred:** #40 (restart-from-N), #41 (threshold auto-reset + context meter)
-**Supersedes (partial):** 2026-06-07 debate-channel-design.md §DebateSession (specPath reversal — see §specPath Reversal below)
+**Supersedes (partial):** 2026-06-07 debate-channel-design.md §DebateSession (specPath reversal — see below)
 
 ---
 
@@ -34,32 +34,29 @@ Deferred: restart-from-N (#40), threshold auto-reset + context meter (#41), per-
 
 ## Cross-Cutting Encoding Standard
 
-**This spec establishes `EntryType.name()` as the canonical encoding for `entryType` in the META sentinel header.** This standardises all encoding to uppercase:
+**This spec establishes `EntryType.name()` as the canonical encoding for `entryType` in the META sentinel header.** All encoding is uppercase:
 
 | Written by | Encoded string | Decoded by |
 |---|---|---|
 | `DebateMcpTools` | `entryType=RAISE`, `entryType=AGREE`, … | `DebateChannelProjection` |
-| `SubAgentOrchestrator` | `entryType=SUB_TASK_FINDING`, `entryType=SUB_TASK_ERROR` | `DebateChannelProjection` |
+| `ChannelAgentDispatcher` | `entryType=SUB_TASK_FINDING`, `entryType=SUB_TASK_ERROR` | `DebateChannelProjection` |
 
-**Migration:** The June 7 debate-channel spec encoded entry types as lowercase strings (`raise`, `agree`, `flag-human`). This spec replaces all lowercase encoded strings with their enum name equivalents (`RAISE`, `AGREE`, `FLAG_HUMAN`). The `flag-human` encoding is replaced with `FLAG_HUMAN` (hyphen → underscore). Since there are no production deployments, in-flight channel messages with old lowercase encoding will not be re-projected — acceptable.
+**Migration from June 7 encoding:** the June 7 debate-channel spec encoded entry types as lowercase (`raise`, `agree`, `flag-human`). This spec replaces all lowercase encoded strings with their enum name equivalents (`RAISE`, `AGREE`, `FLAG_HUMAN`). Since there are no production deployments, in-flight channel messages with old lowercase encoding will not be re-projected — acceptable.
 
-**Files that must change to adopt this standard:**
-- `DebateMcpTools.java` — all `entryType=raise|…` strings → `entryType=RAISE|…`
-- `DebateChannelProjection.apply()` — string switch replaced with `EntryType.valueOf()` + enum switch (see Projection section)
+**Files that must adopt this standard:**
+- `DebateMcpTools.java` — all `entryType=raise|…` → `entryType=RAISE|…`
+- `DebateChannelProjection.apply()` — string switch replaced with `EntryType.valueOf()` + enum switch
+- `DebateProtocol.java` — add `parseMeta()` and `bodyContent()` as public static utilities (moved from `DebateChannelProjection` private methods; required by backends and handlers)
 
-**Encoding rule going forward:** always use `entryType=<EntryType.name()>`. Never hand-code lowercase strings. The enum name is the wire format.
+**Encoding rule going forward:** always use `entryType=<EntryType.name()>`. The enum name is the wire format.
 
 ---
 
 ## specPath Reversal from June 7 Design
 
-The June 7 debate-channel spec (2026-06-07) explicitly stated: *"`specPath` is NOT stored in `DebateSession`. It is echoed back in the `start_debate` response JSON from the input parameter directly. No subsequent tool reads it from the session."*
+The June 7 debate-channel spec explicitly stated: *"`specPath` is NOT stored in `DebateSession`. It is echoed back in the `start_debate` response JSON from the input parameter directly."*
 
-**This spec reverses that decision.** `specPath` must be stored in `DebateSession`.
-
-**Rationale:** `SubAgentOrchestrator` assembles input for `VERIFY` and `DEEP_ANALYSIS` tasks at dispatch time, which is asynchronous and occurs after the tool call has returned. The session is the only available state at that point. The spec path cannot be re-derived from the Qhorus channel history. Echoing it in the JSON response was sufficient for v1 (no orchestrator), but is insufficient when an async component needs it.
-
-**Required change:** `DebateMcpTools.startDebate()` must store the `specPath` parameter in the `DebateSession` record rather than only echoing it in the JSON response.
+**This spec reverses that decision.** `specPath` must be stored in `DebateSession`. The `ChannelAgentDispatcher` dispatches asynchronously after the tool call returns; it needs `specPath` for `VERIFY` and `DEEP_ANALYSIS` assembly. The session is the only available state at that point. `DebateMcpTools.startDebate()` must store `specPath` in the session rather than only echoing it.
 
 ---
 
@@ -71,20 +68,26 @@ DebateMcpTools
   └── request_subagent() → SUB_TASK_REQUEST entry → debate channel (MessageType.QUERY)
                                 ↓
                       DebateChannelBackend.post(ChannelRef, OutboundMessage)
-                      [evolved from pure fence — see §Backend Evolution]
-                                ↓ event.fireAsync(SubAgentRequest)
-                      SubAgentOrchestrator @ObservesAsync
-                                ├── assembleTask() — task-type-driven, may throw IAE
-                                ├── SubAgentProvider.analyse(task)
-                                │     @DefaultBean: LangChain4jSubAgentProvider (ChatModel)
-                                │     @ApplicationScoped: ClaudeSubAgentProvider (platform#55)
-                                └── MessageService.dispatch(SUB_TASK_FINDING or SUB_TASK_ERROR)
+                      [parses META; fires ChannelAgentRequest CDI event for SUB_TASK_REQUEST]
+                                ↓ event.fireAsync(ChannelAgentRequest)
+                      ChannelAgentDispatcher @ObservesAsync
+                                ├── find handler: @Any Instance<ChannelAgentHandler> — first handles()
+                                ├── handler.prepareTask(request) — throws IAE on missing inputs
+                                ├── debateAgentProvider.analyse(task)
+                                ├── handler.buildResponse(channelId, senderId, llmOutput, request)
+                                │     — throws AgentResultParseException on parse failure
+                                └── MessageService.dispatch(result)
+                                       or dispatchError / dispatchParseError on failure
                                               ↓
                                   DebateChannelProjection
-                                  (renders findings with provenance label in SummaryRenderer)
+                                  (renders findings with provenance label)
+
+Handler beans (@ApplicationScoped, extend AbstractDebateSubAgentHandler):
+  VerifyHandler, ArbitrateHandler, DeepAnalysisHandler,
+  ConsistencyCheckHandler, NeutralSummaryHandler, CustomHandler
 ```
 
-Sub-task requests and findings live on the **existing debate channel** — no new Qhorus channels. `SubAgentOrchestrator` has no shared mutable state; concurrent invocations are safe by design (see §Concurrency).
+Handler beans have non-overlapping `handles()` predicates (one per `SubTaskType`). No `@Priority` ordering needed for DraftHouse — documented in #42 as a future extraction concern.
 
 ---
 
@@ -102,22 +105,46 @@ public enum EntryType {
 }
 ```
 
-Note: `DECLINED` is a projection-only status (set when the review channel AI refuses). No message is ever encoded with `entryType=DECLINED`. The enum value must still be handled in all exhaustive switches (see §SummaryRenderer).
+`DECLINED` is projection-only; no message is ever encoded with `entryType=DECLINED`.
 
 ### `SubTaskType`
 
 ```java
 public enum SubTaskType {
-    VERIFY,             // check a claim against the spec
-    ARBITRATE,          // neutral read on a disputed point — both arguments, no prior history
-    DEEP_ANALYSIS,      // close reading of a spec section before raising points
-    CONSISTENCY_CHECK,  // does a proposed resolution contradict prior agreements?
-    NEUTRAL_SUMMARY,    // compact neutral summary of the full current debate state (v1 approximation)
-    CUSTOM              // caller provides explicit context string
+    VERIFY, ARBITRATE, DEEP_ANALYSIS, CONSISTENCY_CHECK, NEUTRAL_SUMMARY, CUSTOM
 }
 ```
 
-`SubTaskType` is DraftHouse vocabulary. The extracted `ChannelAgentDispatcher` pattern (→ #42) carries no task-type enum; each application defines its own.
+DraftHouse vocabulary — not part of the extracted `ChannelAgentHandler` pattern (see #42).
+
+### `AgentTask`
+
+```java
+// Field order: systemPrompt before assembledInput — consistent with LLM API convention
+public record AgentTask(
+    String systemPrompt,    // sub-agent persona, enforces fresh-context invariant
+    String assembledInput   // minimally scoped context assembled by handler.prepareTask()
+) {}
+```
+
+Used by `DebateAgentProvider.analyse()`. Named `AgentTask` (pattern vocabulary) rather than `SubAgentTask` (DraftHouse-specific). Lives in `api/` so the `claude-agent/` optional module can depend on it without pulling in `runtime/`.
+
+### `DebateAgentProvider` SPI
+
+```java
+// api/ — no Qhorus or Quarkus dependency
+public interface DebateAgentProvider {
+    /**
+     * Invoke an LLM and return the complete text response.
+     * Blocking — callers must be on a non-event-loop thread (CDI async observer is correct).
+     */
+    String analyse(AgentTask task);
+}
+```
+
+Named `DebateAgentProvider` per the ARC42 architecture record. Implementations:
+- `LangChain4jDebateAgentProvider @DefaultBean @ApplicationScoped` in `runtime/`
+- `ClaudeAgentSdkDebateAgentProvider @ApplicationScoped` in `claude-agent/` (gated on platform#55)
 
 ### `SubTaskFinding`
 
@@ -125,10 +152,10 @@ public enum SubTaskType {
 public record SubTaskFinding(
     String subTaskId,
     SubTaskType taskType,
-    String requestingAgent,  // "REV" or "IMP" — provenance: who asked
-    String pointId,          // correlationId of related debate point; null for NEUTRAL_SUMMARY and CUSTOM
+    String requestingAgent,  // "REV" or "IMP"
+    String pointId,          // null for NEUTRAL_SUMMARY and CUSTOM
     String finding,          // null while PENDING or on ERROR
-    String errorReason,      // always a fixed sanitized category string — never e.getMessage()
+    String errorReason,      // fixed sanitized string — never e.getMessage()
     SubTaskStatus status
 ) {}
 
@@ -142,8 +169,6 @@ public record RoundMemo(String agentRole, int round, String content) {}
 ```
 
 ### `ReviewState` — explicit constructor change
-
-Add two fields. The compact constructor must perform defensive copies for all four fields:
 
 ```java
 public record ReviewState(
@@ -161,63 +186,295 @@ public record ReviewState(
 }
 ```
 
-`LinkedHashMap` preserves insertion order for both `points` and `subTaskFindings`. Every `apply()` call that returns a new `ReviewState` must pass all four fields, carrying unchanged collections forward alongside any new entries.
-
-### `SubAgentProvider` SPI
-
-```java
-public interface SubAgentProvider {
-    /**
-     * Invoke an LLM sub-agent and return the complete text response.
-     * Blocking — callers must be on a non-event-loop thread.
-     * CDI async observer thread is correct; this method should never be called from Vert.x.
-     */
-    String analyse(SubAgentTask task);
-}
-
-// Field order: taskType, systemPrompt, assembledInput — consistent with LLM API convention (system before user)
-public record SubAgentTask(
-    SubTaskType taskType,
-    String systemPrompt,    // per-task-type persona, enforces fresh-context invariant
-    String assembledInput   // minimally scoped context, assembled by SubAgentOrchestrator
-) {}
-```
-
 ### `DebateSession` — add `specPath`
 
 ```java
 public record DebateSession(
-    UUID channelId,
-    String debateSessionId,
-    String channelName,
-    String revInstanceId,
-    String impInstanceId,
-    String specPath           // absolute path to the spec being debated; may be null if not provided
+    UUID channelId, String debateSessionId, String channelName,
+    String revInstanceId, String impInstanceId,
+    String specPath   // absolute path to spec; null if not provided at session start
 ) {}
 ```
 
-### `SummaryRenderer` — exhaustiveness fix (compile-required)
+### `SummaryRenderer` — exhaustiveness fix
 
-Adding four values to `EntryType` breaks the exhaustive `typeLabel` switch in `SummaryRenderer.render()`. These new types never appear in `ThreadEntry.thread()` (they go into `memos` and `subTaskFindings` instead), but the compiler requires coverage. Add explicit cases with meaningful labels that document the invariant:
+Adding four values to `EntryType` breaks the exhaustive `typeLabel` switch. These types never appear in `ThreadEntry.thread()` but the compiler requires coverage:
 
 ```java
-String typeLabel = switch (entry.type()) {
-    case RAISE           -> "raise";
-    case AGREE           -> "agree";
-    case COUNTER         -> "counter";
-    case DISPUTE         -> "dispute";
-    case QUALIFY         -> "qualify";
-    case FLAG_HUMAN      -> "flag";
-    case DECLINED        -> "declined";
-    // These entry types are never stored in ThreadEntry.thread() —
-    // they go into ReviewState.memos() and ReviewState.subTaskFindings() respectively.
-    // These cases exist only for compiler exhaustiveness.
-    case MEMO            -> "memo";
-    case SUB_TASK_REQUEST -> "sub-task-request";
-    case SUB_TASK_FINDING -> "sub-task-finding";
-    case SUB_TASK_ERROR   -> "sub-task-error";
-};
+case MEMO, SUB_TASK_REQUEST, SUB_TASK_FINDING, SUB_TASK_ERROR -> // invariant: never in thread
+    throw new IllegalStateException("entry type " + entry.type() + " must not appear in ThreadEntry");
 ```
+
+Using `throw` rather than a silent `""` makes the invariant machine-checked: if a bug causes these types to appear in a thread, it fails loudly rather than silently rendering an empty label.
+
+---
+
+## Pattern Types (`runtime` module — extract to patterns repo when devtown adopts)
+
+### `ChannelAgentRequest`
+
+```java
+public record ChannelAgentRequest(
+    UUID channelId,
+    String correlationId,     // subTaskId — ID of the triggering message
+    OutboundMessage message   // the full trigger message; handlers parse META from content
+) {}
+```
+
+The CDI event type fired by `DebateChannelBackend.post()` and observed by `ChannelAgentDispatcher`.
+
+### `AgentResultParseException`
+
+```java
+public class AgentResultParseException extends RuntimeException {
+    public AgentResultParseException(String message) { super(message); }
+    public AgentResultParseException(String message, Throwable cause) { super(message, cause); }
+}
+```
+
+Thrown by `handler.buildResponse()` when LLM output cannot be parsed into the expected format. Caught separately from `RuntimeException` by `ChannelAgentDispatcher` — routes to a distinct fixed error string.
+
+### `ChannelAgentHandler`
+
+```java
+// SPI — one implementation per task type / capability.
+// Handler beans must have non-overlapping handles() predicates; first-match routing.
+public interface ChannelAgentHandler {
+
+    /** Return true if this handler should process the request. Predicates must not overlap. */
+    boolean handles(ChannelAgentRequest request);
+
+    /**
+     * Assemble focused LLM input. Must be deliberately minimal — no extraneous context.
+     * @throws IllegalArgumentException if required inputs are absent (missing specPath,
+     *   unresolvable pointId, null customInput for task types that require it, etc.).
+     *   The dispatcher routes this to the error path.
+     */
+    AgentTask prepareTask(ChannelAgentRequest request);
+
+    /**
+     * Build the Qhorus MessageDispatch from the LLM output.
+     * Handles structured result parsing where needed.
+     * @throws AgentResultParseException if LLM output cannot be parsed into the expected format.
+     *   The dispatcher routes this to a distinct parse-error path.
+     */
+    MessageDispatch buildResponse(UUID channelId, String senderId,
+                                  String llmOutput, ChannelAgentRequest trigger)
+            throws AgentResultParseException;
+}
+```
+
+### `ChannelAgentDispatcher`
+
+```java
+static final String SUBAGENT_INSTANCE_ID = "drafthouse-subagent";
+
+@ApplicationScoped
+public class ChannelAgentDispatcher {
+
+    @Inject @Any Instance<ChannelAgentHandler> handlers;
+    @Inject DebateAgentProvider debateAgentProvider;
+    @Inject MessageService messageService;
+    @Inject InstanceService instanceService;
+
+    @PostConstruct
+    void registerSenderInstance() {
+        // InstanceService.register() is an upsert — idempotent on restart, no prior deregister needed.
+        instanceService.register(SUBAGENT_INSTANCE_ID,
+                "DraftHouse sub-agent (focused analysis)",
+                List.of("document-debate-subagent"));
+    }
+
+    @ObservesAsync
+    public void onChannelAgentRequest(ChannelAgentRequest request) {
+        ChannelAgentHandler handler = handlers.stream()
+                .filter(h -> h.handles(request))
+                .findFirst()
+                .orElse(null);
+
+        if (handler == null) {
+            LOG.warning("ChannelAgentDispatcher: no handler for request on channel "
+                    + request.channelId() + " — dropped");
+            dispatchError(request, "No handler matched this sub-task request.");
+            return;
+        }
+
+        try {
+            AgentTask task = handler.prepareTask(request);
+            String llmOutput = debateAgentProvider.analyse(task);
+            try {
+                MessageDispatch response = handler.buildResponse(
+                        request.channelId(), SUBAGENT_INSTANCE_ID, llmOutput, request);
+                messageService.dispatch(response);
+            } catch (AgentResultParseException e) {
+                LOG.warning("ChannelAgentDispatcher: parse failure [" + request.correlationId()
+                        + "]: " + e.getClass().getSimpleName() + " — " + e.getMessage());
+                dispatchParseError(request);
+            }
+        } catch (Exception e) {
+            LOG.warning("ChannelAgentDispatcher: sub-agent failed [" + request.correlationId()
+                    + "]: " + e.getClass().getSimpleName() + " — " + e.getMessage());
+            dispatchError(request, "Sub-agent analysis failed.");
+        }
+    }
+
+    private void dispatchError(ChannelAgentRequest request, String fixedReason) {
+        // Never pass e.getMessage() here — see qhorus-dispatch-exception-sanitization.md
+        Map<String, String> meta = DebateProtocol.parseMeta(request.message().content());
+        String encoded = DebateProtocol.META_SENTINEL
+                + "entryType=SUB_TASK_ERROR|subTaskId=" + request.correlationId()
+                + "|taskType=" + meta.getOrDefault("taskType", "UNKNOWN")
+                + "|agent=" + meta.getOrDefault("agent", "UNKNOWN")
+                + "\n\n" + fixedReason;
+        Long inReplyTo = messageService.findByCorrelationId(request.correlationId())
+                .map(m -> m.id).orElse(null);
+        messageService.dispatch(MessageDispatch.builder()
+                .channelId(request.channelId())
+                .sender(SUBAGENT_INSTANCE_ID)
+                .type(MessageType.STATUS)
+                .content(encoded)
+                .correlationId(request.correlationId())
+                .inReplyTo(inReplyTo)
+                .actorType(ActorType.AGENT)
+                .build());
+    }
+
+    private void dispatchParseError(ChannelAgentRequest request) {
+        dispatchError(request, "Sub-agent returned an unreadable result.");
+    }
+}
+```
+
+Two distinct error paths, two distinct fixed strings: "Sub-agent analysis failed." (LLM invocation or input assembly failure) vs "Sub-agent returned an unreadable result." (parse failure). Both are fixed strings — never exception messages.
+
+---
+
+## DraftHouse Handler Hierarchy (`runtime` module)
+
+### `AbstractDebateSubAgentHandler`
+
+Abstract base class for all six DraftHouse debate handlers. Implements `handles()` and `buildResponse()` — both are identical across all handlers; only `taskType()` and `prepareTask()` vary.
+
+```java
+abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
+
+    @Inject ProjectionService projectionService;
+    @Inject DebateChannelProjection debateProjection;
+    @Inject DebateSessionRegistry registry;
+    @Inject MessageService messageService;
+
+    abstract SubTaskType taskType();
+
+    @Override
+    public final boolean handles(ChannelAgentRequest request) {
+        Map<String, String> meta = DebateProtocol.parseMeta(request.message().content());
+        try {
+            return SubTaskType.valueOf(meta.getOrDefault("taskType", "")) == taskType();
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public final MessageDispatch buildResponse(UUID channelId, String senderId,
+                                               String llmOutput, ChannelAgentRequest trigger)
+            throws AgentResultParseException {
+        Map<String, String> meta = DebateProtocol.parseMeta(trigger.message().content());
+        String subTaskId = meta.getOrDefault("subTaskId", trigger.correlationId());
+        String agent = meta.getOrDefault("agent", "UNKNOWN");
+        String pointId = meta.get("pointId");
+        Long inReplyTo = messageService.findByCorrelationId(subTaskId).map(m -> m.id).orElse(null);
+        String encoded = DebateProtocol.META_SENTINEL
+                + "entryType=SUB_TASK_FINDING|subTaskId=" + subTaskId
+                + "|taskType=" + taskType().name()
+                + "|agent=" + agent
+                + (pointId != null ? "|pointId=" + pointId : "")
+                + "\n\n" + llmOutput;
+        return MessageDispatch.builder()
+                .channelId(channelId).sender(senderId)
+                .type(MessageType.RESPONSE).content(encoded)
+                .correlationId(subTaskId).inReplyTo(inReplyTo)
+                .actorType(ActorType.AGENT).build();
+    }
+
+    // Shared helpers available to all handler subclasses
+
+    protected ReviewState currentState(UUID channelId) {
+        return projectionService.project(channelId, debateProjection).state();
+    }
+
+    protected DebateSession requireSession(UUID channelId) {
+        return registry.find(channelId).orElseThrow(() ->
+            new IllegalArgumentException("No active debate session for channel " + channelId));
+    }
+
+    protected String requireSpecPath(DebateSession session, SubTaskType type) {
+        if (session.specPath() == null || session.specPath().isBlank())
+            throw new IllegalArgumentException(type + " requires specPath — start_debate must receive a spec path");
+        return session.specPath();
+    }
+
+    protected String requirePointRaiseContent(ReviewState state, String pointId, SubTaskType type) {
+        if (pointId == null) throw new IllegalArgumentException(type + " requires a pointId");
+        ReviewPoint p = state.points().get(pointId);
+        if (p == null) throw new IllegalArgumentException(type + ": pointId " + pointId + " not found in projected state");
+        return p.thread().get(0).content();
+    }
+
+    protected String readSpec(String specPath) {
+        try { return Files.readString(Path.of(specPath)); }
+        catch (IOException e) {
+            LOG.warning("Could not read spec at " + specPath + ": " + e.getMessage());
+            return "(spec file could not be read)";
+        }
+    }
+}
+```
+
+### Concrete handler specifications
+
+Each handler is `@ApplicationScoped` and extends `AbstractDebateSubAgentHandler`. It implements only `taskType()` and `prepareTask()`.
+
+| Handler | `taskType()` | `prepareTask()` — assembled input | Failure conditions |
+|---|---|---|---|
+| `VerifyHandler` | `VERIFY` | Claim text (first thread entry of pointId's point) + full spec content | IAE if pointId null, point not in state, or specPath null |
+| `ArbitrateHandler` | `ARBITRATE` | Original raise content + **last entry** in thread with type ∈ {DISPUTE, QUALIFY, COUNTER} | IAE if pointId null or point not in state |
+| `DeepAnalysisHandler` | `DEEP_ANALYSIS` | Full spec content + location hint from point classification (or "(no section indicated)" if pointId absent — not an error) | IAE if specPath null |
+| `ConsistencyCheckHandler` | `CONSISTENCY_CHECK` | Compact numbered list of AGREED points (pointId + raise content only, no thread history) + customInput | IAE if customInput null |
+| `NeutralSummaryHandler` | `NEUTRAL_SUMMARY` | All points and thread entries from projected `ReviewState` (v1: full state, not per-round filtered) | Never throws |
+| `CustomHandler` | `CUSTOM` | `customInput` verbatim | IAE if customInput null |
+
+**`ArbitrateHandler` — precise "last response" definition:**
+
+```java
+String lastResponse = point.thread().stream()
+    .filter(e -> e.type() == EntryType.DISPUTE
+             || e.type() == EntryType.QUALIFY
+             || e.type() == EntryType.COUNTER)
+    .reduce((a, b) -> b)   // last matching entry, not thread.getLast()
+    .map(ThreadEntry::content)
+    .orElse("(no response yet)");
+```
+
+**`ConsistencyCheckHandler` — compact list format:**
+
+One numbered item per AGREED point (identified by `ReviewStatus.AGREED`), containing only `pointId` and first thread entry content. No thread history, no classification metadata:
+
+```
+1. [pt-1] The API contract is ambiguous — no timeout stated.
+2. [pt-3] Error handling absent in §4.1.
+```
+
+**System prompts by task type:**
+
+| Handler | System prompt |
+|---|---|
+| `VerifyHandler` | "You are a spec verifier. You have no knowledge of this debate's prior rounds. Determine only whether this claim is supported by the spec. Be precise." |
+| `ArbitrateHandler` | "You are a neutral arbitrator. You have not seen this debate before. Assess these two positions on their merits only. Do not favour either side." |
+| `DeepAnalysisHandler` | "You are a spec analyst reading this spec with fresh eyes. Focus on the indicated section. Identify issues." |
+| `ConsistencyCheckHandler` | "You have no memory of this debate. Determine only whether the proposed resolution contradicts any of these prior agreements." |
+| `NeutralSummaryHandler` | "Summarise this debate neutrally. You have not participated in it." |
+| `CustomHandler` | "You are a focused analyst. Answer only the question posed. You have no knowledge of the broader debate." |
 
 ---
 
@@ -233,9 +490,7 @@ post_memo(debateSessionId, agentRole, round, content)
 Encoding: `META_SENTINEL + "entryType=MEMO|agent=<role>|round=<n>\n\n<content>"`
 Qhorus type: `MessageType.STATUS`
 
-**Why STATUS:** STATUS is the correct Qhorus type for informational entries that create no obligation, expect no reply, and do not close a commitment thread. QUERY would imply a pending response. RESPONSE requires `inReplyTo`. DONE/DECLINE/HANDOFF close or redirect commitments. STATUS is the catch-all for audit-trail entries that are neither commands nor responses — the correct type for a reasoning memo.
-
-Agents call this after their last raise/respond of a round to externalise their working model: patterns noticed, why concessions feel solid vs provisional, concerns not yet formally raised. Memos are not citable by other entries but inform a cold agent resuming from the channel history.
+**Why STATUS:** the correct type for informational entries that create no obligation, expect no reply, and do not close a commitment thread. QUERY implies a pending response; RESPONSE requires `inReplyTo`; DONE/DECLINE/HANDOFF close commitments. STATUS is the catch-all for audit-trail entries that are neither commands nor responses.
 
 ### `request_subagent`
 
@@ -244,219 +499,61 @@ request_subagent(debateSessionId, agentRole, taskType, pointId?, customInput?)
 → {subTaskId: "<uuid>", status: "dispatched"}
 ```
 
-- `pointId`: the debate point this task relates to. Null for `NEUTRAL_SUMMARY` and `CUSTOM`. Optional for `DEEP_ANALYSIS`.
-- `customInput`: for `CUSTOM` — the full context the sub-agent receives. For `CONSISTENCY_CHECK` — the proposed resolution text to check against prior agreements. Null for all other task types.
-- `subTaskId`: fresh UUID generated at tool call time; becomes `correlationId` on the channel message so the projection matches REQUEST → FINDING by this ID.
+- `customInput`: for `CUSTOM` — the full context. For `CONSISTENCY_CHECK` — the proposed resolution text. Null for all other types.
+- `subTaskId`: fresh UUID at tool call time; `correlationId` on the channel message so projection matches REQUEST → FINDING.
 
-Encoding: `META_SENTINEL + "entryType=SUB_TASK_REQUEST|agent=<role>|taskType=<EnumName>|subTaskId=<uuid>[|pointId=<id>]\n\n[customInput or empty]"`
+Encoding: `META_SENTINEL + "entryType=SUB_TASK_REQUEST|agent=<role>|taskType=<EnumName>|subTaskId=<uuid>[|pointId=<id>]\n\n[customInput]"`
 Qhorus type: `MessageType.QUERY`
 
-Both tools wrap their dispatch call in try/catch and return `"error: ..."` on failure per `mcp-tool-exception-catch-all.md`. The orchestrator's async execution is fire-and-forget from the tool's perspective — failures surface as `SUB_TASK_ERROR` entries in the channel. The main agent can continue raising/responding while the sub-agent runs. `get_debate_summary` shows `⏳ PENDING` until the finding arrives.
+Both tools catch all exceptions and return `"error: ..."` per `mcp-tool-exception-catch-all.md`.
 
 ---
 
-## SubAgentOrchestrator (`runtime` module)
+## `DebateAgentProvider` Implementations
 
-### `SubAgentRequest` CDI event record
+### `LangChain4jDebateAgentProvider` (`runtime`, `@DefaultBean @ApplicationScoped`)
 
-```java
-public record SubAgentRequest(
-    UUID channelId,
-    String subTaskId,
-    SubTaskType taskType,
-    String requestingAgent,
-    String pointId,      // null for NEUTRAL_SUMMARY, CUSTOM; optional for DEEP_ANALYSIS
-    String customInput,  // null unless CUSTOM or CONSISTENCY_CHECK
-    String specPath      // from DebateSession; may be null if not provided at session start
-) {}
-```
+Injects `ChatModel`. Builds `SystemMessage` + `UserMessage` from `AgentTask` fields. Returns response text. CI-friendly.
 
-### `SUBAGENT_INSTANCE_ID` registration
+### `ClaudeAgentSdkDebateAgentProvider` (`claude-agent`, `@ApplicationScoped`)
 
-`SubAgentOrchestrator` registers a shared Qhorus sender instance at startup. `InstanceService.register()` is an **upsert** — confirmed from source: it calls `findByInstanceId()`, creates if absent, updates description and status if present. Calling `@PostConstruct` again on restart is safe with no prior deregister required. This is the same pattern used by `DraftHouseMcpTools.registerHumanInstance()`.
+Named per ARC42STORIES.MD. Injects `AgentProvider` (platform SPI). Displaces LangChain4j default by classpath presence. **Gated on platform#55** — stub until that ships.
 
-```java
-static final String SUBAGENT_INSTANCE_ID = "drafthouse-subagent";
+CDI priority: `LangChain4jDebateAgentProvider @DefaultBean` < `ClaudeAgentSdkDebateAgentProvider @ApplicationScoped`. Consistent with `ai-agent-provider-cdi-priority.md`.
 
-@PostConstruct
-void registerSubAgentInstance() {
-    instanceService.register(SUBAGENT_INSTANCE_ID,
-            "DraftHouse sub-agent (focused analysis)",
-            List.of("document-debate-subagent"));
-}
-```
+DraftHouse handlers return free-text findings. A `parseResult()` intermediate step for structured result typing belongs in the extracted pattern design (→ #42), not this implementation.
 
-All `SUB_TASK_FINDING` and `SUB_TASK_ERROR` messages are dispatched with `sender = SUBAGENT_INSTANCE_ID`. Qhorus validates sender instances at dispatch time — this registration must complete before any finding is dispatched.
+---
 
-### §Backend Evolution — DebateChannelBackend
+## §Backend Evolution
 
-The June 7 design described `DebateChannelBackend` as a "registration fence" whose `post()` was a no-op. This spec evolves that contract:
+The June 7 design described `DebateChannelBackend` as a "registration fence" with a no-op `post()`. This spec evolves that contract:
 
-**Retained:** the fence role — the backend's presence still prevents `ReviewerChannelBackendFactory` from attaching an LLM backend to debate channels.
+**Retained:** the fence role — prevents `ReviewerChannelBackendFactory` from attaching an LLM backend to debate channels.
 
-**Added:** `post()` now parses the META sentinel from `OutboundMessage.content()` and fires a `SubAgentRequest` CDI event when `entryType == SUB_TASK_REQUEST`. All other entry types are discarded (no-op, same as before).
-
-**Architectural choice:** the CDI event is fired from `ChannelBackend.post()` rather than directly from `DebateMcpTools.request_subagent()`. This keeps orchestration in the Qhorus message-arrival layer — consistent with how `ReviewerChannelBackend` reacts to QUERY messages — and ensures that any `SUB_TASK_REQUEST` entry in the channel (regardless of origin) triggers dispatch. The alternative (firing from the MCP tool) would couple orchestration to the tool layer and bypass the channel as the integration contract.
-
-The backend's SPI signature is `post(ChannelRef channel, OutboundMessage message)` — `OutboundMessage` is the Qhorus type delivered to backends; `MessageView` is the type used by channel projections. These are different Qhorus types serving different purposes.
+**Added:** `post()` parses the META sentinel from `OutboundMessage.content()`, constructs a `ChannelAgentRequest`, and fires it as a CDI event when `entryType == SUB_TASK_REQUEST`. All other entry types remain no-ops.
 
 ```java
+@Inject Event<ChannelAgentRequest> channelAgentEvent;
+@Inject DebateSessionRegistry registry;
+
 @Override
 public void post(ChannelRef channel, OutboundMessage message) {
-    Map<String, String> meta = parseMeta(message.content());
+    Map<String, String> meta = DebateProtocol.parseMeta(message.content());
     if (!"SUB_TASK_REQUEST".equals(meta.get("entryType"))) return;
 
     DebateSession session = registry.find(channel.id()).orElse(null);
     if (session == null) {
-        LOG.warning("SUB_TASK_REQUEST on channel " + channel.id() + " — no session, dropped");
+        LOG.warning("SUB_TASK_REQUEST on " + channel.id() + " — no session, dropped");
         return;
     }
-    subAgentEvent.fireAsync(buildSubAgentRequest(channel, message, meta, session));
+    String correlationId = message.correlationId() != null
+            ? message.correlationId().toString() : UUID.randomUUID().toString();
+    channelAgentEvent.fireAsync(new ChannelAgentRequest(channel.id(), correlationId, message));
 }
 ```
 
-### `SubAgentOrchestrator`
-
-```java
-@ApplicationScoped
-public class SubAgentOrchestrator {
-
-    @Inject SubAgentProvider subAgentProvider;
-    @Inject MessageService messageService;
-    @Inject ProjectionService projectionService;
-    @Inject DebateChannelProjection debateProjection;
-    @Inject DebateSessionRegistry registry;
-    @Inject InstanceService instanceService;
-
-    @PostConstruct
-    void registerSubAgentInstance() { /* see above */ }
-
-    @ObservesAsync
-    public void onSubAgentRequest(SubAgentRequest event) {
-        DebateSession session = registry.find(event.channelId()).orElse(null);
-        if (session == null) {
-            LOG.warning("SubAgentOrchestrator: no session for " + event.channelId() + " — dropped");
-            return;
-        }
-        try {
-            SubAgentTask task = assembleTask(event, session);
-            String finding = subAgentProvider.analyse(task);
-            dispatchFinding(event, finding);
-        } catch (Exception e) {
-            LOG.warning("SubAgentOrchestrator: sub-agent failed [subTaskId=" + event.subTaskId()
-                    + ", type=" + event.taskType() + "]: " + e.getClass().getSimpleName()
-                    + " — " + e.getMessage());
-            dispatchError(event);  // sanitized — never passes e.getMessage() to the ledger
-        }
-    }
-}
-```
-
-### §Concurrency
-
-Multiple `request_subagent` calls may be in flight concurrently on the same session. Each gets a distinct `subTaskId`; `onSubAgentRequest()` executes concurrently on the CDI async thread pool. `SubAgentOrchestrator` has **no shared mutable state** — all fields are immutable injected collaborators. `ProjectionService.project()` produces a snapshot of state at the time of the call; each invocation reads its own snapshot independently. The Qhorus channel serialises `apply()` calls within the projection fold. No synchronization is required in `SubAgentOrchestrator`. This is safe by design.
-
-### Input assembly — `assembleTask()`
-
-**Invariant enforced across all task types:** no prior round entries are included unless the task type explicitly requires them. This is the architectural enforcement of "deliberately minimal context."
-
-**Failure modes:** if required inputs are absent, `assembleTask()` throws `IllegalArgumentException` with a descriptive message. The outer `try/catch` in `onSubAgentRequest()` catches this and routes to `dispatchError()` — the SUB_TASK_ERROR entry documents the failure in the channel.
-
-| Task type | Required inputs | Throws if missing | Assembled input |
-|---|---|---|---|
-| `VERIFY` | `pointId` (must exist in projected state); `specPath` (must not be null) | IAE on null pointId, missing point, or null specPath | Claim text (first thread entry of the point) + full spec content |
-| `ARBITRATE` | `pointId` (must exist in projected state); point must have at least one response entry | IAE on null pointId or missing point | Original raise content + last DISPUTE/QUALIFY/COUNTER entry (see below) |
-| `DEEP_ANALYSIS` | `specPath` (must not be null) | IAE on null specPath | Full spec content + location hint from point's classification (or "(no section indicated)" if pointId is null or location is absent — not an error) |
-| `CONSISTENCY_CHECK` | `customInput` (proposed resolution text) | IAE on null customInput | Compact list of AGREED points + customInput |
-| `NEUTRAL_SUMMARY` | None | Never throws | All points and thread entries from the current projected state |
-| `CUSTOM` | `customInput` | IAE on null customInput | `customInput` verbatim |
-
-**ARBITRATE — precise "most recent response" definition:**
-
-"The most recent response" is the **last `ThreadEntry` in `point.thread()` whose type is one of `{DISPUTE, QUALIFY, COUNTER}`**. Not `thread.getLast()` (which may be FLAG_HUMAN); a filter-then-reduce is required:
-
-```java
-String latestResponse = point.thread().stream()
-    .filter(e -> e.type() == EntryType.DISPUTE
-             || e.type() == EntryType.QUALIFY
-             || e.type() == EntryType.COUNTER)
-    .reduce((a, b) -> b)  // last matching entry
-    .map(ThreadEntry::content)
-    .orElse("(no response yet)");
-```
-
-**CONSISTENCY_CHECK — compact list format:**
-
-One numbered item per AGREED point, containing only `pointId` and the raise entry content (first `ThreadEntry` in the thread). No thread history, no classification metadata:
-
-```
-1. [pt-1] The API contract is ambiguous — no timeout stated.
-2. [pt-3] Error handling absent in §4.1.
-```
-
-Agreed points are identified by `point.currentStatus() == ReviewStatus.AGREED` in the projected state.
-
-**System prompts by task type:**
-
-| Task type | System prompt |
-|---|---|
-| `VERIFY` | "You are a spec verifier. You have no knowledge of this debate's prior rounds. Determine only whether this claim is supported by the spec. Be precise." |
-| `ARBITRATE` | "You are a neutral arbitrator. You have not seen this debate before. Assess these two positions on their merits only. Do not favour either side." |
-| `DEEP_ANALYSIS` | "You are a spec analyst reading this spec with fresh eyes. Focus on the indicated section. Identify issues." |
-| `CONSISTENCY_CHECK` | "You have no memory of this debate. Determine only whether the proposed resolution contradicts any of these prior agreements." |
-| `NEUTRAL_SUMMARY` | "Summarise this debate neutrally. You have not participated in it." |
-| `CUSTOM` | "You are a focused analyst. Answer only the question posed. You have no knowledge of the broader debate." |
-
-### Error dispatch — sanitization rule
-
-**`dispatchError()` takes no `reason` parameter.** It always dispatches a fixed, sanitized category string. The actual exception is logged (with class name + message) at WARN level before calling `dispatchError()`. Exception messages must never reach `MessageService.dispatch()` content — the Qhorus ledger is tamper-evident and immutable. See `qhorus-dispatch-exception-sanitization.md`.
-
-```java
-private void dispatchError(SubAgentRequest event) {
-    Long inReplyTo = messageService.findByCorrelationId(event.subTaskId())
-            .map(m -> m.id).orElse(null);
-    String encoded = DebateProtocol.META_SENTINEL
-            + "entryType=SUB_TASK_ERROR|subTaskId=" + event.subTaskId()
-            + "|taskType=" + event.taskType().name()
-            + "|agent=" + event.requestingAgent()
-            + "\n\nSub-agent analysis failed.";
-    messageService.dispatch(MessageDispatch.builder()
-            .channelId(event.channelId())
-            .sender(SUBAGENT_INSTANCE_ID)
-            .type(MessageType.STATUS)
-            .content(encoded)
-            .correlationId(event.subTaskId())
-            .inReplyTo(inReplyTo)
-            .actorType(ActorType.AGENT)
-            .build());
-}
-```
-
-Note `event.taskType().name()` — enum name, consistent with the encoding standard.
-
-### Finding dispatch
-
-`SUB_TASK_FINDING` message:
-```
-META_SENTINEL + "entryType=SUB_TASK_FINDING|subTaskId=<id>|taskType=<EnumName>|agent=<requestingAgent>[|pointId=<id>]\n\n<finding>"
-```
-`MessageType.RESPONSE`, `correlationId = subTaskId`, `inReplyTo = id of the SUB_TASK_REQUEST message` (via `messageService.findByCorrelationId(subTaskId)`).
-
----
-
-## `SubAgentProvider` Implementations
-
-### `LangChain4jSubAgentProvider` (`runtime`, `@DefaultBean @ApplicationScoped`)
-
-Injects `ChatModel` (LangChain4j, already present via `DocumentReviewer`). Builds `SystemMessage` + `UserMessage` from the task fields and calls `chatModel.generate(messages)`. Returns the response text. CI-friendly — no Claude CLI required.
-
-### `ClaudeSubAgentProvider` (`claude-agent`, `@ApplicationScoped`)
-
-Injects `AgentProvider` (platform SPI). Displaces LangChain4j default by classpath presence. **Gated on platform#55** — stub in `claude-agent/` until that ships.
-
-CDI priority: `LangChain4jSubAgentProvider @DefaultBean` < `ClaudeSubAgentProvider @ApplicationScoped`. Consistent with `ai-agent-provider-cdi-priority.md`.
-
-DraftHouse sub-agents return free-text findings. A structured `parseResult()` step (for typed result objects) is a concern for the extracted `ChannelAgentDispatcher` pattern (→ #42), not this implementation.
+**Architectural choice:** the event is fired from `ChannelBackend.post()` rather than directly from `DebateMcpTools.request_subagent()`. This keeps orchestration in the Qhorus message-arrival layer — the same integration point as `ReviewerChannelBackend` — and means any `SUB_TASK_REQUEST` in the channel triggers dispatch regardless of origin.
 
 ---
 
@@ -464,12 +561,10 @@ DraftHouse sub-agents return free-text findings. A structured `parseResult()` st
 
 ### Encoding standard applied to `apply()`
 
-Replace the string switch with `EntryType.valueOf()` + enum switch. This is type-safe and compiler-exhaustive:
-
 ```java
 @Override
 public ReviewState apply(ReviewState state, MessageView message) {
-    Map<String, String> meta = parseMeta(message.content());
+    Map<String, String> meta = DebateProtocol.parseMeta(message.content());
     String entryTypeStr = meta.get("entryType");
     if (entryTypeStr == null) return state;
 
@@ -477,7 +572,7 @@ public ReviewState apply(ReviewState state, MessageView message) {
     try {
         entryType = EntryType.valueOf(entryTypeStr);
     } catch (IllegalArgumentException e) {
-        LOG.warning("DebateChannelProjection: unknown entryType '" + entryTypeStr + "' — discarded");
+        LOG.warning("Unknown entryType '" + entryTypeStr + "' — discarded");
         return state;
     }
 
@@ -488,65 +583,59 @@ public ReviewState apply(ReviewState state, MessageView message) {
         case DISPUTE          -> handleDispute(state, message, meta);
         case QUALIFY          -> handleQualify(state, message, meta);
         case FLAG_HUMAN       -> handleFlagHuman(state, message, meta);
-        case DECLINED         -> state;  // projection-only status; never encoded in a message
+        case DECLINED         -> state;   // projection-only status; never encoded in a message
         case MEMO             -> handleMemo(state, message, meta);
         case SUB_TASK_REQUEST -> handleSubTaskRequest(state, message, meta);
         case SUB_TASK_FINDING -> handleSubTaskFinding(state, message, meta);
         case SUB_TASK_ERROR   -> handleSubTaskError(state, message, meta);
     };
 }
-```
 
-### `identity()`
-
-```java
 @Override
 public ReviewState identity() {
     return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
 }
 ```
 
-### New dispatch cases (conceptual — `ReviewState` is immutable; handlers build new instances)
+### New dispatch cases (conceptual — ReviewState is immutable; all handlers build new instances)
 
 ```
-MEMO             → add RoundMemo(agentRole, round, bodyContent) to memos; all other fields carried forward
+MEMO             → add RoundMemo(agentRole, round, bodyContent) to memos
 SUB_TASK_REQUEST → add SubTaskFinding(subTaskId, taskType, requestingAgent, pointId, null, null, PENDING)
 SUB_TASK_FINDING → update SubTaskFinding(subTaskId) → COMPLETE with finding text
-SUB_TASK_ERROR   → update SubTaskFinding(subTaskId) → ERROR with errorReason = "Sub-agent analysis failed."
+SUB_TASK_ERROR   → update SubTaskFinding(subTaskId) → ERROR with fixed errorReason
 ```
 
-For `SUB_TASK_FINDING` and `SUB_TASK_ERROR`: if a finding with that `subTaskId` does not yet exist in state (finding arrived before request was projected), create it at COMPLETE/ERROR status directly. The projection is a left-fold over an ordered message stream; out-of-order arrival is possible if the sub-agent completes before the request message is projected.
+Out-of-order arrival (FINDING before REQUEST): create SubTaskFinding at COMPLETE/ERROR status directly. The fold is over an ordered message stream; order inversion is possible if the sub-agent completes very fast.
 
 ---
 
 ## SummaryRenderer Rendering Algorithm (`api` module)
 
-`SummaryRenderer.render(ReviewState state)` must be updated to iterate the new state fields. The rendering algorithm in full:
+`SummaryRenderer.render(ReviewState state)` algorithm:
 
 ```
 1. Header: "# Review Summary\n**Updated:** <instant>\n\n---\n\n"
 
 2. For each ReviewPoint in state.points().values():
-   a. Status marker + point header (unchanged from existing logic)
+   a. Status marker + point header line
    b. For each ThreadEntry in point.thread():
-      render "> **{agent} ({typeLabel}):** {content}"
+        render "> **{agent} ({typeLabel}):** {content}"
    c. For each SubTaskFinding in state.subTaskFindings().values()
-      where finding.pointId() != null && finding.pointId().equals(point.id()):
-        render finding with provenance marker (PENDING / COMPLETE / ERROR)
-   d. Render "\n---\n\n" separator
+        where finding.pointId() != null && finding.pointId().equals(point.id()):
+          render finding with provenance marker (in subTaskId insertion order)
+   d. "\n---\n\n"
 
 3. If state.humanFlags() not empty:
-   render "⚑ **Human review needed:**" section (unchanged)
+     "⚑ **Human review needed:**" + flag list
 
 4. If any SubTaskFinding has null pointId (NEUTRAL_SUMMARY or CUSTOM):
-   render "\n---\n\n**Sub-task findings**\n\n"
-   For each such finding in subTaskId insertion order:
-     render finding with provenance marker
+     "\n---\n\n**Sub-task findings**\n\n"
+     For each such finding in subTaskId insertion order: render finding
 
 5. If state.memos() not empty:
-   render "\n---\n\n**Agent Memos**\n\n"
-   For each RoundMemo in insertion order:
-     render "**{agentRole} memo — Round {round}:** {content}\n\n"
+     "\n---\n\n**Agent Memos**\n\n"
+     For each RoundMemo in insertion order: "**{agentRole} memo — Round {round}:** {content}\n\n"
 ```
 
 **Finding provenance rendering:**
@@ -557,53 +646,77 @@ COMPLETE: "  ⊕ **{taskType}** _(fresh context — no prior round knowledge)_\n
 ERROR:    "  ✗ **{taskType}** failed: {errorReason}\n"
 ```
 
-The `⊕` marker and `_(fresh context — no prior round knowledge)_` caption make provenance visible to the human observer. Main-agent thread entries carry no marker — implicitly accumulated-context.
+---
+
+## §Concurrency
+
+Multiple `request_subagent` calls may be in flight concurrently on the same session. Each gets a distinct `subTaskId`. `ChannelAgentDispatcher.onChannelAgentRequest()` executes concurrently on the CDI async thread pool. `ChannelAgentDispatcher` has no shared mutable state. Handler beans inject only immutable collaborators and read-only services. `ProjectionService.project()` produces a point-in-time snapshot; each invocation is independent. The Qhorus channel serialises `apply()` calls within the projection fold. No synchronization required. Safe by design.
 
 ---
 
 ## Testing
 
-### §SubAgentOrchestratorTest — unit test, no CDI container
+### `ChannelAgentDispatcherTest` — unit, no CDI container
 
-`@ObservesAsync` is a CDI registration marker, not a runtime guard. Tests create `SubAgentOrchestrator` via a package-private constructor and call `onSubAgentRequest()` **directly as a Java method**, bypassing CDI entirely. This makes tests synchronous, fast, and container-free. No event firing, no Quarkus test harness.
+`onChannelAgentRequest()` is called directly as a Java method. No container, no event firing. Synchronous.
 
-**Tests to write:**
+Tests:
+- Handler found and succeeds → `messageService.dispatch(SUB_TASK_FINDING)` called
+- Handler throws `IllegalArgumentException` from `prepareTask` → `dispatchError("Sub-agent analysis failed.")`
+- Handler throws `AgentResultParseException` from `buildResponse` → `dispatchError("Sub-agent returned an unreadable result.")`
+- No handler matches → `dispatchError(...)` for the no-handler case
+- Error body is a fixed string — never contains the exception message
 
-- **VERIFY — throws on null specPath:** `assembleTask()` throws `IllegalArgumentException`; `dispatchError()` is called; dispatched content is `"Sub-agent analysis failed."`, never the exception message.
-- **VERIFY — throws on missing pointId in state:** same error path.
-- **ARBITRATE — most-recent filter:** thread has RAISE → QUALIFY → FLAG_HUMAN; assembled input uses the QUALIFY content, not FLAG_HUMAN.
-- **ARBITRATE — multiple responses:** thread has RAISE → DISPUTE → COUNTER → QUALIFY; assembled input uses QUALIFY (the last of DISPUTE/QUALIFY/COUNTER).
-- **CONSISTENCY_CHECK — includes only AGREED points:** state has one AGREED and one OPEN point; only AGREED appears in input; OPEN does not.
-- **CUSTOM — null customInput throws:** `assembleTask()` throws `IllegalArgumentException`.
-- **Session not found mid-flight:** registry returns empty; neither `subAgentProvider` nor `messageService` is called (silent drop).
-- **Error body is fixed string:** provider throws; dispatched content body is exactly `"Sub-agent analysis failed."` and does not contain the exception message.
+### Handler unit tests (one test class per handler)
+
+Each handler test creates the handler directly (no CDI), mocks `ProjectionService`, `DebateSessionRegistry`, and (where applicable) filesystem reads.
+
+`VerifyHandlerTest`:
+- Missing specPath → IAE thrown
+- Missing pointId → IAE thrown
+- pointId not in projected state → IAE thrown
+- All inputs present → `AgentTask.assembledInput()` contains spec content and claim; does not contain any other thread entry
+
+`ArbitrateHandlerTest`:
+- Last entry filter: thread is RAISE → QUALIFY → FLAG_HUMAN; `assembledInput` uses QUALIFY content, not FLAG_HUMAN
+- Multiple responses: RAISE → DISPUTE → COUNTER → QUALIFY; `assembledInput` uses QUALIFY (last of {DISPUTE, QUALIFY, COUNTER})
+- No response yet: thread is RAISE only; `assembledInput` contains "(no response yet)"
+
+`ConsistencyCheckHandlerTest`:
+- Null customInput → IAE thrown
+- AGREED and OPEN points in state: only AGREED appears in input; OPEN excluded
+
+`CustomHandlerTest`:
+- Null customInput → IAE thrown
+
+`NeutralSummaryHandlerTest`:
+- Empty state: assembledInput contains "(no debate entries)"
+- Never throws regardless of inputs
 
 ### `DebateChannelProjectionTest` additions
 
-- MEMO entry → appears in `state.memos()`; `state.points()` unchanged
-- SUB_TASK_REQUEST → `state.subTaskFindings()` contains entry with status PENDING
-- SUB_TASK_FINDING for same subTaskId → status COMPLETE, `finding` populated
-- SUB_TASK_ERROR → status ERROR, `errorReason` = `"Sub-agent analysis failed."`
-- Finding with null pointId (NEUTRAL_SUMMARY) → `finding.pointId()` is null
-- Out-of-order: FINDING before REQUEST → finding created at COMPLETE status directly
-- Existing apply() tests still pass — encoding change from lowercase strings to `EntryType.valueOf()` does not break test helpers that already use the `msg(type, correlationId, metaHeader, body)` pattern, since `parseMeta()` is string-key-based
-
-**Note on test helper compatibility:** `DebateChannelProjectionTest.msg()` encodes metadata as `"entryType=raise|agent=REV|round=1|..."` strings in the META header. After the encoding change, all test helper calls must use uppercase: `"entryType=RAISE|agent=REV|round=1|..."`. This is a required update to the test class.
+- MEMO → `state.memos()` size increases; `state.points()` unchanged
+- SUB_TASK_REQUEST → `state.subTaskFindings()` contains PENDING entry
+- SUB_TASK_FINDING for same subTaskId → COMPLETE with finding text
+- SUB_TASK_ERROR → ERROR with fixed reason string
+- Out-of-order (FINDING before REQUEST) → finding created at COMPLETE directly
+- Test helper `msg()` updated: all `entryType` strings use uppercase (`RAISE`, `AGREE`, etc.)
 
 ### `DebateChannelBackendTest` additions
 
-- `SUB_TASK_REQUEST` message with valid session → `SubAgentRequest` CDI event fired with correct fields
-- `SUB_TASK_REQUEST` message with no session → event not fired; log warning; no exception
-- `RAISE` message → no event fired
-- Any non-SUB_TASK_REQUEST entry type → no event fired
+- `SUB_TASK_REQUEST` message with active session → `ChannelAgentRequest` CDI event fired
+- `SUB_TASK_REQUEST` with no session → event not fired; warning logged
+- `RAISE`, `AGREE`, any other entryType → no event fired
 
 ### E2E — `SubAgentE2ETest`
 
-`MockSubAgentProvider @Alternative @Priority(1)` returns deterministic strings. Full lifecycle:
-- Start debate, raise point, respond, `request_subagent(ARBITRATE, pointId)` → `get_debate_summary` shows `⏳ PENDING`; after mock returns, shows `⊕` finding
+`MockDebateAgentProvider @Alternative @Priority(1)` returns deterministic strings. `MockHandler @Alternative @Priority(1)` for targeted handler testing.
+
+Full lifecycle:
+- `request_subagent(ARBITRATE)` → summary shows `⏳`, then `⊕` after mock returns
 - `post_memo` → memo appears in summary
-- `CUSTOM` sub-task → finding in standalone Sub-task findings section
-- Concurrent sub-tasks: two `request_subagent` calls before either finding arrives → both appear in summary
+- `CUSTOM` → finding in standalone "Sub-task findings" section
+- Two concurrent `request_subagent` calls → both appear in summary
 
 ---
 
@@ -611,10 +724,12 @@ The `⊕` marker and `_(fresh context — no prior round knowledge)_` caption ma
 
 | Module | Changes |
 |---|---|
-| `api/` | `EntryType`: add MEMO, SUB_TASK_REQUEST, SUB_TASK_FINDING, SUB_TASK_ERROR. New types: `SubTaskType`, `SubTaskStatus`, `SubTaskFinding` (with `pointId`), `RoundMemo`, `SubAgentProvider` SPI, `SubAgentTask` (field order: taskType, systemPrompt, assembledInput). `ReviewState`: add `memos` and `subTaskFindings` fields; update compact constructor to defensive-copy all four fields. `SummaryRenderer`: exhaustiveness fix for new EntryType values; new rendering logic for memos and sub-task findings per §Rendering Algorithm. `DebateSession`: add `specPath` field (reversal from June 7 — see §specPath Reversal). |
-| `runtime/` | `DebateMcpTools`: update all `entryType=lowercase` encodings to `EntryType.name()` (RAISE, AGREE, DISPUTE, QUALIFY, COUNTER, FLAG_HUMAN); add `post_memo`, `request_subagent` tools; update `startDebate()` to store `specPath` in session. `DebateChannelBackend`: evolve `post()` from no-op to CDI event dispatch for SUB_TASK_REQUEST; inject `Event<SubAgentRequest>` and `DebateSessionRegistry`. `DebateChannelProjection`: replace string switch with `EntryType.valueOf()` + enum switch; update `identity()` to 4-field ReviewState; add MEMO/SUB_TASK_* handlers; update all `new ReviewState(...)` calls to 4-field form. New: `SubAgentRequest` CDI event record, `SubAgentOrchestrator` (with `@PostConstruct` instance registration, `assembleTask()`, sanitized `dispatchError()`), `LangChain4jSubAgentProvider @DefaultBean`. |
-| `claude-agent/` | `ClaudeSubAgentProvider @ApplicationScoped` stub (gated on platform#55). |
-| Tests | `DebateChannelProjectionTest`: update all test helper `entryType` strings to uppercase; add new cases. `DebateChannelBackendTest` (was `DebateChannelBackendFactoryTest`): add SUB_TASK_REQUEST dispatch tests. `SubAgentOrchestratorTest`: new (unit, no container). `SubAgentE2ETest`: new, with `MockSubAgentProvider`. |
+| `api/` | `EntryType`: add MEMO, SUB_TASK_REQUEST, SUB_TASK_FINDING, SUB_TASK_ERROR. New: `SubTaskType`, `SubTaskStatus`, `SubTaskFinding` (with `pointId`), `RoundMemo`. **Rename:** `SubAgentTask` → `AgentTask`; `SubAgentProvider` → `DebateAgentProvider`. `ReviewState`: add `memos`, `subTaskFindings`; 4-field compact constructor with defensive copies. `SummaryRenderer`: exhaustiveness fix (throw for new types) + full rendering algorithm. `DebateSession`: add `specPath`. |
+| `runtime/` — pattern types | New: `ChannelAgentHandler` (SPI), `ChannelAgentRequest` (CDI event record), `AgentResultParseException`, `ChannelAgentDispatcher` (registers sender, `@ObservesAsync`, finds handler, invokes provider, sanitized error dispatch). |
+| `runtime/` — DraftHouse handlers | New: `AbstractDebateSubAgentHandler` (implements `handles()` + `buildResponse()`, shared helpers). New: `VerifyHandler`, `ArbitrateHandler`, `DeepAnalysisHandler`, `ConsistencyCheckHandler`, `NeutralSummaryHandler`, `CustomHandler` (each `@ApplicationScoped`, implements `taskType()` + `prepareTask()`). |
+| `runtime/` — existing changes | `DebateProtocol`: add `parseMeta()` + `bodyContent()` as public static methods (moved from `DebateChannelProjection`). `DebateChannelBackend`: evolve `post()` to fire `ChannelAgentRequest`; inject `Event<ChannelAgentRequest>` + `DebateSessionRegistry`. `DebateChannelProjection`: `EntryType.valueOf()` switch; `identity()` 4-field; new handlers; all `new ReviewState(...)` → 4-field. `DebateMcpTools`: uppercase encoding; store `specPath`; add `post_memo`, `request_subagent`. **Remove:** `SubAgentRequest`, `SubAgentOrchestrator`. `LangChain4jDebateAgentProvider @DefaultBean` (renamed from `LangChain4jSubAgentProvider`). |
+| `claude-agent/` | `ClaudeAgentSdkDebateAgentProvider @ApplicationScoped` (aligned with ARC42; stub pending platform#55). |
+| Tests | New: `ChannelAgentDispatcherTest`, `VerifyHandlerTest`, `ArbitrateHandlerTest`, `ConsistencyCheckHandlerTest`, `CustomHandlerTest`, `NeutralSummaryHandlerTest`, `SubAgentE2ETest`. Update: `DebateChannelProjectionTest` (uppercase META headers), `DebateChannelBackendTest` (event type → `ChannelAgentRequest`), `DebateMcpToolsTest` (new tools + encoding). |
 
 ---
 
@@ -622,6 +737,6 @@ The `⊕` marker and `_(fresh context — no prior round knowledge)_` caption ma
 
 | Issue | What |
 |---|---|
-| #40 | Restart-from-round-N semantics — branching the channel history and what is actually lost |
-| #41 | Threshold-based auto-reset safety valve + context meter UI |
-| #42 | Channel-Reactive Agent pattern — extraction to patterns repo (see devtown feedback for extraction concerns) |
+| #40 | Restart-from-round-N semantics |
+| #41 | Threshold-based auto-reset + context meter UI |
+| #42 | Channel-Reactive Agent — extraction to patterns repo; devtown extraction concerns documented |
