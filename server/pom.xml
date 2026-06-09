@@ -12,6 +12,7 @@
   <modules>
     <module>api</module>
     <module>runtime</module>
+    <module>claude-agent</module>
   </modules>
 
   <properties>
