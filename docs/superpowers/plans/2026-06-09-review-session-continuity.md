@@ -537,7 +537,9 @@ class SubAgentOrchestratorTest {
         MessageDispatch dispatched = dispatchCaptor.getValue();
         assertThat(dispatched.type()).isEqualTo(MessageType.STATUS);
         assertThat(dispatched.content()).contains("SUB_TASK_ERROR");
-        assertThat(dispatched.content()).contains("LLM timeout");
+        // Fixed sanitized body — never e.getMessage() (qhorus-dispatch-exception-sanitization.md)
+        assertThat(dispatched.content()).contains("Sub-agent analysis failed.");
+        assertThat(dispatched.content()).doesNotContain("LLM timeout");
     }
 
     @Test
@@ -621,29 +623,39 @@ public class SubAgentOrchestrator {
     private final ProjectionService projectionService;
     private final DebateChannelProjection debateProjection;
     private final DebateSessionRegistry registry;
+    private final InstanceService instanceService;
 
     @Inject
     SubAgentOrchestrator(SubAgentProvider subAgentProvider,
                          MessageService messageService,
                          ProjectionService projectionService,
                          DebateChannelProjection debateProjection,
-                         DebateSessionRegistry registry) {
+                         DebateSessionRegistry registry,
+                         InstanceService instanceService) {
         this.subAgentProvider  = subAgentProvider;
         this.messageService    = messageService;
         this.projectionService = projectionService;
         this.debateProjection  = debateProjection;
         this.registry          = registry;
+        this.instanceService   = instanceService;
     }
 
-    // Constructor for unit tests (no CDI)
+    @PostConstruct
+    void registerSubAgentInstance() {
+        // Qhorus validates sender instances at dispatch time — must be registered before any finding is dispatched.
+        instanceService.register(SUBAGENT_INSTANCE_ID,
+                "DraftHouse sub-agent (focused analysis)",
+                List.of("document-debate-subagent"));
+    }
+
+    // Constructor for unit tests (no CDI — pass null for instanceService, @PostConstruct not called)
     SubAgentOrchestrator(SubAgentProvider subAgentProvider,
                          MessageService messageService,
                          ProjectionService projectionService,
                          DebateChannelProjection debateProjection,
                          DebateSessionRegistry registry,
-                         // unused sentinel to disambiguate from CDI constructor
                          boolean _testMode) {
-        this(subAgentProvider, messageService, projectionService, debateProjection, registry);
+        this(subAgentProvider, messageService, projectionService, debateProjection, registry, null);
     }
 
     public void onSubAgentRequest(@ObservesAsync SubAgentRequest event) {
@@ -657,9 +669,11 @@ public class SubAgentOrchestrator {
             String finding = subAgentProvider.analyse(task);
             dispatchFinding(event, finding);
         } catch (Exception e) {
-            LOG.warning("SubAgentOrchestrator: sub-agent failed for subTaskId=" + event.subTaskId()
-                    + ": " + e.getMessage());
-            dispatchError(event, e.getMessage());
+            // Log full detail for debuggability — never pass e.getMessage() to the ledger
+            LOG.warning("SubAgentOrchestrator: sub-agent failed [subTaskId=" + event.subTaskId()
+                    + ", type=" + event.taskType() + "]: " + e.getClass().getSimpleName()
+                    + " — " + e.getMessage());
+            dispatchError(event);
         }
     }
 
@@ -764,14 +778,18 @@ public class SubAgentOrchestrator {
                 .build());
     }
 
-    private void dispatchError(SubAgentRequest event, String reason) {
+    private void dispatchError(SubAgentRequest event) {
+        // NEVER pass exception messages here — the Qhorus ledger is immutable and tamper-evident.
+        // Exception messages may contain stack traces, API keys, or internal paths.
+        // Log full detail above (in the caller); dispatch a fixed sanitised category string only.
+        // See: qhorus-dispatch-exception-sanitization.md
         Long inReplyTo = messageService.findByCorrelationId(event.subTaskId())
                 .map(m -> m.id).orElse(null);
         String encoded = DebateProtocol.META_SENTINEL
                 + "entryType=SUB_TASK_ERROR|subTaskId=" + event.subTaskId()
                 + "|taskType=" + event.taskType()
                 + "|agent=" + event.requestingAgent()
-                + "\n\n" + Objects.requireNonNullElse(reason, "unknown error");
+                + "\n\nSub-agent analysis failed.";
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(event.channelId())
                 .sender(SUBAGENT_INSTANCE_ID)
@@ -804,13 +822,13 @@ public class SubAgentOrchestrator {
 }
 ```
 
-**Note on test constructor:** The test uses a package-private constructor that mirrors the CDI constructor — this avoids Mockito needing CDI. In the test `setUp()`, call it as:
+**Note on test constructor:** The test uses a package-private boolean-sentinel constructor that avoids CDI and passes `null` for `instanceService` (the `@PostConstruct` is not called in tests — no Qhorus instance registration needed). In the test `setUp()`, call it as:
 ```java
 orchestrator = new SubAgentOrchestrator(
         subAgentProvider, messageService, projectionService, debateProjection, registry, true);
 ```
 
-Update `SubAgentOrchestratorTest.setUp()` to use the test constructor.
+Update `SubAgentOrchestratorTest.setUp()` to use this constructor.
 
 - [ ] **Step 5: Run orchestrator tests**
 
