@@ -60,6 +60,7 @@ public class ChannelAgentDispatcher {
 
     @PostConstruct
     void registerSenderInstance() {
+        if (instanceService == null) return; // test constructor path — @PostConstruct never called by CDI
         // InstanceService.register() is an upsert — idempotent on restart, no prior deregister needed
         instanceService.register(SUBAGENT_INSTANCE_ID,
                 "DraftHouse sub-agent (focused analysis)",

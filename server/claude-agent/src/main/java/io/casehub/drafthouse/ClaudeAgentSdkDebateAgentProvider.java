@@ -6,7 +6,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Claude CLI-backed DebateAgentProvider. Named per ARC42STORIES.MD.
- * Activates by classpath presence; displaces LangChain4jDebateAgentProvider @DefaultBean.
+ *
+ * CDI displacement: this bean is plain @ApplicationScoped (no @Alternative, no @DefaultBean).
+ * When this module is on the classpath, CDI's @DefaultBean displacement rule activates it:
+ * a non-default bean displaces any @DefaultBean of the same type automatically, without
+ * requiring quarkus.arc.selected-alternatives. Do NOT add @Alternative here — that would
+ * require explicit configuration and break the classpath-presence activation contract.
+ * See: ai-agent-provider-cdi-priority.md
+ *
  * Pending casehubio/platform#55 — stub until that ships.
  */
 @ApplicationScoped
