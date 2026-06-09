@@ -150,7 +150,7 @@ class DebateMcpToolsTest {
         // Metadata encoded in content as META header; artefactRefs is null (Qhorus parses it as CSV UUIDs)
         assertThat(d.artefactRefs()).isNull();
         assertThat(d.content()).startsWith(DebateProtocol.META_SENTINEL);
-        assertThat(d.content()).contains("entryType=raise");
+        assertThat(d.content()).contains("entryType=RAISE");
         assertThat(d.content()).contains("agent=REV");
         assertThat(d.content()).contains("round=1");
         assertThat(d.content()).contains("priority=P1");
@@ -201,7 +201,7 @@ class DebateMcpToolsTest {
         assertThat(d.correlationId()).isEqualTo(pointId);
         // Metadata encoded in content; artefactRefs is null
         assertThat(d.artefactRefs()).isNull();
-        assertThat(d.content()).contains("entryType=agree");
+        assertThat(d.content()).contains("entryType=AGREE");
         assertThat(d.content()).endsWith("I agree.");
     }
 
@@ -254,7 +254,7 @@ class DebateMcpToolsTest {
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().type()).isEqualTo(MessageType.RESPONSE);
         assertThat(cap.getValue().artefactRefs()).isNull();
-        assertThat(cap.getValue().content()).contains("entryType=counter");
+        assertThat(cap.getValue().content()).contains("entryType=COUNTER");
     }
 
     @Test
@@ -293,7 +293,7 @@ class DebateMcpToolsTest {
         assertThat(d.inReplyTo()).isEqualTo(7L);
         // Metadata encoded in content; artefactRefs is null
         assertThat(d.artefactRefs()).isNull();
-        assertThat(d.content()).contains("entryType=flag-human");
+        assertThat(d.content()).contains("entryType=FLAG_HUMAN");
         assertThat(d.content()).endsWith("Human clarification needed.");
     }
 

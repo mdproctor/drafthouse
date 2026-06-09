@@ -1,6 +1,7 @@
 package io.casehub.drafthouse;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Logger;
 
@@ -114,7 +115,7 @@ public class DebateMcpTools {
 
         String pointId = UUID.randomUUID().toString();
         StringBuilder meta = new StringBuilder(DebateProtocol.META_SENTINEL)
-                .append("entryType=raise|agent=").append(agentRole)
+                .append("entryType=RAISE|agent=").append(agentRole)
                 .append("|round=").append(round)
                 .append("|priority=").append(priority)
                 .append("|scope=").append(scope);
@@ -165,7 +166,7 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=" + entryType
+        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=" + entryType.toUpperCase()
                 + "|agent=" + agentRole + "|round=" + round + "\n\n" + content;
 
         messageService.dispatch(MessageDispatch.builder()
@@ -200,7 +201,7 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=flag-human|agent=" + agentRole
+        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=FLAG_HUMAN|agent=" + agentRole
                 + "|round=" + round + "\n\n" + reason;
 
         messageService.dispatch(MessageDispatch.builder()
@@ -265,6 +266,76 @@ public class DebateMcpTools {
 
         return "{\"debateSessionId\":\"" + debateSessionId + "\",\"status\":\"ended\",\"channelDeleted\":"
                 + deleteChannel + "}";
+    }
+
+    @Tool(name = "post_memo",
+          description = "Write a per-round reasoning memo to the debate channel. Call after your last "
+                  + "raise/respond of a round to record working hypotheses, patterns noticed, and why "
+                  + "concessions feel solid vs provisional.")
+    public String postMemo(
+            @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
+            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Current round number") int round,
+            @ToolArg(description = "Your reasoning memo content") String content) {
+        try {
+            DebateSession session = resolveSession(debateSessionId);
+            if (session == null) return sessionError(debateSessionId);
+            if (!"REV".equals(agentRole) && !"IMP".equals(agentRole))
+                return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
+            String encoded = DebateProtocol.META_SENTINEL
+                    + "entryType=MEMO|agent=" + agentRole + "|round=" + round
+                    + "\n\n" + Objects.requireNonNullElse(content, "");
+            messageService.dispatch(MessageDispatch.builder()
+                    .channelId(session.channelId())
+                    .sender(sender(session, agentRole))
+                    .type(MessageType.STATUS)
+                    .content(encoded)
+                    .actorType(ActorType.AGENT)
+                    .build());
+            return "{\"status\":\"dispatched\"}";
+        } catch (Exception e) {
+            LOG.warning("post_memo failed: " + e.getMessage());
+            return "error: " + e.getMessage();
+        }
+    }
+
+    @Tool(name = "request_subagent",
+          description = "Dispatch a fresh-context sub-agent for focused analysis. Finding appears in "
+                  + "get_debate_summary (⏳ while pending). You may continue raising/responding while it runs. "
+                  + "taskType: VERIFY | ARBITRATE | DEEP_ANALYSIS | CONSISTENCY_CHECK | NEUTRAL_SUMMARY | CUSTOM. "
+                  + "customInput: for CUSTOM — the full context; for CONSISTENCY_CHECK — the proposed resolution text.")
+    public String requestSubagent(
+            @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
+            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Sub-task type") String taskType,
+            @ToolArg(description = "pointId from raise_point. Null for NEUTRAL_SUMMARY or CUSTOM.") String pointId,
+            @ToolArg(description = "For CUSTOM: full context. For CONSISTENCY_CHECK: proposed resolution. Null otherwise.") String customInput) {
+        try {
+            DebateSession session = resolveSession(debateSessionId);
+            if (session == null) return sessionError(debateSessionId);
+            if (!"REV".equals(agentRole) && !"IMP".equals(agentRole))
+                return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
+            String subTaskId = UUID.randomUUID().toString();
+            StringBuilder header = new StringBuilder(DebateProtocol.META_SENTINEL)
+                    .append("entryType=SUB_TASK_REQUEST")
+                    .append("|agent=").append(agentRole)
+                    .append("|taskType=").append(Objects.requireNonNullElse(taskType, "CUSTOM"))
+                    .append("|subTaskId=").append(subTaskId);
+            if (pointId != null && !pointId.isBlank()) header.append("|pointId=").append(pointId);
+            String encoded = header + "\n\n" + Objects.requireNonNullElse(customInput, "");
+            messageService.dispatch(MessageDispatch.builder()
+                    .channelId(session.channelId())
+                    .sender(sender(session, agentRole))
+                    .type(MessageType.QUERY)
+                    .content(encoded)
+                    .correlationId(subTaskId)
+                    .actorType(ActorType.AGENT)
+                    .build());
+            return "{\"subTaskId\":\"" + subTaskId + "\",\"status\":\"dispatched\"}";
+        } catch (Exception e) {
+            LOG.warning("request_subagent failed: " + e.getMessage());
+            return "error: " + e.getMessage();
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
