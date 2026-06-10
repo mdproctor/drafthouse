@@ -111,6 +111,8 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
     private ReviewState handleRaise(ReviewState state, MessageView message, Map<String, String> meta) {
         String entryId = message.correlationId();
         if (entryId == null) return state;
+        AgentType agent = agentType(meta);
+        if (agent == null) return state;
         Priority priority = parsePriority(meta.getOrDefault("priority", "P3"));
         Scope scope = parseScope(meta.getOrDefault("scope", "ISOLATED"));
         String location = meta.get("location");
@@ -118,7 +120,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
                 location != null && !location.isBlank() ? location : null);
         int round = DebateProtocol.parseRound(meta);
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(entryId, agentType(meta), round, EntryType.RAISE, DebateProtocol.bodyContent(message.content())));
+        thread.add(new ThreadEntry(entryId, agent, round, EntryType.RAISE, DebateProtocol.bodyContent(message.content())));
         var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
@@ -147,6 +149,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
         String content = DebateProtocol.bodyContent(Objects.requireNonNullElse(message.content(), ""));
         int round = DebateProtocol.parseRound(meta);
         AgentType agent = agentType(meta);
+        if (agent == null) return state;
         var points = new LinkedHashMap<>(state.points());
         if (targetId != null && points.containsKey(targetId)) {
             ReviewPoint p = points.get(targetId);
@@ -171,10 +174,12 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
                     "Debate entry ({0}) references unknown point: {1} — discarded", type, targetId);
             return state;
         }
+        AgentType agent = agentType(meta);
+        if (agent == null) return state;
         ReviewPoint existing = state.points().get(targetId);
         int round = DebateProtocol.parseRound(meta);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(meta), round, type, DebateProtocol.bodyContent(message.content())));
+        thread.add(new ThreadEntry(null, agent, round, type, DebateProtocol.bodyContent(message.content())));
         var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
@@ -182,14 +187,25 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
                 new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
+    /**
+     * Resolves agent string to AgentType. Returns null (with log) instead of throwing —
+     * fold() has no exception handling; throwing would crash the fold and break the session.
+     * ERROR severity for null (protocol violation by our code); WARNING for unknown (future role).
+     */
     private AgentType agentType(Map<String, String> meta) {
         String agent = meta.get("agent");
-        if (agent == null) throw new IllegalArgumentException("debate message content missing META.agent field");
-        return switch (agent) {
-            case "REV" -> AgentType.REV;
-            case "IMP" -> AgentType.IMP;
-            default    -> throw new IllegalArgumentException("Unknown agent in debate META header: " + agent);
-        };
+        if (agent == null) {
+            LOG.log(System.Logger.Level.ERROR,
+                    "Debate message missing META.agent field — protocol violation, message discarded");
+            return null;
+        }
+        try {
+            return AgentType.valueOf(agent);
+        } catch (IllegalArgumentException e) {
+            LOG.log(System.Logger.Level.WARNING,
+                    "Unknown agent ''{0}'' in debate META header — message discarded", agent);
+            return null;
+        }
     }
 
     private Priority parsePriority(String s) {

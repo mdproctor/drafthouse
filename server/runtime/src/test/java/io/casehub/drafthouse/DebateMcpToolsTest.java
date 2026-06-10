@@ -24,6 +24,7 @@ import io.casehub.qhorus.runtime.instance.InstanceService;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.casehub.qhorus.runtime.message.ProjectionService;
+import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.drafthouse.debate.ReviewState;
@@ -82,7 +83,6 @@ class DebateMcpToolsTest {
     @Test
     void startDebate_specPathWithQuote_escapedCorrectlyInJson() {
         String result = tools.startDebate("/path/to/spec \"with quotes\".md");
-        // Must not produce malformed JSON — the quote must be escaped
         assertThat(result).contains("\\\"with quotes\\\"");
         assertThat(result).doesNotContain("\"specPath\":\"/path/to/spec \"");
     }
@@ -108,8 +108,11 @@ class DebateMcpToolsTest {
         assertThat(s.channelId()).isEqualTo(stubChannel.id);
         assertThat(s.debateSessionId()).isEqualTo(stubChannel.id.toString());
         assertThat(s.channelName()).isEqualTo(stubChannel.name);
-        assertThat(s.revInstanceId()).isEqualTo("drafthouse-rev-" + s.debateSessionId());
-        assertThat(s.impInstanceId()).isEqualTo("drafthouse-imp-" + s.debateSessionId());
+        // After startDebate() returns, REV and IMP must be in the participants map
+        assertThat(s.instanceIdFor(AgentType.REV))
+                .isEqualTo(DebateSession.instanceId(AgentType.REV, s.debateSessionId()));
+        assertThat(s.instanceIdFor(AgentType.IMP))
+                .isEqualTo(DebateSession.instanceId(AgentType.IMP, s.debateSessionId()));
     }
 
     @Test
@@ -140,10 +143,7 @@ class DebateMcpToolsTest {
     @Test
     void raisePoint_dispatchesQueryWithCorrectFields() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         String result = tools.raisePoint(channelId.toString(), "REV", 1,
@@ -156,10 +156,9 @@ class DebateMcpToolsTest {
         verify(messageService).dispatch(cap.capture());
         MessageDispatch d = cap.getValue();
         assertThat(d.type()).isEqualTo(MessageType.QUERY);
-        assertThat(d.sender()).isEqualTo(session.revInstanceId());
+        assertThat(d.sender()).isEqualTo(session.instanceIdFor(AgentType.REV));
         assertThat(d.actorType()).isEqualTo(ActorType.AGENT);
         assertThat(d.correlationId()).isNotBlank();
-        // Metadata encoded in content as META header; artefactRefs is null (Qhorus parses it as CSV UUIDs)
         assertThat(d.artefactRefs()).isNull();
         assertThat(d.content()).startsWith(DebateProtocol.META_SENTINEL);
         assertThat(d.content()).contains("entryType=RAISE");
@@ -174,17 +173,46 @@ class DebateMcpToolsTest {
     @Test
     void raisePoint_impSender_usesImpInstanceId() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         tools.raisePoint(channelId.toString(), "IMP", 2, "content", "P2", "SYSTEMIC", null);
 
         ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(cap.capture());
-        assertThat(cap.getValue().sender()).isEqualTo(session.impInstanceId());
+        assertThat(cap.getValue().sender()).isEqualTo(session.instanceIdFor(AgentType.IMP));
+    }
+
+    @Test
+    void raisePoint_supervisorRole_dispatchesCorrectly() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.raisePoint(channelId.toString(), "SUPERVISOR", 1,
+                "Meta concern.", "P2", "SYSTEMIC", null);
+
+        assertThat(result).contains("pointId");
+        assertThat(result).contains("dispatched");
+        ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService).dispatch(cap.capture());
+        assertThat(cap.getValue().sender())
+                .isEqualTo(DebateSession.instanceId(AgentType.SUPERVISOR, channelId.toString()));
+        assertThat(cap.getValue().content()).contains("agent=SUPERVISOR");
+    }
+
+    @Test
+    void raisePoint_unknownRole_returnsErrorListingAllValidRoles() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.raisePoint(channelId.toString(), "INVALID_ROLE", 1,
+                "content", "P1", "ISOLATED", null);
+
+        assertThat(result).startsWith("error: invalid agentRole 'INVALID_ROLE'");
+        // Must list all valid roles in the error message
+        for (AgentType role : AgentType.values()) {
+            assertThat(result).contains(role.name());
+        }
     }
 
     // ── respond_to ────────────────────────────────────────────────────────────
@@ -193,10 +221,7 @@ class DebateMcpToolsTest {
     void respondTo_agree_dispatchesDone() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message();
         stubMsg.id = 99L;
@@ -211,7 +236,6 @@ class DebateMcpToolsTest {
         assertThat(d.type()).isEqualTo(MessageType.DONE);
         assertThat(d.inReplyTo()).isEqualTo(99L);
         assertThat(d.correlationId()).isEqualTo(pointId);
-        // Metadata encoded in content; artefactRefs is null
         assertThat(d.artefactRefs()).isNull();
         assertThat(d.content()).contains("entryType=AGREE");
         assertThat(d.content()).endsWith("I agree.");
@@ -221,10 +245,7 @@ class DebateMcpToolsTest {
     void respondTo_dispute_dispatchesDecline() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message();
         stubMsg.id = 42L;
@@ -241,7 +262,7 @@ class DebateMcpToolsTest {
     void respondTo_qualify_dispatchesResponse() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 1L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -256,7 +277,7 @@ class DebateMcpToolsTest {
     void respondTo_counter_dispatchesResponse() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 1L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -272,7 +293,7 @@ class DebateMcpToolsTest {
     @Test
     void respondTo_unknownPointId_returnsError() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         when(messageService.findByCorrelationId(anyString())).thenReturn(Optional.empty());
 
@@ -286,10 +307,7 @@ class DebateMcpToolsTest {
     void flagHuman_dispatchesHandoffWithCorrectFields() {
         UUID channelId = stubChannel.id;
         String pointId = UUID.randomUUID().toString();
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         Message stubMsg = new Message(); stubMsg.id = 7L;
         when(messageService.findByCorrelationId(pointId)).thenReturn(Optional.of(stubMsg));
@@ -303,7 +321,6 @@ class DebateMcpToolsTest {
         assertThat(d.type()).isEqualTo(MessageType.HANDOFF);
         assertThat(d.target()).isEqualTo(DraftHouseInstances.HUMAN_INSTANCE_ID);
         assertThat(d.inReplyTo()).isEqualTo(7L);
-        // Metadata encoded in content; artefactRefs is null
         assertThat(d.artefactRefs()).isNull();
         assertThat(d.content()).contains("entryType=FLAG_HUMAN");
         assertThat(d.content()).endsWith("Human clarification needed.");
@@ -312,7 +329,7 @@ class DebateMcpToolsTest {
     @Test
     void flagHuman_unknownPointId_returnsError() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         when(messageService.findByCorrelationId(anyString())).thenReturn(Optional.empty());
 
@@ -325,7 +342,7 @@ class DebateMcpToolsTest {
     @Test
     void getDebateSummary_delegatesToProjectionAndRenders() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
         ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
@@ -341,7 +358,7 @@ class DebateMcpToolsTest {
     @Test
     void endDebate_removesSessionAndReturnsEnded() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(), stubChannel.name, "r", "i", null);
+        DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         String result = tools.endDebate(channelId.toString(), false);
@@ -363,18 +380,31 @@ class DebateMcpToolsTest {
     }
 
     @Test
-    void endDebate_deregistersRevAndImpInstances() {
+    void endDebate_deregistersAllRegisteredParticipants() {
         UUID channelId = stubChannel.id;
-        DebateSession session = new DebateSession(channelId, channelId.toString(),
-                stubChannel.name,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId, null);
+        DebateSession session = sessionFor(channelId); // pre-populated with REV + IMP
         when(registry.find(channelId)).thenReturn(Optional.of(session));
 
         tools.endDebate(channelId.toString(), false);
 
-        verify(instanceService).deregister(session.revInstanceId());
-        verify(instanceService).deregister(session.impInstanceId());
+        verify(instanceService).deregister(session.instanceIdFor(AgentType.REV));
+        verify(instanceService).deregister(session.instanceIdFor(AgentType.IMP));
+    }
+
+    @Test
+    void endDebate_deregistersThirdParticipant_whenSupervisorJoined() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        // SUPERVISOR joins after session creation (lazy registration)
+        session.registerIfAbsent(AgentType.SUPERVISOR,
+                () -> DebateSession.instanceId(AgentType.SUPERVISOR, channelId.toString()));
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        tools.endDebate(channelId.toString(), false);
+
+        verify(instanceService).deregister(session.instanceIdFor(AgentType.REV));
+        verify(instanceService).deregister(session.instanceIdFor(AgentType.IMP));
+        verify(instanceService).deregister(session.instanceIdFor(AgentType.SUPERVISOR));
     }
 
     @Test
@@ -386,6 +416,7 @@ class DebateMcpToolsTest {
 
         assertThat(result).startsWith("error:");
         String debateSessionId = stubChannel.id.toString();
+        // Cleanup must deregister all registered participants (REV + IMP were registered before failure)
         verify(instanceService).deregister("drafthouse-rev-" + debateSessionId);
         verify(instanceService).deregister("drafthouse-imp-" + debateSessionId);
     }
@@ -444,7 +475,6 @@ class DebateMcpToolsTest {
         UUID channelId = stubChannel.id;
         when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
         ReviewState empty = emptyState();
-        // non-null lastMessageId so isEmpty() == false — but state has no content
         when(projectionService.project(eq(channelId), any()))
                 .thenReturn(new ProjectionResult<>(empty, 99L));
 
@@ -550,6 +580,26 @@ class DebateMcpToolsTest {
     }
 
     @Test
+    void restartFromRound_lazyRegistersRevForNewSession() {
+        UUID originalId = stubChannel.id;
+        when(registry.find(originalId)).thenReturn(Optional.of(sessionFor(originalId)));
+        when(projectionService.project(eq(originalId), any()))
+                .thenReturn(new ProjectionResult<>(emptyState(), null));
+        Channel newCh = newChannel();
+        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+                .thenReturn(newCh);
+
+        tools.restartFromRound(originalId.toString(), 2);
+
+        // RESTART_CONTEXT marker is sent as REV — REV must be registered for the new session
+        String expectedRevId = DebateSession.instanceId(AgentType.REV, newCh.id.toString());
+        ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService, atLeastOnce()).dispatch(cap.capture());
+        assertThat(cap.getAllValues()).anyMatch(d ->
+                newCh.id.equals(d.channelId()) && expectedRevId.equals(d.sender()));
+    }
+
+    @Test
     void restartFromRound_emptyBoundedState_summaryContainsNoneMessage() {
         UUID originalId = stubChannel.id;
         when(registry.find(originalId)).thenReturn(Optional.of(sessionFor(originalId)));
@@ -578,6 +628,8 @@ class DebateMcpToolsTest {
 
         assertThat(result).startsWith("error:");
         verify(channelService).delete(eq(newCh.id), eq(true));
+        // REV was registered via sender() before dispatch() threw — must be deregistered
+        verify(instanceService).deregister(DebateSession.instanceId(AgentType.REV, newCh.id.toString()));
     }
 
     @Test
@@ -601,12 +653,10 @@ class DebateMcpToolsTest {
         UUID originalId = stubChannel.id;
         when(registry.find(originalId)).thenReturn(Optional.of(sessionFor(originalId)));
 
-        // Bounded state (rounds ≤ 2): 2 COMPLETE + 1 PENDING
         ReviewState boundedState = stateWithFindings(
                 finding("f1", SubTaskStatus.COMPLETE),
                 finding("f2", SubTaskStatus.COMPLETE),
                 finding("f3", SubTaskStatus.PENDING));
-        // Full state: same 3 + 2 more COMPLETE from rounds > 2
         ReviewState fullState = stateWithFindings(
                 finding("f1", SubTaskStatus.COMPLETE),
                 finding("f2", SubTaskStatus.COMPLETE),
@@ -632,12 +682,19 @@ class DebateMcpToolsTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private DebateSession sessionFor(UUID channelId) {
-        return new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-" + channelId,
-                "drafthouse-rev-" + channelId,
-                "drafthouse-imp-" + channelId,
-                "spec.md");
+    /**
+     * Creates a DebateSession pre-populated with REV and IMP participants (no instanceService call).
+     * Pre-population prevents unexpected instanceService.register() calls in tests that only need
+     * a session object with known participant IDs.
+     */
+    private DebateSession sessionFor(final UUID channelId) {
+        final DebateSession session = new DebateSession(channelId, channelId.toString(),
+                "drafthouse/debate/d-" + channelId, "spec.md");
+        session.registerIfAbsent(AgentType.REV,
+                () -> DebateSession.instanceId(AgentType.REV, channelId.toString()));
+        session.registerIfAbsent(AgentType.IMP,
+                () -> DebateSession.instanceId(AgentType.IMP, channelId.toString()));
+        return session;
     }
 
     private static ReviewState emptyState() {

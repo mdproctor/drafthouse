@@ -45,8 +45,8 @@ class ArbitrateHandlerTest {
         lenient().when(outboundMessage.content()).thenReturn(DebateProtocol.META_SENTINEL
                 + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1\n\n");
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
-        lenient().when(registry.find(channelId)).thenReturn(Optional.of(new DebateSession(
-                channelId, channelId.toString(), "ch", "rev", "imp", null)));
+        lenient().when(registry.find(channelId)).thenReturn(Optional.of(
+                new DebateSession(channelId, channelId.toString(), "ch", null)));
     }
 
     private ReviewState stateWith(List<ThreadEntry> thread) {

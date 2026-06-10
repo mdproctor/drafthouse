@@ -195,12 +195,36 @@ class DebateChannelProjectionTest {
     }
 
     @Test
-    void missingAgent_throwsIAE() {
+    void missingAgent_messageDiscarded_stateUnchanged() {
+        // Missing agent= field is a protocol violation — fold must not crash (no try-catch in fold()).
+        // Message is discarded at ERROR severity; point remains OPEN.
         ReviewState s0 = proj.apply(proj.identity(),
                 msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        assertThatThrownBy(() -> proj.apply(s0,
-                msg(MessageType.DONE, "pt-1", "entryType=AGREE|round=2", "Agreed.")))
-                .isInstanceOf(IllegalArgumentException.class);
+        ReviewState s1 = proj.apply(s0,
+                msg(MessageType.DONE, "pt-1", "entryType=AGREE|round=2", "Agreed."));
+        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
+    }
+
+    @Test
+    void unknownAgent_messageDiscarded_stateUnchanged() {
+        // Unknown future role — fold must not crash; message discarded at WARNING severity.
+        ReviewState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
+        ReviewState s1 = proj.apply(s0,
+                msg(MessageType.DONE, "pt-1", "entryType=AGREE|agent=UNKNOWN_FUTURE_ROLE|round=2", "Agreed."));
+        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
+    }
+
+    @Test
+    void supervisorAgent_raise_foldsCorrectlyIntoState() {
+        // SUPERVISOR is a valid new AgentType — must fold as a RAISE with agent=SUPERVISOR.
+        ReviewState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-sup",
+                        ratefacts("RAISE", "SUPERVISOR", 1, "P2", "SYSTEMIC"),
+                        "Meta-point from supervisor."));
+        assertThat(s.points()).containsKey("pt-sup");
+        assertThat(s.points().get("pt-sup").thread().get(0).agent()).isEqualTo(AgentType.SUPERVISOR);
+        assertThat(s.points().get("pt-sup").currentStatus()).isEqualTo(ReviewStatus.OPEN);
     }
 
     @Test

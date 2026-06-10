@@ -66,6 +66,22 @@ class DebateSessionLifecycleTest {
     }
 
     @Test
+    void supervisorRaise_foldsCorrectly_appearsInSummary() {
+        // Exercises the projection fold path for a new AgentType (SUPERVISOR) end-to-end.
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        String raiseResult = tools.raisePoint(sessionId, "SUPERVISOR", 1,
+                "Debate quality seems low.", "P2", "SYSTEMIC", null);
+        assertThat(raiseResult).contains("pointId");
+
+        String summary = tools.getDebateSummary(sessionId);
+        assertThat(summary).contains("Debate quality seems low.");
+        assertThat(summary).contains("🔴");  // OPEN status
+    }
+
+    @Test
     void raiseAndDispute_summaryShowsDisputedPoint_noStrikethrough() {
         String startResult = tools.startDebate("test-spec.md");
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);

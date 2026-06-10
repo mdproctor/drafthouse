@@ -1,9 +1,11 @@
 package io.casehub.drafthouse;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -19,6 +21,7 @@ import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.casehub.qhorus.runtime.message.ProjectionService;
+import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.drafthouse.debate.ReviewState;
@@ -29,7 +32,7 @@ import io.quarkiverse.mcp.server.ToolArg;
 
 /**
  * MCP tool surface for debate sessions.
- * Agents (REV and IMP) post structured debate entries via these tools.
+ * Any AgentType (REV, IMP, SUPERVISOR, MODERATOR, SELECTOR) may post via these tools.
  *
  * Error handling: all errors returned as "error: ..." strings per mcp-tool-error-strings.md.
  * Session cleanup order: registry.remove() first, then channel.delete()
@@ -40,6 +43,9 @@ public class DebateMcpTools {
 
     private static final Logger LOG = Logger.getLogger(DebateMcpTools.class.getName());
 
+    private static final String VALID_ROLES = Arrays.stream(AgentType.values())
+            .map(Enum::name).collect(Collectors.joining(", "));
+
     @Inject ChannelService channelService;
     @Inject ChannelGateway channelGateway;
     @Inject InstanceService instanceService;
@@ -49,34 +55,29 @@ public class DebateMcpTools {
     @Inject DebateChannelProjection debateProjection;
 
     @Tool(name = "start_debate",
-          description = "Start a peer-to-peer debate session between a reviewer (REV) and implementer (IMP) agent. Returns JSON with debateSessionId (use for all subsequent calls), channel name, and specPath.")
+          description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, and specPath.")
     public String startDebate(
             @ToolArg(description = "Absolute path to the spec file being debated") String specPath) {
 
         String debateSlug = "d-" + UUID.randomUUID();
         String channelName = "drafthouse/debate/" + debateSlug;
 
-        String revInstanceId = null;
-        String impInstanceId = null;
         Channel channel = null;
+        DebateSession session = null;
         try {
             channel = channelService.create(channelName, "DraftHouse debate session",
                     ChannelSemantic.APPEND, null);
 
             String debateSessionId = channel.id.toString();
             String resolvedName = channel.name;
-            revInstanceId = "drafthouse-rev-" + debateSessionId;
-            impInstanceId = "drafthouse-imp-" + debateSessionId;
 
-            instanceService.register(revInstanceId, "DraftHouse debate reviewer " + debateSessionId,
-                    List.of("document-debate-rev"));
-            instanceService.register(impInstanceId, "DraftHouse debate implementer " + debateSessionId,
-                    List.of("document-debate-imp"));
-
-            DebateSession session = new DebateSession(
-                    channel.id, debateSessionId, resolvedName, revInstanceId, impInstanceId, specPath);
-
+            session = new DebateSession(channel.id, debateSessionId, resolvedName, specPath);
             registry.put(session);
+
+            // Register REV and IMP eagerly; all other roles lazy-register on first use via sender()
+            sender(session, AgentType.REV);
+            sender(session, AgentType.IMP);
+
             channelGateway.initChannel(channel.id, new ChannelRef(channel.id, resolvedName));
 
             return "{\"debateSessionId\":\"" + debateSessionId + "\",\"channel\":\"" + resolvedName
@@ -85,13 +86,12 @@ public class DebateMcpTools {
         } catch (Exception e) {
             LOG.warning("start_debate failed: " + e.getMessage() + " — attempting cleanup");
             if (channel != null) {
-                if (revInstanceId != null) {
-                    try { instanceService.deregister(revInstanceId); } catch (Exception ce) { LOG.warning("cleanup rev instance: " + ce.getMessage()); }
+                if (session != null) {
+                    session.participants().values().forEach(id -> {
+                        try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
+                    });
+                    try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 }
-                if (impInstanceId != null) {
-                    try { instanceService.deregister(impInstanceId); } catch (Exception ce) { LOG.warning("cleanup imp instance: " + ce.getMessage()); }
-                }
-                try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 try { channelService.delete(channel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
             return "error: " + e.getMessage();
@@ -102,7 +102,7 @@ public class DebateMcpTools {
           description = "Raise a new debate point. Returns JSON with pointId — use this in subsequent respond_to calls to cite this point.")
     public String raisePoint(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
-            @ToolArg(description = "Your agent role: REV (reviewer) or IMP (implementer)") String agentRole,
+            @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Current debate round number (integer, starting at 1)") int round,
             @ToolArg(description = "The point being raised") String content,
             @ToolArg(description = "Priority: P1 (blocking), P2 (important), P3 (minor)") String priority,
@@ -112,9 +112,8 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        if (!"REV".equals(agentRole) && !"IMP".equals(agentRole)) {
-            return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
-        }
+        AgentType role = parseRole(agentRole);
+        if (role == null) return roleError(agentRole);
 
         String pointId = UUID.randomUUID().toString();
         StringBuilder meta = new StringBuilder(DebateProtocol.META_SENTINEL)
@@ -129,7 +128,7 @@ public class DebateMcpTools {
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
-                .sender(sender(session, agentRole))
+                .sender(sender(session, role))
                 .type(MessageType.QUERY)
                 .content(encodedContent)
                 .correlationId(pointId)
@@ -143,7 +142,7 @@ public class DebateMcpTools {
           description = "Respond to a debate point. entryType must be: agree, dispute, qualify, or counter.")
     public String respondTo(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
-            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Current debate round number") int round,
             @ToolArg(description = "The pointId returned by raise_point") String pointId,
             @ToolArg(description = "Response type: agree, dispute, qualify, counter") String entryType,
@@ -152,9 +151,8 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        if (!"REV".equals(agentRole) && !"IMP".equals(agentRole)) {
-            return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
-        }
+        AgentType role = parseRole(agentRole);
+        if (role == null) return roleError(agentRole);
 
         MessageType qhorusType = switch (entryType) {
             case "agree"   -> MessageType.DONE;
@@ -174,7 +172,7 @@ public class DebateMcpTools {
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
-                .sender(sender(session, agentRole))
+                .sender(sender(session, role))
                 .type(qhorusType)
                 .content(encodedContent)
                 .correlationId(pointId)
@@ -189,7 +187,7 @@ public class DebateMcpTools {
           description = "Flag a debate point for human review. Signals that the agents cannot resolve the point without human input.")
     public String flagHuman(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
-            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Current debate round number") int round,
             @ToolArg(description = "The pointId being flagged") String pointId,
             @ToolArg(description = "Reason for escalating to human") String reason) {
@@ -197,9 +195,8 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        if (!"REV".equals(agentRole) && !"IMP".equals(agentRole)) {
-            return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
-        }
+        AgentType role = parseRole(agentRole);
+        if (role == null) return roleError(agentRole);
 
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
@@ -209,7 +206,7 @@ public class DebateMcpTools {
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
-                .sender(sender(session, agentRole))
+                .sender(sender(session, role))
                 .type(MessageType.HANDOFF)
                 .content(encodedContent)
                 .target(DraftHouseInstances.HUMAN_INSTANCE_ID)
@@ -253,10 +250,10 @@ public class DebateMcpTools {
 
         registry.remove(channelId);
 
-        try { instanceService.deregister(session.revInstanceId()); }
-        catch (Exception e) { LOG.warning("end_debate: rev instance deregister failed: " + e.getMessage()); }
-        try { instanceService.deregister(session.impInstanceId()); }
-        catch (Exception e) { LOG.warning("end_debate: imp instance deregister failed: " + e.getMessage()); }
+        session.participants().values().forEach(instanceId -> {
+            try { instanceService.deregister(instanceId); }
+            catch (Exception e) { LOG.warning("end_debate: deregister failed: " + e.getMessage()); }
+        });
 
         if (deleteChannel) {
             try {
@@ -277,20 +274,20 @@ public class DebateMcpTools {
                   + "concessions feel solid vs provisional.")
     public String postMemo(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
-            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Current round number") int round,
             @ToolArg(description = "Your reasoning memo content") String content) {
         try {
             DebateSession session = resolveSession(debateSessionId);
             if (session == null) return sessionError(debateSessionId);
-            if (!"REV".equals(agentRole) && !"IMP".equals(agentRole))
-                return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
+            AgentType role = parseRole(agentRole);
+            if (role == null) return roleError(agentRole);
             String encoded = DebateProtocol.META_SENTINEL
                     + "entryType=MEMO|agent=" + agentRole + "|round=" + round
                     + "\n\n" + Objects.requireNonNullElse(content, "");
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(session.channelId())
-                    .sender(sender(session, agentRole))
+                    .sender(sender(session, role))
                     .type(MessageType.STATUS)
                     .content(encoded)
                     .actorType(ActorType.AGENT)
@@ -309,7 +306,7 @@ public class DebateMcpTools {
                   + "customInput: for CUSTOM — the full context; for CONSISTENCY_CHECK — the proposed resolution text.")
     public String requestSubagent(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
-            @ToolArg(description = "Your agent role: REV or IMP") String agentRole,
+            @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Sub-task type") String taskType,
             @ToolArg(description = "pointId from raise_point. Null for NEUTRAL_SUMMARY or CUSTOM.") String pointId,
             @ToolArg(description = "Current debate round number") int round,
@@ -317,8 +314,8 @@ public class DebateMcpTools {
         try {
             DebateSession session = resolveSession(debateSessionId);
             if (session == null) return sessionError(debateSessionId);
-            if (!"REV".equals(agentRole) && !"IMP".equals(agentRole))
-                return "error: invalid agentRole '" + agentRole + "' — must be REV or IMP";
+            AgentType role = parseRole(agentRole);
+            if (role == null) return roleError(agentRole);
             String subTaskId = UUID.randomUUID().toString();
             StringBuilder header = new StringBuilder(DebateProtocol.META_SENTINEL)
                     .append("entryType=SUB_TASK_REQUEST")
@@ -330,7 +327,7 @@ public class DebateMcpTools {
             String encoded = header + "\n\n" + Objects.requireNonNullElse(customInput, "");
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(session.channelId())
-                    .sender(sender(session, agentRole))
+                    .sender(sender(session, role))
                     .type(MessageType.QUERY)
                     .content(encoded)
                     .correlationId(subTaskId)
@@ -393,31 +390,22 @@ public class DebateMcpTools {
                 - boundedResult.state().subTaskFindings().size();
         int pointCount = boundedResult.state().points().size();
 
-        // Create new session (same pattern as start_debate)
         String debateSlug = "d-" + UUID.randomUUID();
         String channelName = "drafthouse/debate/" + debateSlug;
-        String newRevId = null;
-        String newImpId = null;
         Channel newChannel = null;
+        DebateSession newSession = null;
         try {
-            newChannel = channelService.create(channelName, "DraftHouse debate session (restarted from round " + round + ")",
+            newChannel = channelService.create(channelName,
+                    "DraftHouse debate session (restarted from round " + round + ")",
                     ChannelSemantic.APPEND, null);
             String newSessionId = newChannel.id.toString();
-            newRevId = "drafthouse-rev-" + newSessionId;
-            newImpId = "drafthouse-imp-" + newSessionId;
 
-            instanceService.register(newRevId, "DraftHouse debate reviewer " + newSessionId,
-                    List.of("document-debate-rev"));
-            instanceService.register(newImpId, "DraftHouse debate implementer " + newSessionId,
-                    List.of("document-debate-imp"));
-
-            DebateSession newSession = new DebateSession(
-                    newChannel.id, newSessionId, newChannel.name, newRevId, newImpId, original.specPath());
+            newSession = new DebateSession(newChannel.id, newSessionId, newChannel.name, original.specPath());
             registry.put(newSession);
             channelGateway.initChannel(newChannel.id, new ChannelRef(newChannel.id, newChannel.name));
 
-            // Post RESTART_CONTEXT provenance marker — DHMETA structured but not an EntryType enum constant.
-            // DebateChannelProjection.apply() intercepts this by string check before EntryType.valueOf().
+            // Extract sender registration before builder — makes the registration site unambiguous
+            String markerSender = sender(newSession, AgentType.REV); // registers REV for the new session
             String markerContent = DebateProtocol.META_SENTINEL
                     + "entryType=RESTART_CONTEXT"
                     + "|originChannelId=" + original.channelId()
@@ -425,7 +413,7 @@ public class DebateMcpTools {
                     + "\n\n" + summary;
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(newChannel.id)
-                    .sender(newRevId)
+                    .sender(markerSender)
                     .type(MessageType.STATUS)
                     .content(markerContent)
                     .actorType(ActorType.AGENT)
@@ -450,13 +438,12 @@ public class DebateMcpTools {
         } catch (Exception e) {
             LOG.warning("restart_from_round failed: " + e.getMessage() + " — attempting cleanup");
             if (newChannel != null) {
-                if (newRevId != null) {
-                    try { instanceService.deregister(newRevId); } catch (Exception ce) { LOG.warning("cleanup rev: " + ce.getMessage()); }
+                if (newSession != null) {
+                    newSession.participants().values().forEach(id -> {
+                        try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
+                    });
+                    try { registry.remove(newChannel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 }
-                if (newImpId != null) {
-                    try { instanceService.deregister(newImpId); } catch (Exception ce) { LOG.warning("cleanup imp: " + ce.getMessage()); }
-                }
-                try { registry.remove(newChannel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 try { channelService.delete(newChannel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
             return "error: " + e.getMessage();
@@ -498,11 +485,30 @@ public class DebateMcpTools {
         }
     }
 
-    private String sender(DebateSession session, String agentRole) {
-        return switch (agentRole) {
-            case "REV" -> session.revInstanceId();
-            case "IMP" -> session.impInstanceId();
-            default    -> throw new IllegalArgumentException("Unknown agentRole: " + agentRole);
-        };
+    /** Parses an agentRole string, returning null for unknown values. */
+    private static AgentType parseRole(final String agentRole) {
+        try {
+            return AgentType.valueOf(agentRole);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private String roleError(final String agentRole) {
+        return "error: invalid agentRole '" + agentRole + "' — must be one of: " + VALID_ROLES;
+    }
+
+    /**
+     * Returns the Qhorus instance ID for the given role, registering it on first use.
+     * The registration is idempotent — InstanceService.register() is an upsert.
+     */
+    private String sender(final DebateSession session, final AgentType role) {
+        return session.registerIfAbsent(role, () -> {
+            final String instanceId = DebateSession.instanceId(role, session.debateSessionId());
+            instanceService.register(instanceId,
+                    "DraftHouse " + role.name().toLowerCase() + " " + session.debateSessionId(),
+                    List.of("document-debate-" + role.name().toLowerCase()));
+            return instanceId;
+        });
     }
 }
