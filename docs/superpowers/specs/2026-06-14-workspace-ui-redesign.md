@@ -359,9 +359,9 @@ Renders the SSE debate event stream from #50. Consumes events from the `DebateEv
 
 New entries scroll into view automatically unless the user has scrolled up (reading history). A "jump to latest" affordance appears when the user is behind the latest entry.
 
-### Session discovery
+### No-session state
 
-When mounted with no `debateSessionId`, the panel calls `GET /api/debate/sessions` and shows active sessions to connect to. If exactly one session is active, auto-connects.
+When mounted without a `debateSessionId` (the shell hasn't discovered a session yet), the panel shows a "Waiting for debate session…" placeholder. The panel does NOT independently poll `GET /api/debate/sessions` — session discovery is the shell's responsibility (§7a). The shell calls `configure({ debateSessionId })` when it finds a session.
 
 ### Events emitted
 
