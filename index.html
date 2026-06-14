@@ -26,6 +26,9 @@
     }}});
   });
 </script>
+<script type="module" src="panels/drafthouse-diff.js"></script>
+<script type="module" src="panels/drafthouse-debate.js"></script>
+<script type="module" src="panels/drafthouse-review-tracker.js"></script>
 </head>
 <body>
 
@@ -33,10 +36,10 @@
 <div id="topbar">
   <div id="logo">DraftHouse</div>
   <div class="sep"></div>
-  <button id="btn-sync" class="active" onclick="toggleSync()" title="Sync scroll between panels">⟺ Sync</button>
-  <button id="btn-swap" onclick="swapPanels()" title="Swap panels A↔B" disabled style="opacity:.4">⇄ Swap</button>
-  <button id="btn-prev" onclick="prevDiff()" title="Previous diff (p)" disabled style="opacity:.4">↑</button>
-  <button id="btn-next" onclick="nextDiff()" title="Next diff (n)" disabled style="opacity:.4">↓</button>
+  <button id="btn-sync" class="active" title="Sync scroll between panels">⟺ Sync</button>
+  <button id="btn-swap" title="Swap panels A↔B" disabled style="opacity:.4">⇄ Swap</button>
+  <button id="btn-prev" title="Previous diff (p)" disabled style="opacity:.4">↑</button>
+  <button id="btn-next" title="Next diff (n)" disabled style="opacity:.4">↓</button>
   <span id="diff-counter" style="font-size:11px;color:#a09080;padding:0 4px;min-width:36px;display:inline-block;text-align:center">— / —</span>
   <span id="diff-summary" data-tooltip="" style="font-size:11px;color:#a09080;padding:0 6px;cursor:default;position:relative"></span>
   <span id="diff-legend" title="A only · B only">
@@ -44,725 +47,239 @@
     <span class="legend-swatch legend-ins"></span><span class="legend-label">B</span>
   </span>
   <div id="topbar-spacer"></div>
-  <!-- Phase 2: critique toggle button lives here -->
-  <button id="btn-critique" onclick="toggleCritique()" title="Open critique panel" style="opacity:.4" disabled>✦ Critique</button>
+  <button id="btn-debate" title="Toggle debate panel">💬 Debate</button>
+  <button id="btn-review" title="Toggle review tracker">☑ Review</button>
 </div>
 
-<!-- ── Main area ── -->
+<!-- ── Workspace slots ── -->
 <div id="main">
   <div id="panels">
-
-    <!-- Panel A -->
-    <div class="panel" id="panel-a">
-      <div class="panel-header">
-        <input class="panel-label" id="label-a" value="File A" title="Click to rename">
-        <span class="panel-path" id="path-a">No file selected</span>
-        <button onclick="selectFile('a')">Choose…</button>
-      </div>
-      <div class="panel-body" id="body-a">
-        <div class="panel-empty" id="empty-a">
-          <div class="panel-empty-icon">📄</div>
-          <div class="panel-empty-hint">Drop a .md file here<br>or click Choose…</div>
-        </div>
-        <div class="md-wrap" id="render-a"></div>
-      </div>
+    <div class="slot slot-left" id="slot-left"></div>
+    <div class="slot-divider" id="slot-divider"></div>
+    <div class="slot slot-right" id="slot-right">
+      <div class="slot slot-right-top" id="slot-right-top"></div>
+      <div class="slot-divider-h" id="slot-divider-h"></div>
+      <div class="slot slot-right-bottom" id="slot-right-bottom"></div>
     </div>
+  </div>
+</div>
 
-    <!-- Drag divider + diff minimap -->
-    <div id="divider"><canvas id="diff-map"></canvas></div>
-
-    <!-- Panel B -->
-    <div class="panel" id="panel-b">
-      <div class="panel-header">
-        <input class="panel-label" id="label-b" value="File B" title="Click to rename">
-        <span class="panel-path" id="path-b">No file selected</span>
-        <button onclick="selectFile('b')">Choose…</button>
-      </div>
-      <div class="panel-body" id="body-b">
-        <div class="panel-empty" id="empty-b">
-          <div class="panel-empty-icon">📄</div>
-          <div class="panel-empty-hint">Drop a .md file here<br>or click Choose…</div>
-        </div>
-        <div class="md-wrap" id="render-b"></div>
-      </div>
-    </div>
-
-    <!-- ── Critique panel (Phase 2 — ships empty) ── -->
-    <div id="critique-panel" class="hidden">
-      <div id="critique-hdr">
-        <span>Critique</span>
-        <button onclick="toggleCritique()">✕</button>
-      </div>
-      <div id="critique-body">
-        <!-- Phase 2: LLM critique displayed here as readable prose -->
-        Critique panel — Phase 2
-      </div>
-    </div>
-
-  </div><!-- #panels -->
-</div><!-- #main -->
-
-<script>
+<script type="module">
 'use strict';
+import { registry } from './panels/panel-registry.js';
+import { debateEventBus } from './panels/debate-event-bus.js';
+
 const $ = id => document.getElementById(id);
 
-// ── State ────────────────────────────────────────────────────────────
-const panels = {
-  a: { path: null, content: null, label: 'File A' },
-  b: { path: null, content: null, label: 'File B' }
-};
-const watchers = {};   // path → EventSource
-
-function panelsWatching(path) {
-  return ['a', 'b'].filter(p => panels[p].path === path);
-}
-
-let syncEnabled = true, syncing = false, dragging = false;
-let lastChunks = [], lastTotalA = 0, lastTotalB = 0;
-let currentChunkIdx = -1;   // index into lastChunks; -1 = no active chunk
-let scrollAnchors = [];  // [{a: scrollTopPx, b: scrollTopPx}], sorted by .a
-let API_PORT = null;
-let _pendingFiles = null;
-
+// ── Create panels ───────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
 const isElectron = typeof window.compare !== 'undefined';
 
-// ── API helpers ──────────────────────────────────────────────────────
-function apiUrl(path) {
-  return API_PORT ? `http://127.0.0.1:${API_PORT}${path}` : path;
+const diffPanel = registry.create('drafthouse-diff', {
+  pathA: isElectron ? null : params.get('a'),
+  pathB: isElectron ? null : params.get('b'),
+});
+$('slot-left').appendChild(diffPanel);
+
+const debatePanel = registry.create('drafthouse-debate', {});
+$('slot-right-top').appendChild(debatePanel);
+
+const reviewPanel = registry.create('drafthouse-review-tracker', {});
+$('slot-right-bottom').appendChild(reviewPanel);
+
+// ── Topbar button wiring ────────────────────────────────────────────
+function updateSyncButton() {
+  $('btn-sync').classList.toggle('active', diffPanel.syncEnabled);
 }
 
-async function fetchFile(filePath) {
-  const res = await fetch(apiUrl(`/api/file?path=${encodeURIComponent(filePath)}`));
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.text();
-}
-
-function watchFile(filePath) {
-  if (watchers[filePath]) return; // EventSource already open
-  const es = new EventSource(apiUrl(`/api/watch?path=${encodeURIComponent(filePath)}`));
-  es.onmessage = async () => {
-    for (const p of panelsWatching(filePath)) {
-      try {
-        const content = await fetchFile(filePath);
-        renderMarkdown(p, content);
-      } catch (_) {}
-    }
-  };
-  watchers[filePath] = es;
-}
-
-function unwatchFile(filePath) {
-  if (panelsWatching(filePath).length === 0 && watchers[filePath]) {
-    watchers[filePath].close();
-    delete watchers[filePath];
-  }
-}
-
-function syncPanelMeta(panel) {
-  const s = panels[panel];
-  $(`label-${panel}`).value = s.label;
-  $(`path-${panel}`).textContent = s.path || 'No file selected';
-  $(`path-${panel}`).classList.toggle('loaded', !!s.path);
-}
-
-function syncPanelContent(panel) {
-  const s = panels[panel];
-  if (s.content) {
-    $(`render-${panel}`).innerHTML = marked.parse(s.content);
-    $(`empty-${panel}`).classList.add('hidden');
-  } else {
-    $(`render-${panel}`).innerHTML = '';
-    $(`empty-${panel}`).classList.remove('hidden');
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────
-function scrollPercent(el) {
-  const max = el.scrollHeight - el.clientHeight;
-  return max <= 0 ? 0 : Math.min(1, el.scrollTop / max);
-}
-// ── File loading ─────────────────────────────────────────────────────
-async function selectFile(panel) {
-  const path = isElectron
-    ? await window.compare.selectFile()
-    : prompt('Enter file path:');
-  if (path) await loadFile(panel, path);
-}
-
-async function loadFile(panel, path) {
-  const prev = panels[panel].path;
-  panels[panel].path = path;
-  panels[panel].label = path.split('/').pop();
-  syncPanelMeta(panel);
-  if (prev && prev !== path) unwatchFile(prev);
-  try {
-    const content = await fetchFile(path);
-    renderMarkdown(panel, content);
-  } catch (err) {
-    panels[panel].content = null;
-    syncPanelContent(panel);
-    $(`render-${panel}`).innerHTML =
-      `<p style="color:var(--error);padding:24px">Could not read file: ${err.message}</p>`;
-  }
-  watchFile(path);
-  updateSwapButton();
-}
-
-function updateSwapButton() {
-  const enabled = !!(panels.a.path && panels.b.path);
-  $('btn-swap').disabled = !enabled;
-  $('btn-swap').style.opacity = enabled ? '' : '0.4';
-}
-
-function swapPanels() {
-  if (!panels.a.path || !panels.b.path) return;
-  [panels.a, panels.b] = [panels.b, panels.a];
-  ['a', 'b'].forEach(p => { syncPanelMeta(p); syncPanelContent(p); });
-  $('body-a').scrollTop = 0;
-  $('body-b').scrollTop = 0;
-  updateDiffMap();
-}
-
-// ── Diff navigation ──────────────────────────────────────────────────
-function nonEqIndices() {
-  return lastChunks.reduce((acc, c, i) => { if (c.op !== 'eq') acc.push(i); return acc; }, []);
-}
-
-function chunkOutOfView(ci) {
-  for (const p of ['a', 'b']) {
-    const el = $(`render-${p}`).querySelector(`[data-diff-chunk="${ci}"]`);
-    if (!el) continue;
-    const br = $(`body-${p}`).getBoundingClientRect();
-    const er = el.getBoundingClientRect();
-    return er.bottom < br.top || er.top > br.bottom;
-  }
-  return true;
-}
-
-function scrollToChunk(ci) {
-  for (const p of ['a', 'b']) {
-    const el = $(`render-${p}`).querySelector(`[data-diff-chunk="${ci}"]`);
-    if (!el) continue;
-    const body = $(`body-${p}`);
-    const delta = el.getBoundingClientRect().top - body.getBoundingClientRect().top - 24;
-    if (Math.abs(delta) > 1) body.scrollBy({ top: delta, behavior: 'instant' });
-  }
-}
-
-function updateNavCounter(idx) {
-  const pos = idx.indexOf(currentChunkIdx);
-  $('diff-counter').textContent = pos >= 0 ? `${pos + 1} / ${idx.length}` : '— / —';
-}
-
-function updateDiffSummary() {
-  const mod = lastChunks.filter(c => c.op === 'mod').length;
-  const del = lastChunks.filter(c => c.op === 'del').length;
-  const ins = lastChunks.filter(c => c.op === 'ins').length;
+function updateDiffUI() {
+  const s = diffPanel.getDiffSummary();
+  // Counter
+  $('diff-counter').textContent = s.currentIdx >= 0
+    ? `${s.currentIdx + 1} / ${s.totalDiffs}` : '— / —';
+  // Summary
   const el = $('diff-summary');
-  if (mod + del + ins === 0) {
+  if (s.modified + s.deleted + s.inserted === 0) {
     el.textContent = '';
     el.dataset.tooltip = '';
-    return;
+  } else {
+    const parts = [];
+    if (s.modified) parts.push(`~${s.modified}`);
+    if (s.deleted) parts.push(`−${s.deleted}`);
+    if (s.inserted) parts.push(`+${s.inserted}`);
+    el.textContent = parts.join(' ');
+    el.dataset.tooltip = '~ modified · − only in A · + only in B';
   }
-  const parts = [];
-  if (mod) parts.push(`~${mod}`);
-  if (del) parts.push(`−${del}`);
-  if (ins) parts.push(`+${ins}`);
-  el.textContent = parts.join(' ');
-  el.dataset.tooltip = '~ modified · − only in A · + only in B';
-}
-
-function updateNavButtons() {
-  const has = nonEqIndices().length > 0;
+  // Nav buttons
+  const has = s.totalDiffs > 0;
   $('btn-prev').disabled = !has;
   $('btn-next').disabled = !has;
   $('btn-prev').style.opacity = has ? '' : '0.4';
   $('btn-next').style.opacity = has ? '' : '0.4';
-  if (!has) $('diff-counter').textContent = '— / —';
+  // Swap button — enabled when diffs exist (both files loaded)
+  $('btn-swap').disabled = !has;
+  $('btn-swap').style.opacity = has ? '' : '0.4';
 }
 
-function nextDiff() {
-  const idx = nonEqIndices();
-  if (!idx.length) return;
-  if (currentChunkIdx === -1) {
-    currentChunkIdx = idx[0];
-  } else if (chunkOutOfView(currentChunkIdx)) {
-    const bodyA = $('body-a');
-    const centre = bodyA.getBoundingClientRect().top + bodyA.clientHeight / 2;
-    const found = idx.find(ci => {
-      const el = $('render-a').querySelector(`[data-diff-chunk="${ci}"]`) ||
-                 $('render-b').querySelector(`[data-diff-chunk="${ci}"]`);
-      return el && el.getBoundingClientRect().top >= centre;
-    });
-    currentChunkIdx = found ?? idx[0];
-  } else {
-    const pos = idx.indexOf(currentChunkIdx);
-    currentChunkIdx = idx[(pos + 1) % idx.length];
-  }
-  scrollToChunk(currentChunkIdx);
-  updateNavCounter(idx);
-}
-
-function prevDiff() {
-  const idx = nonEqIndices();
-  if (!idx.length) return;
-  if (currentChunkIdx === -1) {
-    currentChunkIdx = idx[idx.length - 1];
-  } else if (chunkOutOfView(currentChunkIdx)) {
-    const bodyA = $('body-a');
-    const centre = bodyA.getBoundingClientRect().top + bodyA.clientHeight / 2;
-    const found = [...idx].reverse().find(ci => {
-      const el = $('render-a').querySelector(`[data-diff-chunk="${ci}"]`) ||
-                 $('render-b').querySelector(`[data-diff-chunk="${ci}"]`);
-      return el && el.getBoundingClientRect().bottom <= centre;
-    });
-    currentChunkIdx = found ?? idx[idx.length - 1];
-  } else {
-    const pos = idx.indexOf(currentChunkIdx);
-    currentChunkIdx = idx[(pos - 1 + idx.length) % idx.length];
-  }
-  scrollToChunk(currentChunkIdx);
-  updateNavCounter(idx);
-}
-
-function renderMarkdown(panel, content) {
-  panels[panel].content = content;
-  syncPanelContent(panel);
-  updateDiffMap();
-}
-
-// ── Scroll anchors ───────────────────────────────────────────────────
-function normHead(t) {
-  return t.toLowerCase().replace(/[^\w\s]/g, '').trim().split(/\s+/).slice(0, 6).join(' ');
-}
-
-function getScrollAnchors() { return scrollAnchors; }
-
-function interp(pos, fk, tk) {
-  const a = scrollAnchors;
-  if (a.length < 2) return pos;
-  let i = a.length - 2;
-  while (i > 0 && a[i][fk] > pos) i--;
-  const lo = a[i], hi = a[i + 1];
-  if (hi[fk] === lo[fk]) return lo[tk];
-  return lo[tk] + Math.max(0, Math.min(1, (pos - lo[fk]) / (hi[fk] - lo[fk])))
-                * (hi[tk] - lo[tk]);
-}
-
-function buildScrollAnchors() {
-  const bodyA = $('body-a'), bodyB = $('body-b');
-  const maxA = bodyA.scrollHeight - bodyA.clientHeight;
-  const maxB = bodyB.scrollHeight - bodyB.clientHeight;
-  if (maxA <= 0 || maxB <= 0) { scrollAnchors = []; return; }
-
-  const brA = bodyA.getBoundingClientRect();
-  const brB = bodyB.getBoundingClientRect();
-
-  const aHds = [...$('render-a').querySelectorAll('h2,h3,h4')]
-    .map(el => ({ text: normHead(el.textContent),
-                  pos: el.getBoundingClientRect().top - brA.top + bodyA.scrollTop }));
-  const bHds = [...$('render-b').querySelectorAll('h2,h3,h4')]
-    .map(el => ({ text: normHead(el.textContent),
-                  pos: el.getBoundingClientRect().top - brB.top + bodyB.scrollTop }));
-
-  const anchors = [{ a: 0, b: 0 }];
-  const usedB = new Set();
-  for (const ah of aHds) {
-    let bi = bHds.findIndex((bh, i) => !usedB.has(i) && bh.text === ah.text);
-    if (bi < 0) bi = bHds.findIndex((bh, i) => !usedB.has(i) && (
-      (ah.text.length >= 18 && bh.text.startsWith(ah.text.slice(0, 18)))
-      || (bh.text.length >= 18 && ah.text.startsWith(bh.text.slice(0, 18)))));
-    if (bi >= 0) {
-      usedB.add(bi);
-      anchors.push({ a: ah.pos, b: bHds[bi].pos });
-    }
-  }
-  anchors.push({ a: maxA, b: maxB });
-
-  anchors.sort((x, y) => x.a - y.a);
-  scrollAnchors = anchors.filter((an, i) => i === 0 || an.a > anchors[i - 1].a);
-}
-
-// ── Scroll sync ──────────────────────────────────────────────────────
-function setupScrollSync() {
-  const bodyA = $('body-a'), bodyB = $('body-b');
-  bodyA.addEventListener('scroll', () => {
-    if (!syncEnabled || syncing) return;
-    syncing = true;
-    bodyB.scrollTop = scrollAnchors.length >= 2
-      ? interp(bodyA.scrollTop, 'a', 'b')
-      : scrollPercent(bodyA) * (bodyB.scrollHeight - bodyB.clientHeight);
-    requestAnimationFrame(() => requestAnimationFrame(() => { syncing = false; }));
-  }, { passive: true });
-  bodyB.addEventListener('scroll', () => {
-    if (!syncEnabled || syncing) return;
-    syncing = true;
-    bodyA.scrollTop = scrollAnchors.length >= 2
-      ? interp(bodyB.scrollTop, 'b', 'a')
-      : scrollPercent(bodyB) * (bodyA.scrollHeight - bodyA.clientHeight);
-    requestAnimationFrame(() => requestAnimationFrame(() => { syncing = false; }));
-  }, { passive: true });
-}
-
-function toggleSync() {
-  syncEnabled = !syncEnabled;
-  $('btn-sync').classList.toggle('active', syncEnabled);
-  if (syncEnabled) {
-    $('body-b').scrollTop = scrollAnchors.length >= 2
-      ? interp($('body-a').scrollTop, 'a', 'b')
-      : scrollPercent($('body-a')) * ($('body-b').scrollHeight - $('body-b').clientHeight);
-  }
-}
-
-// ── Drag divider ─────────────────────────────────────────────────────
-$('divider').addEventListener('mousedown', () => { dragging = true; });
-document.addEventListener('mousemove', e => {
-  if (!dragging) return;
-  const r   = $('panels').getBoundingClientRect();
-  const pct = Math.max(20, Math.min(80, (e.clientX - r.left) / r.width * 100));
-  const pa = $('panel-a'), pb = $('panel-b');
-  pa.style.flex = 'none'; pa.style.width = pct + '%';
-  pb.style.flex = '1';    pb.style.width = '';
+$('btn-sync').addEventListener('click', () => {
+  diffPanel.toggleSync();
+  updateSyncButton();
 });
-document.addEventListener('mouseup', () => { dragging = false; });
+$('btn-swap').addEventListener('click', () => {
+  diffPanel.swapPanels();
+  updateDiffUI();
+});
+$('btn-prev').addEventListener('click', () => {
+  diffPanel.prevDiff();
+  updateDiffUI();
+});
+$('btn-next').addEventListener('click', () => {
+  diffPanel.nextDiff();
+  updateDiffUI();
+});
 
-// ── Drop zones ──────────────────────────────────────────────────────
-function setupDropZone(panel) {
-  const body = $(`body-${panel}`);
-  body.addEventListener('dragover', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    body.classList.add('drag-over');
-  });
-  body.addEventListener('dragleave', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    body.classList.remove('drag-over');
-  });
-  body.addEventListener('drop', e => {
-    e.preventDefault();
-    e.stopPropagation();
-    body.classList.remove('drag-over');
-    const file = e.dataTransfer.files[0];
-    if (file && file.path) loadFile(panel, file.path);
-  });
-}
-document.addEventListener('dragover', e => e.preventDefault());
-document.addEventListener('drop',     e => e.preventDefault());
+// Listen for diff-updated events from the panel
+document.addEventListener('diff-updated', () => updateDiffUI());
 
-// ── Diff minimap (LCS line diff) ─────────────────────────────────────
-function lineDiff(textA, textB) {
-  const a = textA.split('\n');
-  const b = textB.split('\n');
-  const m = a.length, n = b.length;
-  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
-  for (let i = m - 1; i >= 0; i--)
-    for (let j = n - 1; j >= 0; j--)
-      dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+// ── Panel toggle buttons ────────────────────────────────────────────
+let debateVisible = true, reviewVisible = true;
 
-  const raw = [];
-  let i = 0, j = 0;
-  while (i < m || j < n) {
-    const last = raw[raw.length - 1];
-    if (i < m && j < n && a[i] === b[j]) {
-      if (last?.op === 'eq') { last.aEnd++; last.bEnd++; }
-      else raw.push({ op: 'eq', aStart: i, aEnd: i+1, bStart: j, bEnd: j+1 });
-      i++; j++;
-    } else if (i < m && (j >= n || dp[i+1][j] >= dp[i][j+1])) {
-      if (last?.op === 'del') { last.aEnd++; }
-      else raw.push({ op: 'del', aStart: i, aEnd: i+1, bStart: j, bEnd: j });
-      i++;
-    } else {
-      if (last?.op === 'ins') { last.bEnd++; }
-      else raw.push({ op: 'ins', aStart: i, aEnd: i, bStart: j, bEnd: j+1 });
-      j++;
-    }
-  }
-  const chunks = [];
-  for (let k = 0; k < raw.length; k++) {
-    if (raw[k].op === 'del' && raw[k+1]?.op === 'ins') {
-      chunks.push({ op: 'mod', aStart: raw[k].aStart, aEnd: raw[k].aEnd,
-                               bStart: raw[k+1].bStart, bEnd: raw[k+1].bEnd });
-      k++;
-    } else { chunks.push(raw[k]); }
-  }
-  return { a, b, chunks };
+function updateSlotVisibility() {
+  $('slot-right-top').classList.toggle('hidden', !debateVisible);
+  $('slot-right-bottom').classList.toggle('hidden', !reviewVisible);
+  $('slot-divider-h').classList.toggle('hidden', !debateVisible || !reviewVisible);
+  const rightHidden = !debateVisible && !reviewVisible;
+  $('slot-right').classList.toggle('hidden', rightHidden);
+  $('slot-divider').classList.toggle('hidden', rightHidden);
+  $('btn-debate').classList.toggle('active', debateVisible);
+  $('btn-review').classList.toggle('active', reviewVisible);
 }
 
-function drawDiffMap(totalA, totalB, chunks) {
-  const canvas  = $('diff-map');
-  const divider = $('divider');
-  const h = divider.clientHeight, w = divider.clientWidth;
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  const mid = Math.floor(w / 2);
-  ctx.fillStyle = '#ede7d9'; ctx.fillRect(0, 0, w, h);
-  for (const c of chunks) {
-    if (c.op === 'eq') continue;
-    if (c.op === 'del' || c.op === 'mod') {
-      const y1 = Math.floor((c.aStart / totalA) * h);
-      const y2 = Math.ceil( (c.aEnd   / totalA) * h);
-      ctx.fillStyle = '#ef4444';
-      ctx.fillRect(1, y1, mid - 2, Math.max(2, y2 - y1));
-    }
-    if (c.op === 'ins' || c.op === 'mod') {
-      const y1 = Math.floor((c.bStart / totalB) * h);
-      const y2 = Math.ceil( (c.bEnd   / totalB) * h);
-      ctx.fillStyle = '#22c55e';
-      ctx.fillRect(mid + 1, y1, w - mid - 2, Math.max(2, y2 - y1));
-    }
-  }
-  ctx.fillStyle = '#c8baa0'; ctx.fillRect(mid, 0, 1, h);
+$('btn-debate').addEventListener('click', () => {
+  debateVisible = !debateVisible;
+  updateSlotVisibility();
+});
+$('btn-review').addEventListener('click', () => {
+  reviewVisible = !reviewVisible;
+  updateSlotVisibility();
+});
+
+// ── Cross-panel event routing ───────────────────────────────────────
+document.addEventListener('point-selected', e => {
+  const location = e.detail?.location;
+  if (location) diffPanel.scrollToLocation(location);
+});
+
+// ── Session discovery polling (§7a) ─────────────────────────────────
+let discoveryInterval = null;
+
+function connectDebateSession(sessionId) {
+  debateEventBus.connect(sessionId);
+  debatePanel.configure({ debateSessionId: sessionId });
+  reviewPanel.configure({ debateSessionId: sessionId });
 }
 
-function annotateRendered(panel, content, chunks) {
-  const render   = $(`render-${panel}`);
-  const elements = [...render.children];
-  const startKey = panel === 'a' ? 'aStart' : 'bStart';
-  const endKey   = panel === 'a' ? 'aEnd'   : 'bEnd';
-  elements.forEach(el => {
-    el.removeAttribute('data-diff-chunk');
-    el.classList.remove('diff-del', 'diff-ins');
-  });
-  const tokens = marked.lexer(content);
-  let line = 0, elIdx = 0;
-  for (const token of tokens) {
-    const rawLines = token.raw.split('\n').length - 1;
-    const tokenEnd = line + rawLines;
-    if (token.type !== 'space') {
-      const el = elements[elIdx++];
-      if (el) {
-        // marked v9 paragraph tokens have rawLines=0 (raw has no trailing newline).
-        // Use line+1 as the minimum upper bound so a chunk starting exactly at `line`
-        // is still matched. Headings (rawLines>=1) are unaffected.
-        const endForCheck = Math.max(tokenEnd, line + 1);
-        const ci = chunks.findIndex(c =>
-          c.op !== 'eq' && c[startKey] < endForCheck && c[endKey] > line);
-        if (ci >= 0) {
-          el.dataset.diffChunk = ci;
-          el.classList.add(panel === 'a' ? 'diff-del' : 'diff-ins');
-        }
+function showSessionPicker(sessions) {
+  const slot = $('slot-right-top');
+  // Clear debate panel temporarily and show picker
+  const picker = document.createElement('div');
+  picker.style.cssText = 'padding:24px;color:var(--sepia);font-size:13px;';
+  picker.innerHTML = '<h3 style="margin-bottom:12px;color:var(--ink)">Active Debate Sessions</h3>';
+  for (const session of sessions) {
+    const btn = document.createElement('button');
+    btn.textContent = session.debateSessionId;
+    btn.style.cssText = 'display:block;margin:6px 0;width:100%;text-align:left;';
+    btn.addEventListener('click', () => {
+      picker.remove();
+      connectDebateSession(session.debateSessionId);
+    });
+    picker.appendChild(btn);
+  }
+  slot.insertBefore(picker, slot.firstChild);
+}
+
+function startSessionDiscovery() {
+  discoveryInterval = setInterval(async () => {
+    try {
+      const res = await fetch('/api/debate/sessions');
+      if (!res.ok) return;
+      const sessions = await res.json();
+      if (sessions.length === 1) {
+        clearInterval(discoveryInterval);
+        discoveryInterval = null;
+        connectDebateSession(sessions[0].debateSessionId);
+      } else if (sessions.length > 1) {
+        clearInterval(discoveryInterval);
+        discoveryInterval = null;
+        showSessionPicker(sessions);
       }
-    }
-    line = tokenEnd;
+    } catch (_) { /* ignore — server may not be up yet */ }
+  }, 5000);
+}
+
+const debateParam = params.get('debate');
+if (debateParam) {
+  connectDebateSession(debateParam);
+} else {
+  startSessionDiscovery();
+}
+
+// ── Slot divider dragging ───────────────────────────────────────────
+let slotDragging = false;
+let slotDraggingH = false;
+
+$('slot-divider').addEventListener('mousedown', () => { slotDragging = true; });
+$('slot-divider-h').addEventListener('mousedown', () => { slotDraggingH = true; });
+
+document.addEventListener('mousemove', e => {
+  if (slotDragging) {
+    const r = $('panels').getBoundingClientRect();
+    const pct = Math.max(20, Math.min(80, (e.clientX - r.left) / r.width * 100));
+    $('slot-left').style.flex = 'none';
+    $('slot-left').style.width = pct + '%';
+    $('slot-right').style.flex = '1';
+    $('slot-right').style.width = '';
   }
-}
-
-function updateDiffMap() {
-  if (!panels.a.content || !panels.b.content) {
-    lastChunks = [];
-    scrollAnchors = [];
-    updateDiffSummary();
-    updateNavButtons();
-    return;
+  if (slotDraggingH) {
+    const r = $('slot-right').getBoundingClientRect();
+    const pct = Math.max(20, Math.min(80, (e.clientY - r.top) / r.height * 100));
+    $('slot-right-top').style.flex = 'none';
+    $('slot-right-top').style.height = pct + '%';
+    $('slot-right-bottom').style.flex = '1';
+    $('slot-right-bottom').style.height = '';
   }
-  const { a, b, chunks } = lineDiff(panels.a.content, panels.b.content);
-  lastChunks = chunks; lastTotalA = a.length; lastTotalB = b.length;
-  drawDiffMap(a.length, b.length, chunks);
-  annotateRendered('a', panels.a.content, chunks);
-  annotateRendered('b', panels.b.content, chunks);
-  annotateWordDiffs(chunks);
-  buildScrollAnchors();
-  currentChunkIdx = -1;
-  updateDiffSummary();
-  updateNavButtons();
-}
+});
 
-// ── Word-level diff ──────────────────────────────────────────────────
-function tokenize(text) {
-  const tokens = [];
-  let pos = 0;
-  for (const m of text.matchAll(/\S+/g)) {
-    if (m.index > pos) tokens.push({ text: text.slice(pos, m.index), word: false });
-    tokens.push({ text: m[0], word: true, start: m.index, end: m.index + m[0].length });
-    pos = m.index + m[0].length;
-  }
-  if (pos < text.length) tokens.push({ text: text.slice(pos), word: false });
-  return tokens;
-}
+document.addEventListener('mouseup', () => {
+  slotDragging = false;
+  slotDraggingH = false;
+});
 
-function wordDiff(textA, textB) {
-  const ta = tokenize(textA).filter(t => t.word);
-  const tb = tokenize(textB).filter(t => t.word);
-  const m = ta.length, n = tb.length;
-  const dp = Array.from({ length: m + 1 }, () => new Uint32Array(n + 1));
-  for (let i = m - 1; i >= 0; i--)
-    for (let j = n - 1; j >= 0; j--)
-      dp[i][j] = ta[i].text === tb[j].text ? dp[i+1][j+1] + 1
-                                            : Math.max(dp[i+1][j], dp[i][j+1]);
-  const rangesA = [], rangesB = [];
-  let i = 0, j = 0;
-  while (i < m || j < n) {
-    if (i < m && j < n && ta[i].text === tb[j].text) { i++; j++; }
-    else if (j >= n || (i < m && dp[i+1][j] >= dp[i][j+1])) {
-      rangesA.push([ta[i].start, ta[i].end]); i++;
-    } else {
-      rangesB.push([tb[j].start, tb[j].end]); j++;
-    }
-  }
-  return { rangesA, rangesB };
-}
-
-function applyWordHighlights(el, changedRanges, markClass) {
-  if (!changedRanges.length) return;
-  const walker = document.createTreeWalker(el, 4); // NodeFilter.SHOW_TEXT
-  const nodes = [];
-  let node, off = 0;
-  while ((node = walker.nextNode())) {
-    // Skip text nodes inside <code> (inline code spans) — include their length
-    // in the offset so ranges from wordDiff() remain correctly aligned.
-    if (node.parentNode.tagName === 'CODE') { off += node.length; continue; }
-    nodes.push({ node, start: off, end: off + node.length });
-    off += node.length;
-  }
-  for (let i = nodes.length - 1; i >= 0; i--) {
-    const { node, start, end } = nodes[i];
-    const overlaps = changedRanges.filter(([rs, re]) => re > start && rs < end);
-    if (!overlaps.length) continue;
-    const segs = [];
-    let pos = start;
-    for (const [rs, re] of overlaps) {
-      if (rs > pos) segs.push({ t: node.data.slice(pos - start, rs - start), ch: false });
-      segs.push({ t: node.data.slice(Math.max(rs, start) - start, Math.min(re, end) - start), ch: true });
-      pos = re;
-    }
-    if (pos < end) segs.push({ t: node.data.slice(pos - start), ch: false });
-    const frag = document.createDocumentFragment();
-    for (const s of segs) {
-      if (s.ch) {
-        const mark = document.createElement('mark');
-        mark.className = markClass;
-        mark.textContent = s.t;
-        frag.appendChild(mark);
-      } else {
-        frag.appendChild(document.createTextNode(s.t));
-      }
-    }
-    node.parentNode.replaceChild(frag, node);
-  }
-}
-
-function annotateWordDiffs(chunks) {
-  // Strip any existing word-diff marks before re-annotating (e.g. from ResizeObserver)
-  document.querySelectorAll('mark.diff-word-a, mark.diff-word-b').forEach(m => {
-    m.replaceWith(document.createTextNode(m.textContent));
-  });
-  chunks.forEach((c, ci) => {
-    if (c.op !== 'mod') return;
-    const elA = $('render-a').querySelector(`[data-diff-chunk="${ci}"]`);
-    const elB = $('render-b').querySelector(`[data-diff-chunk="${ci}"]`);
-    if (!elA || !elB || elA.tagName === 'PRE' || elB.tagName === 'PRE') return;
-    const { rangesA, rangesB } = wordDiff(elA.textContent, elB.textContent);
-    applyWordHighlights(elA, rangesA, 'diff-word-a');
-    applyWordHighlights(elB, rangesB, 'diff-word-b');
-  });
-}
-
-// ── Critique panel stub ──────────────────────────────────────────────
-function toggleCritique() {
-  $('critique-panel').classList.toggle('hidden');
-}
-
-// ── Keyboard shortcuts ───────────────────────────────────────────────
+// ── Keyboard shortcuts ──────────────────────────────────────────────
 document.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') return;
-  if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); toggleSync(); }
-  if (e.key === 'n') nextDiff();
-  if (e.key === 'p') prevDiff();
+  if (e.key === 's' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); diffPanel.toggleSync(); updateSyncButton(); }
+  if (e.key === 'n') { diffPanel.nextDiff(); updateDiffUI(); }
+  if (e.key === 'p') { diffPanel.prevDiff(); updateDiffUI(); }
 });
 
-// ── Init ─────────────────────────────────────────────────────────────
+// ── Electron IPC (if running in Electron shell) ─────────────────────
 if (isElectron) {
   window.compare.onInitConfig(async cfg => {
-    API_PORT = cfg.port;
-    if (_pendingFiles) {
-      const { a, b } = _pendingFiles;
-      _pendingFiles = null;
-      if (a) await loadFile('a', a);
-      if (b) await loadFile('b', b);
-    }
+    diffPanel.configure({ apiPort: cfg.port });
   });
   window.compare.onInitFiles((a, b) => {
-    if (API_PORT) {
-      if (a) loadFile('a', a);
-      if (b) loadFile('b', b);
-    } else {
-      _pendingFiles = { a, b };
-    }
+    if (a) diffPanel.loadFile('a', a);
+    if (b) diffPanel.loadFile('b', b);
   });
-} else {
-  (async () => {
-    const params = new URLSearchParams(window.location.search);
-    const pathA = params.get('a');
-    const pathB = params.get('b');
-    if (pathA) await loadFile('a', pathA);
-    if (pathB) await loadFile('b', pathB);
-  })();
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  setupScrollSync();
-  if (isElectron) { setupDropZone('a'); setupDropZone('b'); }
-  ['a', 'b'].forEach(p =>
-    $(`label-${p}`).addEventListener('input', () => {
-      panels[p].label = $(`label-${p}`).value;
-    }));
-  new ResizeObserver(updateDiffMap).observe($('divider'));
+// Suppress browser-level drag-drop
+document.addEventListener('dragover', e => e.preventDefault());
+document.addEventListener('drop', e => e.preventDefault());
 
-  $('diff-map').addEventListener('click', e => {
-    if (!lastChunks.length) return;
-    const canvas   = $('diff-map');
-    const yFrac    = e.offsetY / canvas.height;
-    const leftSide = e.offsetX < canvas.width / 2;
-    const total    = leftSide ? lastTotalA : lastTotalB;
-    const startKey = leftSide ? 'aStart' : 'bStart';
-    const endKey   = leftSide ? 'aEnd'   : 'bEnd';
-    const clickLine = Math.floor(yFrac * total);
-    const ci = lastChunks.findIndex(c =>
-      c.op !== 'eq' && c[startKey] <= clickLine && c[endKey] > clickLine);
-    if (ci < 0) return;
-    scrollToChunk(ci);
-    currentChunkIdx = ci;
-    updateNavCounter(nonEqIndices());
-  });
-});
-
-// ── Debate SSE (sp2 — data pipe only, sp3 adds rendering) ────────────
-let debateEventSource = null;
-
-function connectDebateSSE(debateSessionId) {
-    if (debateEventSource) {
-        debateEventSource.close();
-    }
-    debateEventSource = new EventSource(
-        '/api/debate/' + encodeURIComponent(debateSessionId) + '/events');
-    debateEventSource.onmessage = function(e) {
-        var events;
-        try {
-            events = JSON.parse(e.data);
-        } catch (err) {
-            return;
-        }
-        if (events.type === 'heartbeat') return;
-        if (!Array.isArray(events)) events = [events];
-        events.forEach(function(event) {
-            document.dispatchEvent(
-                new CustomEvent('debate-event', { detail: event }));
-        });
-    };
-    debateEventSource.onerror = function() {
-        // EventSource auto-reconnects; sp3 contract: clear accumulated
-        // events on reconnect (replay-from-start)
-    };
-    return debateEventSource;
-}
-
-function disconnectDebateSSE() {
-    if (debateEventSource) {
-        debateEventSource.close();
-        debateEventSource = null;
-    }
-}
+// Initial slot visibility
+updateSlotVisibility();
 </script>
 </body>
 </html>

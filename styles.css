@@ -51,115 +51,22 @@ button.active { background: var(--accent); border-color: var(--accent); color: v
 #main   { flex: 1; display: flex; overflow: hidden; }
 #panels { flex: 1; display: flex; overflow: hidden; min-height: 0; position: relative; }
 
-/* ── Panel columns (copied + adapted from Sparge) ── */
-.panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
-
-/* ── Drag divider + diff minimap ── */
-#divider {
-  width: 20px; background: var(--chrome); cursor: col-resize; flex-shrink: 0;
-  position: relative; border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+/* ── Workspace slots ── */
+.slot { display: flex; flex-direction: column; overflow: hidden; }
+.slot.hidden { display: none; }
+.slot-left { flex: 3; min-width: 0; }
+.slot-right { flex: 2; display: flex; flex-direction: column; min-width: 0; }
+.slot-right-top { flex: 3; overflow: hidden; }
+.slot-right-bottom { flex: 2; overflow: hidden; }
+.slot-divider {
+  width: 6px; background: var(--chrome); cursor: col-resize; flex-shrink: 0;
+  border-left: 1px solid var(--border); border-right: 1px solid var(--border);
 }
-#diff-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-
-/* ── Panel header (file picker strip) ── */
-.panel-header {
-  flex-shrink: 0; background: var(--chrome); border-bottom: 1px solid var(--border);
-  padding: 5px 10px; display: flex; align-items: center; gap: 8px;
+.slot-divider-h {
+  height: 6px; background: var(--chrome); cursor: row-resize; flex-shrink: 0;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
 }
-.panel-label {
-  font-weight: 700; font-size: 12px; color: var(--ink);
-  background: none; border: 1px solid transparent; border-radius: 2px;
-  padding: 2px 6px; width: 56px; font-family: Georgia, serif; font-style: italic;
-  transition: border-color .15s;
-}
-.panel-label:hover  { border-color: var(--border-light); }
-.panel-label:focus  { outline: none; border-color: var(--accent); background: var(--bg); }
-.panel-path {
-  flex: 1; font-size: 10px; color: var(--muted); font-family: 'SFMono-Regular', Consolas, monospace;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-}
-.panel-path.loaded { color: var(--sepia); }
-
-/* ── Panel body ── */
-.panel-body {
-  flex: 1; overflow: auto; position: relative;
-}
-
-/* ── Empty state ── */
-.panel-empty {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 10px; color: var(--muted); text-align: center; padding: 40px;
-  pointer-events: none;
-}
-.panel-empty.hidden { display: none; }
-.panel-empty-icon { font-size: 32px; opacity: .4; }
-.panel-empty-hint { font-size: 12px; line-height: 1.6; }
-
-/* ── Drop-target highlight ── */
-.panel-body.drag-over { outline: 2px dashed var(--accent); outline-offset: -4px; }
-
-/* ── Rendered markdown content (adapted from Sparge #md-wrap) ── */
-.md-wrap {
-  padding: 28px 36px; max-width: 820px; margin: 0 auto; line-height: 1.75;
-}
-.md-wrap h1, .md-wrap h2 {
-  border-bottom: 1px solid var(--border); padding-bottom: .3em;
-  margin: 1.5em 0 .6em; color: var(--ink);
-}
-.md-wrap h3, .md-wrap h4 { margin: 1.2em 0 .4em; color: var(--accent); }
-.md-wrap p   { margin: .7em 0; color: var(--sepia); }
-.md-wrap a   { color: var(--accent); }
-.md-wrap code {
-  background: var(--chrome); border: 1px solid var(--border); border-radius: 2px;
-  padding: 2px 6px; font-size: .875em; color: var(--sepia);
-}
-.md-wrap pre {
-  background: var(--chrome); border: 1px solid var(--border); border-radius: 2px;
-  padding: 0; overflow-x: auto; margin: 1em 0;
-}
-.md-wrap pre code { background: none; border: none; padding: 16px; display: block; color: var(--ink); font-size: .875em; }
-.md-wrap blockquote {
-  border-left: 3px solid var(--border); margin: 1em 0; padding: .5em 1em; color: var(--muted);
-}
-.md-wrap ul, .md-wrap ol { margin: .7em 0 .7em 1.5em; }
-.md-wrap li  { margin: .3em 0; }
-.md-wrap img { max-width: 100%; border-radius: 2px; margin: 1em 0; border: 1px solid var(--border); }
-.md-wrap table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-.md-wrap th, .md-wrap td { border: 1px solid var(--border); padding: 6px 13px; }
-.md-wrap th  { background: var(--chrome); }
-
-/* ── Inline diff markers — horizontal brackets above/below changed blocks ── */
-.diff-del {
-  border-top: 2px solid #ef4444;
-  border-bottom: 2px solid #ef4444;
-  background: rgba(239, 68, 68, 0.05);
-}
-.diff-ins {
-  border-top: 2px solid #22c55e;
-  border-bottom: 2px solid #22c55e;
-  background: rgba(34, 197, 94, 0.05);
-}
-
-/* ── Critique panel (Phase 2 — ships empty in Phase 1) ── */
-#critique-panel {
-  position: absolute; right: 0; top: 0; bottom: 0; width: 360px;
-  background: var(--chrome); border-left: 1px solid var(--border);
-  display: flex; flex-direction: column; z-index: 10; font-size: 13px; overflow: hidden;
-}
-#critique-panel.hidden { display: none; }
-#critique-hdr {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 8px 12px; border-bottom: 1px solid var(--border);
-  font-size: 10px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .08em; flex-shrink: 0;
-  font-family: 'SFMono-Regular', Consolas, monospace;
-}
-#critique-hdr button { padding: 3px 8px; font-size: 11px; }
-#critique-body {
-  flex: 1; overflow-y: auto; padding: 16px;
-  color: var(--muted); font-size: 12px; font-style: italic;
-}
+.slot-divider.hidden, .slot-divider-h.hidden { display: none; }
 
 /* ── Diff summary tooltip ── */
 #diff-summary::after {
@@ -182,11 +89,7 @@ button.active { background: var(--accent); border-color: var(--accent); color: v
 }
 #diff-summary:hover::after { opacity: 1; }
 
-/* ── Word-level diff highlights ── */
-mark.diff-word-a { background: rgba(239,68,68,0.35); border-radius: 2px; padding: 0 1px; color: inherit; }
-mark.diff-word-b { background: rgba(34,197,94,0.35); border-radius: 2px; padding: 0 1px; color: inherit; }
-
-/* ── Diff legend ──────────────────────────────────────────────────── */
+/* ── Diff legend ── */
 #diff-legend {
   display: inline-flex;
   align-items: center;
