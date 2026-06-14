@@ -15,7 +15,6 @@ import java.net.URL;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
-import static io.casehub.drafthouse.e2e.PlaywrightFixtures.shadowLocator;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @QuarkusTest
@@ -43,13 +42,13 @@ class HappyPathE2ETest {
     @Test
     void panelARendersContent() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(shadowLocator(page, "drafthouse-diff", "#render-a")).not().isEmpty();
+        assertThat(page.locator("#render-a")).not().isEmpty();
     }
 
     @Test
     void panelBRendersContent() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(shadowLocator(page, "drafthouse-diff", "#render-b")).not().isEmpty();
+        assertThat(page.locator("#render-b")).not().isEmpty();
     }
 
     @Test
