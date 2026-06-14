@@ -15,6 +15,7 @@ import java.net.URL;
 import static com.microsoft.playwright.assertions.PlaywrightAssertions.assertThat;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
+import static io.casehub.drafthouse.e2e.PlaywrightFixtures.shadowLocator;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.waitForRender;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -51,7 +52,7 @@ class SwapPanelsE2ETest {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         page.evaluate("() => swapPanels()");
         waitForRender(page);
-        int count = page.locator("[data-diff-chunk]").count();
+        int count = shadowLocator(page, "drafthouse-diff", "[data-diff-chunk]").count();
         assertTrue(count > 0, "diff chunks should be present after swap");
     }
 
@@ -60,7 +61,7 @@ class SwapPanelsE2ETest {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         page.evaluate("() => swapPanels()");
         waitForRender(page);
-        String textA = page.locator("#render-a").innerText();
+        String textA = shadowLocator(page, "drafthouse-diff", "#render-a").innerText();
         assertTrue(textA.contains("New Section"),
             "after swap, panel A should contain text from original B (New Section)");
     }
@@ -72,7 +73,7 @@ class SwapPanelsE2ETest {
         waitForRender(page);
         page.evaluate("() => swapPanels()");
         waitForRender(page);
-        String restoredTextA = page.locator("#render-a").innerText();
+        String restoredTextA = shadowLocator(page, "drafthouse-diff", "#render-a").innerText();
         assertTrue(restoredTextA.contains("Summary"),
             "after double swap, panel A should be restored (contains 'Summary')");
     }

@@ -14,6 +14,7 @@ import java.net.URL;
 
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.fixturePath;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
+import static io.casehub.drafthouse.e2e.PlaywrightFixtures.shadowLocator;
 import static io.casehub.drafthouse.e2e.PlaywrightFixtures.waitForRender;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -43,21 +44,21 @@ class WordDiffE2ETest {
     @Test
     void changedWordsHighlightedInPanelA() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        int count = page.locator("#render-a mark.diff-word-a").count();
+        int count = shadowLocator(page, "drafthouse-diff", "#render-a mark.diff-word-a").count();
         assertTrue(count > 0, "expected at least one word highlight in panel A");
     }
 
     @Test
     void changedWordsHighlightedInPanelB() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        int count = page.locator("#render-b mark.diff-word-b").count();
+        int count = shadowLocator(page, "drafthouse-diff", "#render-b mark.diff-word-b").count();
         assertTrue(count > 0, "expected at least one word highlight in panel B");
     }
 
     @Test
     void preBlocksHaveNoWordHighlights() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        int count = page.locator("#render-a pre mark, #render-b pre mark").count();
+        int count = shadowLocator(page, "drafthouse-diff", "#render-a pre mark, #render-b pre mark").count();
         assertEquals(0, count, "pre blocks must not contain word highlights");
     }
 
@@ -66,8 +67,8 @@ class WordDiffE2ETest {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         page.evaluate("() => swapPanels()");
         waitForRender(page);
-        int countA = page.locator("#render-a mark.diff-word-a").count();
-        int countB = page.locator("#render-b mark.diff-word-b").count();
+        int countA = shadowLocator(page, "drafthouse-diff", "#render-a mark.diff-word-a").count();
+        int countB = shadowLocator(page, "drafthouse-diff", "#render-b mark.diff-word-b").count();
         assertTrue(countA + countB > 0, "word highlights should reappear after swap");
         page.evaluate("() => swapPanels()"); // restore
     }

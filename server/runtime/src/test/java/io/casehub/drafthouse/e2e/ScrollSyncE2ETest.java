@@ -52,9 +52,9 @@ class ScrollSyncE2ETest {
     void anchorModeScrollsPanelB() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         // Scroll panel A to 300px; sync should move panel B
-        page.evaluate("() => { document.getElementById('body-a').scrollTop = 300; }");
+        page.evaluate("() => { document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-a').scrollTop = 300; }");
         page.waitForTimeout(200); // allow two rAF cycles for syncing flag to reset
-        int scrollB = (int) page.evaluate("() => document.getElementById('body-b').scrollTop");
+        int scrollB = (int) page.evaluate("() => document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-b').scrollTop");
         assertTrue(scrollB > 0, "panel B should have scrolled when panel A was scrolled");
     }
 
@@ -70,9 +70,9 @@ class ScrollSyncE2ETest {
     @Test
     void noHeadingsModeStillScrollsPanelB() {
         loadFilePair(page, index, fixturePath("no-headings-a.md"), fixturePath("no-headings-b.md"));
-        page.evaluate("() => { document.getElementById('body-a').scrollTop = 300; }");
+        page.evaluate("() => { document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-a').scrollTop = 300; }");
         page.waitForTimeout(200);
-        int scrollB = (int) page.evaluate("() => document.getElementById('body-b').scrollTop");
+        int scrollB = (int) page.evaluate("() => document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-b').scrollTop");
         assertTrue(scrollB > 0, "panel B should scroll even when sync uses only endpoint anchors");
     }
 }

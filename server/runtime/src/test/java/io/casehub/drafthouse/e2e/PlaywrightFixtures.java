@@ -1,5 +1,6 @@
 package io.casehub.drafthouse.e2e;
 
+import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 
 import java.net.URL;
@@ -22,6 +23,17 @@ public final class PlaywrightFixtures {
     }
 
     /**
+     * Pierces open Shadow DOM for a custom element. Uses Playwright's >>> combinator.
+     * @param page the Playwright page
+     * @param hostType the custom element tag name (e.g., "drafthouse-diff")
+     * @param selector the selector inside the shadow root (e.g., "#render-a")
+     * @return a locator that targets the element inside the shadow root
+     */
+    public static Locator shadowLocator(Page page, String hostType, String selector) {
+        return page.locator(hostType).locator(">>> " + selector);
+    }
+
+    /**
      * Navigates to the app with the given file pair and waits for full render.
      * Paths are URL-encoded so spaces and special chars don't corrupt the query string.
      * The JS side uses URLSearchParams.get('a') which correctly decodes %2F back to /.
@@ -38,8 +50,9 @@ public final class PlaywrightFixtures {
      * [data-diff-chunk] is set by annotateRendered() inside updateDiffMap(), which
      * runs after marked.js rendering. It only appears when at least one diff chunk
      * exists — all fixture pairs must produce at least one diff.
+     * Now pierces Shadow DOM since the diff panel is a Web Component.
      */
     public static void waitForRender(Page page) {
-        page.waitForSelector("[data-diff-chunk]");
+        page.locator("drafthouse-diff").locator(">>> [data-diff-chunk]").first().waitFor();
     }
 }
