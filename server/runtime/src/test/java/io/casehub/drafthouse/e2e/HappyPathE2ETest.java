@@ -64,4 +64,12 @@ class HappyPathE2ETest {
         page.navigate(index.toString());
         assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
     }
+
+    @Test
+    void panelsDirectoryServesJavaScript() {
+        var response = page.request().get(index + "panels/panel-registry.js");
+        // File doesn't exist yet (Task 2 creates it), but route should match.
+        // Clean 404 means the path matched. Before fix: 405 or routing failure.
+        assertEquals(404, response.status());
+    }
 }
