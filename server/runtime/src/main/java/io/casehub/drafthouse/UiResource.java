@@ -36,7 +36,7 @@ public class UiResource {
     }
 
     @GET
-    @jakarta.ws.rs.Path("{path:.*}")
+    @jakarta.ws.rs.Path("{path:.+}")
     public Response file(@PathParam("path") String path) throws IOException {
         return serveFile(path);
     }

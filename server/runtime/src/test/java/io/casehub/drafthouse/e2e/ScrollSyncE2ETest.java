@@ -43,7 +43,7 @@ class ScrollSyncE2ETest {
     void anchorModeBuildsInteriorAnchors() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
         // diff-a/b has 5 matching headings → at least 7 anchors (start + 5 headings + end)
-        int anchorCount = (int) page.evaluate("() => getScrollAnchors().length");
+        int anchorCount = (int) page.evaluate("() => document.querySelector('drafthouse-diff')._scrollAnchors.length");
         assertTrue(anchorCount >= 7,
             "expected 7+ anchors (start + 5 heading matches + end), got " + anchorCount);
     }
@@ -62,7 +62,7 @@ class ScrollSyncE2ETest {
     void noHeadingsProducesOnlyEndpointAnchors() {
         loadFilePair(page, index, fixturePath("no-headings-a.md"), fixturePath("no-headings-b.md"));
         // No heading matches → only start {a:0,b:0} and end {a:maxA,b:maxB} anchors
-        int anchorCount = (int) page.evaluate("() => getScrollAnchors().length");
+        int anchorCount = (int) page.evaluate("() => document.querySelector('drafthouse-diff')._scrollAnchors.length");
         assertEquals(2, anchorCount,
             "expected exactly 2 anchors (start + end) with no heading matches");
     }

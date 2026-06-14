@@ -10,21 +10,19 @@
 <link rel="stylesheet" href="styles.css">
 <script>
   // DRL language for hljs (from Sparge)
-  document.addEventListener('DOMContentLoaded', () => {
-    hljs.registerLanguage('drl', h => ({
-      keywords: { keyword: 'rule when then end import package declare salience agenda-group ruleflow-group lock-on-active no-loop accumulate collect from exists forall not and or modify update insert retract delete global eval query function' },
-      contains: [h.C_LINE_COMMENT_MODE, h.C_BLOCK_COMMENT_MODE, h.QUOTE_STRING_MODE, h.C_NUMBER_MODE]
-    }));
-    // Use renderer (not extensions) to override built-in code blocks.
-    // extensions:[{name:'code'}] targets custom token types only and does NOT
-    // override the built-in 'code' renderer in marked.js v9 — it is silently ignored.
-    marked.use({ renderer: { code(code, lang) {
-      const language = lang && hljs.getLanguage(lang) ? lang : null;
-      const hi = language ? hljs.highlight(code, { language, ignoreIllegals: true }).value
-                          : (code ? hljs.highlightAuto(code).value : code);
-      return `<pre><code class="hljs${language ? ` language-${language}` : ''}">${hi}</code></pre>\n`;
-    }}});
-  });
+  // Runs immediately — CDN scripts above are synchronous, hljs and marked are available.
+  // Must NOT be wrapped in DOMContentLoaded — module scripts execute after DOMContentLoaded,
+  // so the diff panel would call marked.parse() before marked.use() configures the renderer.
+  hljs.registerLanguage('drl', h => ({
+    keywords: { keyword: 'rule when then end import package declare salience agenda-group ruleflow-group lock-on-active no-loop accumulate collect from exists forall not and or modify update insert retract delete global eval query function' },
+    contains: [h.C_LINE_COMMENT_MODE, h.C_BLOCK_COMMENT_MODE, h.QUOTE_STRING_MODE, h.C_NUMBER_MODE]
+  }));
+  marked.use({ renderer: { code(code, lang) {
+    const language = lang && hljs.getLanguage(lang) ? lang : null;
+    const hi = language ? hljs.highlight(code, { language, ignoreIllegals: true }).value
+                        : (code ? hljs.highlightAuto(code).value : code);
+    return `<pre><code class="hljs${language ? ` language-${language}` : ''}">${hi}</code></pre>\n`;
+  }}});
 </script>
 <script type="module" src="panels/drafthouse-diff.js"></script>
 <script type="module" src="panels/drafthouse-debate.js"></script>

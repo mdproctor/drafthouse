@@ -64,11 +64,11 @@ class WordDiffE2ETest {
     @Test
     void wordHighlightsPersistAfterSwap() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        page.evaluate("() => swapPanels()");
+        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()");
         waitForRender(page);
         int countA = page.locator("#render-a mark.diff-word-a").count();
         int countB = page.locator("#render-b mark.diff-word-b").count();
         assertTrue(countA + countB > 0, "word highlights should reappear after swap");
-        page.evaluate("() => swapPanels()"); // restore
+        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()"); // restore
     }
 }
