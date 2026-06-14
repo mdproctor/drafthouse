@@ -62,8 +62,9 @@ java -Dui.dir=/Users/mdproctor/claude/casehub/drafthouse \
 
 Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in a browser.
 
-- `ui.dir` — tells UiResource where to find `index.html` and `styles.css`
+- `ui.dir` — tells UiResource where to find `index.html`, `styles.css`, and `panels/*.js`
 - Query params `?a=` and `?b=` — initial file paths to load
+- Query param `?debate=` — debate session ID to auto-connect
 
 ## Testing
 
@@ -85,8 +86,14 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 
 | Path | Contents |
 |---|---|
-| `index.html` | All UI: HTML, JS, styles.css link — the entire renderer |
-| `styles.css` | Archive Room CSS tokens + panel/diff/minimap styles |
+| `index.html` | Workspace shell (~285 lines) — layout slots, topbar, panel orchestration, session discovery |
+| `styles.css` | Shell layout styles + `:root` Archive Room design tokens |
+| `panels/` | Web Component panels (ES modules, Shadow DOM, adoptedStyleSheets) |
+| `panels/panel-registry.js` | PanelRegistry — component type catalogue + factory (first draft of `@casehub/ui` registry) |
+| `panels/debate-event-bus.js` | DebateEventBus — shared SSE connection for debate events |
+| `panels/drafthouse-diff.js` | `<drafthouse-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
+| `panels/drafthouse-debate.js` | `<drafthouse-debate>` — SSE debate event conversation feed |
+| `panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist |
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
 | `server/api/` | Pure Java domain model — no Quarkus, no Qhorus; includes `debate/` package |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
@@ -116,32 +123,34 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/debate/{id}/events  ← SSE debate event stream
   └── GET /api/debate/sessions     ← active debate session list
 
-Browser UI (index.html)
-  ├── fetch /api/file              ← load file content (relative URLs)
-  ├── EventSource /api/watch       ← live reload on file change
-  ├── EventSource /api/debate/{id}/events  ← live debate events
-  ├── marked.js + highlight.js     ← render markdown
-  ├── URL query params (?a=&b=)    ← initial file loading
-  ├── LCS line diff                ← compare A and B
-  ├── Word-level diff highlights   ← within modified blocks
-  ├── Canvas minimap               ← red=A-side, green=B-side changes
-  └── Scroll sync via anchors      ← heading-based anchor matching
+Browser UI (Web Component panels + workspace shell)
+  ├── index.html                   ← workspace shell (layout slots, topbar, session discovery)
+  ├── panels/panel-registry.js     ← PanelRegistry (component catalogue + factory)
+  ├── panels/debate-event-bus.js   ← DebateEventBus (shared SSE connection)
+  ├── <drafthouse-diff>            ← diff panel (Shadow DOM Web Component)
+  │   ├── fetch /api/file          ← load file content
+  │   ├── EventSource /api/watch   ← live reload on file change
+  │   ├── marked.js + highlight.js ← render markdown
+  │   ├── LCS line diff + word-level highlights
+  │   ├── Canvas minimap           ← red=A-side, green=B-side changes
+  │   └── Scroll sync via anchors  ← heading-based anchor matching
+  ├── <drafthouse-debate>          ← debate feed (Shadow DOM Web Component)
+  │   └── DebateEventBus           ← SSE debate events, grouped by round
+  └── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
+      └── DebateEventBus           ← derives status per pointId from event stream
 ```
 
 ## Architectural Direction
 
-DraftHouse is designed as a **standalone tool today, Claudony plugin tomorrow**. All
-diff, rendering, and critique logic must be modular — cleanly separable from the
-Electron shell and Quarkus serving layer so it can be embedded as a Claudony channel
-view type when Claudony's plugin API stabilises.
+DraftHouse uses **Web Component panels targeting the `@casehub/ui` `Component` model** — the same component contract that Melviz (casehub-ui) and all future CaseHub frontends will adopt. Each panel is a custom element with Shadow DOM encapsulation and `adoptedStyleSheets`, registered via `PanelRegistry`, and composable into any layout. The workspace shell is explicitly temporary — it will be replaced by `@casehub/ui` layout primitives (`split()`, `grid()`) when they ship.
 
 **Practical implications:**
-- Keep diff engine, word-level highlighting, and LLM critique anchoring as pure
-  functions with no UI framework coupling
-- Look at Claudony's channel architecture when designing new features — borrow
-  patterns and share code where possible (channel model, message rendering, etc.)
-- Don't build a second channel system — design for eventual convergence
-- The Electron shell and browser mode are distribution wrappers, not the product
+- Every panel conforms to the `@casehub/ui` `Component` interface: `{ type, id, props, slots, items, style, access }`
+- Panels accept `configure(props)` — the method the `@casehub/ui` renderer will call
+- Shadow DOM encapsulation ensures panels can't leak styles or state; CSS custom properties on `:root` provide theming
+- The `DebateEventBus` is shared infrastructure — not shell-owned. Panels subscribe orthogonally; the shell controls connect/disconnect.
+- When `@casehub/ui` extracts, migration is a dependency swap — panels don't change, the shell is replaced
+- Claudony and all other CaseHub apps will adopt the same Web Component panel model
 
 **Claudony repo:** `~/claude/claudony/` (standalone tier peer — see Peer Repos table)
 

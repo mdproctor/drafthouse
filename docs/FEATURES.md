@@ -16,14 +16,18 @@ Planned and completed features for DraftHouse.
 - [x] Quarkus backend (FileResource, WatchResource, UiResource, CritiqueResource stub)
 - [x] `java-server.js` process manager with crash recovery
 - [x] Playwright E2E tests: happy path (9) + regression (4) + swap panels (9) + nav (7) + diff summary (8) + word diff (11) = 48 total, 46 passing, 2 intentionally skipped
-- [x] Phase 2 critique panel placeholder (layout ready, content empty)
+- [x] ~~Phase 2 critique panel placeholder~~ — superseded by `<drafthouse-debate>` Web Component (#51)
 
 ## Done — recent
 
 - [x] **Swap panels (A↔B)** — ⇄ button in topbar swaps paths, content, and labels atomically; disabled until both panels loaded
 - [x] **Next/prev diff navigation** — ↑↓ topbar buttons + `n`/`p` keyboard; `N/M` counter; viewport-recalibrating nav; minimap click fixed to scroll both panels
 - [x] **Diff summary** — `~N −N +N` topbar label shows modified/deleted/inserted block counts; CSS hover tooltip explains symbols
-- [x] **Word-level diff** — changed words highlighted within mod blocks via DOM-walking LCS diff; preserves inline formatting (bold, italic, code, links); bug fix: `annotateRendered` now correctly tags paragraph elements (marked v9 paragraphs have `rawLines=0`, fixed via `endForCheck = Math.max(tokenEnd, line+1)`)
+- [x] **Word-level diff** — changed words highlighted within mod blocks via DOM-walking LCS diff; preserves inline formatting (bold, italic, code, links)
+- [x] **Web Component panel architecture** (#51) — decomposed monolithic index.html into Shadow DOM Web Components (`<drafthouse-diff>`, `<drafthouse-debate>`, `<drafthouse-review-tracker>`) with PanelRegistry and DebateEventBus. Targets `@casehub/ui` Component model.
+- [x] **Debate event rendering** (#51) — SSE debate events rendered as conversation feed grouped by round, with visual treatment per EntryType (colour-coded borders, priority badges, scope tags)
+- [x] **Review point tracker** (#51) — status-derived checklist with progress bar, agent trail, strikethrough on AGREED/DECLINED, show/hide resolved filter
+- [x] **Workspace shell** (#51) — fixed-slot layout with panel toggles, session discovery polling, cross-panel point-selected event routing
 
 ## Planned
 
