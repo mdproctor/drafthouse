@@ -7,8 +7,11 @@ Covers issue #51. Designs DraftHouse's transition from a monolithic diff viewer 
 - **Full `@casehub/ui` `Component` model from day one** (Approach A) — panels are describable as `Component` nodes `{ type, id, props, slots, items, style, access }`. Web Components accept props via a `configure()` method that the `@casehub/ui` renderer will call. Migration to `@casehub/ui` becomes a dependency swap, not a rewrite.
 - **Fixed-slot layout** (Approach A for layout) — named regions with show/hide and draggable dividers. The workspace shell is explicitly temporary — replaced by `@casehub/ui` layout primitives (`split()`, `grid()`) when they ship.
 - **Review tracker derives status from the SSE stream** — no new backend state. The tracker maps `DebateStreamEntry.entryType` per `pointId` to `ReviewStatus` display values. This is a simple status map, not a replication of the server-side `DebateChannelProjection` fold.
-- **Shared SSE connection via DebateEventBus** — one `EventSource` per session, multiple panel consumers. Panels subscribe to the bus, not to the endpoint directly.
+- **Shared SSE connection via DebateEventBus** — one `EventSource` per session, multiple panel consumers. Shell owns connect/disconnect; panels subscribe/unsubscribe orthogonally.
 - **Cross-panel coordination via DOM events** — panels emit `CustomEvent`s, the shell routes them. No direct coupling between panels.
+
+**Prerequisites:**
+- **DECLINED fold fix** — `DebateChannelProjection.apply()` currently has `case DECLINED -> state;` (no-op). The spec's status derivation maps DECLINED → `ReviewStatus.DECLINED`. This requires a prerequisite commit: `case DECLINED -> appendToPoint(state, message, meta, EntryType.DECLINED, ReviewStatus.DECLINED);` — same pattern as AGREE/DISPUTE/COUNTER/QUALIFY. Without this, the client tracker and `get_debate_summary` MCP tool will show different statuses for the same point.
 
 **Platform context:**
 - All CaseHub frontend apps (DraftHouse, Claudony, Devtown, AML, Clinical, Life) will adopt this Web Component model. DraftHouse is the first mover.
@@ -53,7 +56,7 @@ Covers issue #51. Designs DraftHouse's transition from a monolithic diff viewer 
   - MCP tools                    (debate + review session lifecycle)
 ```
 
-Each panel is a Web Component with Shadow DOM encapsulation. The workspace shell manages layout and cross-panel event routing. The `DebateEventBus` manages the shared SSE connection. No new backend endpoints — all data flows exist from #50. `UiResource` requires a minor modification to serve subdirectory files (see §7).
+Each panel is a Web Component with Shadow DOM encapsulation. The workspace shell manages layout and cross-panel event routing. The `DebateEventBus` manages the shared SSE connection. No new backend endpoints — all data flows exist from #50. `UiResource` requires a minor modification to serve subdirectory files (see §8).
 
 The existing `index.html` (~770 lines) is decomposed: diff logic moves into `<drafthouse-diff>`, debate rendering into `<drafthouse-debate>`, review tracking into `<drafthouse-review-tracker>`, and the shell becomes a thin orchestrator.
 
@@ -106,9 +109,11 @@ Every DraftHouse Web Component implements:
 | Method | Purpose |
 |---|---|
 | `constructor()` | `attachShadow({ mode: 'open' })`, initial DOM structure |
-| `configure(props)` | Accept `Component.props`, (re)connect data sources |
-| `connectedCallback()` | Start rendering, connect to DebateEventBus or fetch data |
-| `disconnectedCallback()` | Cleanup — unsubscribe from event bus, cancel timers |
+| `configure(props)` | Store props. May be called pre-connection (initial config) or post-connection (re-configuration). Does NOT initiate work — that's `connectedCallback()`'s job. |
+| `connectedCallback()` | Read stored props, initiate work (subscribe to DebateEventBus, fetch data, render). |
+| `disconnectedCallback()` | Cleanup — unsubscribe from event bus, cancel timers. |
+
+**Calling order rule:** `configure(props)` stores props only. `connectedCallback()` reads stored props and initiates work. The shell calls `configure()` before inserting the element into the DOM, so `configure()` always runs before `connectedCallback()`. If `configure()` is called again post-connection (e.g., session change), the panel re-initialises with the new props.
 
 ### 2c. Component type metadata
 
@@ -131,7 +136,7 @@ Global singleton, ES module export. Both catalogues component types (declarative
 ```javascript
 // panel-registry.js
 class PanelRegistry {
-  register(metadata)                     // add a component type + its class
+  register(metadata)                     // add a component type + its class; calls customElements.define() internally
   get(type) → ComponentTypeMetadata      // look up metadata by type string
   create(type, props) → HTMLElement      // factory: createElement + configure(props)
   types() → string[]                     // list all registered type strings
@@ -160,9 +165,60 @@ registry.register({
 
 `register()` calls `customElements.define(metadata.type, metadata.component)` internally. `create(type, props)` calls `document.createElement(type)` then `el.configure(props)`.
 
-### 2e. Theming across Shadow DOM
+### 2e. Style decomposition
 
-DraftHouse's existing CSS custom properties (`--bg`, `--chrome`, `--border`, `--ink`, `--sepia`, `--muted`, `--accent`, etc.) are defined on `:root`. Shadow DOM inherits CSS custom properties from the host document — panels use `var(--bg)` and get the Archive Room aesthetic without style injection.
+CSS custom properties (`--bg`, `--chrome`, `--border`, etc.) inherit through Shadow DOM. Class-based structural styles do NOT. The current `styles.css` (~210 lines) must be decomposed:
+
+**Stays in `styles.css` (shell light DOM):**
+- `:root` design tokens (lines 1–16) — inherited by all shadow roots
+- `*` reset, `body` layout (lines 18–23)
+- `#topbar`, `#logo`, `.sep`, `#topbar-spacer` (lines 25–38)
+- `button` styles (lines 40–48) — shell topbar buttons
+- `#main`, `#panels` layout (lines 50–52)
+- `#diff-summary::after` tooltip (lines 164–183) — topbar element
+- `#diff-legend`, `.legend-swatch`, `.legend-label` (lines 189–207) — topbar element
+
+**Moves into `<drafthouse-diff>` shadow root:**
+- `.panel`, `.panel-header`, `.panel-label`, `.panel-path` (lines 54–81)
+- `.panel-body`, `.panel-empty`, `.panel-body.drag-over` (lines 83–100)
+- `#divider`, `#diff-map` (lines 57–62)
+- `.md-wrap` and all children (lines 102–130)
+- `.diff-del`, `.diff-ins` (lines 132–142)
+- `mark.diff-word-a`, `mark.diff-word-b` (lines 185–187)
+
+**Removed (replaced by workspace shell):**
+- `#critique-panel`, `#critique-hdr`, `#critique-body` (lines 144–162) — the old critique stub is superseded by the debate panel
+
+**New per-panel styles (authored in shadow root):**
+- `<drafthouse-debate>` — conversation feed cards, entry type colours, round grouping
+- `<drafthouse-review-tracker>` — status icons, progress bar, strikethrough, filter toggles
+
+**Mechanism:** `adoptedStyleSheets`. Each panel module creates a `CSSStyleSheet`, populates it via `.replaceSync()`, and assigns it to the shadow root's `adoptedStyleSheets`. No file fetch, no FOUC, module-scoped. Common styles shared across panels (e.g., markdown rendering) can use a shared `CSSStyleSheet` object imported from a common module.
+
+```javascript
+// In drafthouse-diff.js
+const diffStyles = new CSSStyleSheet();
+diffStyles.replaceSync(`
+  .panel { flex: 1; display: flex; flex-direction: column; ... }
+  .md-wrap { padding: 28px 36px; max-width: 820px; ... }
+  .diff-del { border-top: 2px solid #ef4444; ... }
+  /* ... all panel-internal structural styles ... */
+`);
+
+class DraftHouseDiff extends HTMLElement {
+  constructor() {
+    super();
+    const shadow = this.attachShadow({ mode: 'open' });
+    shadow.adoptedStyleSheets = [diffStyles];
+  }
+}
+```
+
+Browser support: Chrome 73+, Firefox 101+, Safari 16.4+ — covers all target environments.
+
+### 2f. Theming across Shadow DOM
+
+DraftHouse's CSS custom properties on `:root` are inherited by all shadow roots. Panels use `var(--bg)`, `var(--chrome)`, etc. and get the Archive Room aesthetic without style injection.
 
 When `@casehub/ui` ships its theming system, the property names swap (mechanical find-replace).
 
@@ -175,9 +231,10 @@ A shared ES module that manages the `EventSource` connection. Panels subscribe t
 ```javascript
 // debate-event-bus.js
 class DebateEventBus {
-  connect(debateSessionId)              // opens EventSource if not already connected
-  disconnect()                          // ref-counted close (closes when last subscriber leaves)
-  subscribe(callback) → unsubscribe    // add a consumer; returns cleanup function
+  connect(debateSessionId)              // opens EventSource (explicit, called by shell)
+  disconnect()                          // closes EventSource (explicit, called by shell)
+  subscribe({ onEntries, onReconnect }) → unsubscribe
+                                        // add a consumer; returns cleanup function
   get connected() → boolean            // current connection state
   get sessionId() → string | null      // current session
 }
@@ -185,21 +242,24 @@ class DebateEventBus {
 export const debateEventBus = new DebateEventBus();
 ```
 
-**Lifecycle:**
-1. Shell calls `debateEventBus.connect(id)` when a debate session is active
-2. Panels call `debateEventBus.subscribe(callback)` in `connectedCallback()`
+**Lifecycle — explicit connect/disconnect, orthogonal subscribe/unsubscribe:**
+1. Shell calls `debateEventBus.connect(id)` when a debate session is discovered
+2. Panels call `debateEventBus.subscribe({ onEntries, onReconnect })` in `connectedCallback()`
 3. Panels call the returned `unsubscribe` in `disconnectedCallback()`
-4. When the last subscriber unsubscribes, the EventSource closes automatically
+4. Shell calls `debateEventBus.disconnect()` when the session ends or the user navigates away
+5. Connection and subscription are orthogonal — the connection stays open regardless of subscriber count; subscribers can join/leave without affecting the connection
 
-**Event format:** Callbacks receive parsed `DebateStreamEntry` arrays (the bus does `JSON.parse` once, all subscribers get the same objects). Heartbeats are filtered out by the bus.
+**Callback contract (type-safe, separate channels):**
+- `onEntries(entries: DebateStreamEntry[])` — called with each batch of parsed entries. Heartbeats are filtered out by the bus.
+- `onReconnect()` — called when the EventSource reconnects. Subscribers should clear accumulated state and rebuild from the catch-up payload that follows.
 
-**Reconnection:** The browser `EventSource` auto-reconnects on network errors. On reconnect, the bus does a full catch-up (same as initial connection) — subscribers that accumulated partial state should clear on reconnect. The bus emits a synthetic `{ type: 'reconnect' }` event to signal this.
+**Reconnection:** The browser `EventSource` auto-reconnects on network errors. On reconnect, the bus calls `onReconnect()` on all subscribers, then delivers the catch-up payload via `onEntries()`.
 
 ---
 
 ## 4. Diff Panel (`<drafthouse-diff>`)
 
-Extraction of existing diff logic from `index.html` into a Web Component. No new functionality — repackaging for modularity.
+Extraction of existing diff logic from `index.html` into a Web Component, plus one new method (`scrollToLocation()`) for cross-panel coordination.
 
 ### What moves into the panel
 
@@ -233,7 +293,18 @@ Extraction of existing diff logic from `index.html` into a Web Component. No new
 | `nextDiff()` | Navigate to next diff chunk |
 | `prevDiff()` | Navigate to previous diff chunk |
 | `getDiffSummary()` | Returns `{ modified, deleted, inserted, currentIdx, totalDiffs }` |
-| `scrollToLocation(location)` | Scroll to a `§`-reference (heading match in rendered content) |
+| `scrollToLocation(location)` | **New.** Scroll to a `§`-reference by matching against rendered headings. See below. |
+
+### scrollToLocation() — new logic
+
+This method does not exist in the current `index.html`. It parses `§`-references (e.g., `"§3.2"`, `"§Error Handling"`) from review point `location` fields and scrolls to the matching heading in the rendered markdown.
+
+**Matching rules:**
+1. **Numeric reference** (`§3.2`) — match the Nth heading at the specified depth (heading 3, subheading 2)
+2. **Text reference** (`§Error Handling`) — case-insensitive substring match against heading text content
+3. **No match** — no-op (no scroll, no error)
+
+Scrolls both panels (A and B) to the matching heading, using the existing scroll anchor infrastructure.
 
 ### Events emitted
 
@@ -256,17 +327,16 @@ Renders the SSE debate event stream from #50. Consumes events from the `DebateEv
 
 ```javascript
 {
-  debateSessionId: string,   // UUID — the bus uses this to connect
+  debateSessionId: string,   // UUID — passed to DebateEventBus by the shell
 }
 ```
 
 ### Data flow
 
-1. On `connectedCallback()`, subscribes to `debateEventBus`
-2. Receives `DebateStreamEntry[]` arrays via the subscription callback
-3. Accumulates entries and renders as a conversation feed grouped by round
-4. On reconnect event, clears accumulated state and rebuilds from the catch-up payload
-5. On `disconnectedCallback()`, unsubscribes
+1. On `connectedCallback()`, subscribes to `debateEventBus` via `subscribe({ onEntries, onReconnect })`
+2. `onEntries` receives `DebateStreamEntry[]` arrays — accumulates and renders as a conversation feed grouped by round
+3. `onReconnect` clears accumulated state; the catch-up payload that follows rebuilds it
+4. On `disconnectedCallback()`, calls the `unsubscribe` function
 
 ### Visual treatment per entry type
 
@@ -315,7 +385,7 @@ A structured view of review points with status lifecycle and resolution tracking
 
 ### Data flow
 
-Same as debate panel — subscribes to `DebateEventBus`, accumulates entries, clears on reconnect. The difference is presentation: instead of a conversation feed, the tracker extracts review points and computes a status summary.
+Same as debate panel — subscribes to `DebateEventBus` via `subscribe({ onEntries, onReconnect })`, accumulates entries, clears on reconnect. The difference is presentation: instead of a conversation feed, the tracker extracts review points and computes a status summary.
 
 ### Client-side status derivation
 
@@ -351,6 +421,8 @@ Status is derived from `DebateStreamEntry` fields (already parsed by the server 
 | `QUALIFY` | `ACTIVE` | `⟳` | Blue accent (distinguish from COUNTER) |
 | `FLAG_HUMAN` | `PENDING_HUMAN` | `⚑` | Attention styling |
 | `DECLINED` | `DECLINED` | `✓` | Grey, content strikethrough |
+
+**Prerequisite:** The DECLINED mapping requires the server-side fold fix noted in the Prerequisites section. Without it, the server's `get_debate_summary` and the client tracker diverge.
 
 Entry types that do not affect point status (no `pointId` or infrastructure): `MEMO`, `RESTART_CONTEXT`. Sub-task entries (`SUB_TASK_REQUEST`, `SUB_TASK_FINDING`, `SUB_TASK_ERROR`) carry a `pointId` but do not change the point's `ReviewStatus` — they are informational provenance, not negotiation moves.
 
@@ -446,7 +518,7 @@ The temporary shell encodes this tree in DOM. The `@casehub/ui` renderer encodes
 | Responsibility | Detail |
 |---|---|
 | Panel lifecycle | Create via `registry.create(type, props)`, insert into slots, destroy |
-| DebateEventBus | Calls `debateEventBus.connect(id)` when a session is active |
+| DebateEventBus | Calls `debateEventBus.connect(id)` / `disconnect()` |
 | Cross-panel events | Listen for `point-selected` on any panel, forward to all others; forward `location` to diff panel's `scrollToLocation()` |
 | Topbar | Diff controls call methods on `<drafthouse-diff>`; panel toggles show/hide slots |
 | URL state | `?a=path&b=path&debate=sessionId` — shell reads query params and configures panels on load |
@@ -457,7 +529,7 @@ The temporary shell encodes this tree in DOM. The `@casehub/ui` renderer encodes
 - Panel-internal rendering (each Web Component's job)
 - State management (panels manage their own state)
 - Backend communication (panels connect via DebateEventBus; diff panel fetches files directly)
-- SSE connection management (DebateEventBus owns this)
+- SSE connection management (DebateEventBus owns this; shell calls connect/disconnect)
 
 ### 7a. Session discovery lifecycle
 
@@ -487,20 +559,18 @@ All UI files live at the project root (served by `UiResource` via `-Dui.dir`):
 
 ```
 index.html                      → workspace shell (~250 lines)
-styles.css                      → shell + shared CSS custom properties (`:root` tokens)
+styles.css                      → shell + :root design tokens only
 panels/
   panel-registry.js             → PanelRegistry class + singleton export
   debate-event-bus.js           → DebateEventBus class + singleton export
-  drafthouse-diff.js            → <drafthouse-diff> Web Component
-  drafthouse-debate.js          → <drafthouse-debate> Web Component
-  drafthouse-review-tracker.js  → <drafthouse-review-tracker> Web Component
+  drafthouse-diff.js            → <drafthouse-diff> Web Component (includes structural styles via adoptedStyleSheets)
+  drafthouse-debate.js          → <drafthouse-debate> Web Component (includes own styles)
+  drafthouse-review-tracker.js  → <drafthouse-review-tracker> Web Component (includes own styles)
 ```
 
-Each panel file is a self-contained ES module loaded via `<script type="module">`. No bundler. The shell `index.html` imports them:
+Each panel file is a self-contained ES module. The shell `index.html` loads only the panel files — they import their dependencies (`panel-registry.js`, `debate-event-bus.js`) via ES module `import` statements. No bare `<script>` tags for shared modules; ES module import ordering handles dependencies.
 
 ```html
-<script type="module" src="panels/panel-registry.js"></script>
-<script type="module" src="panels/debate-event-bus.js"></script>
 <script type="module" src="panels/drafthouse-diff.js"></script>
 <script type="module" src="panels/drafthouse-debate.js"></script>
 <script type="module" src="panels/drafthouse-review-tracker.js"></script>
@@ -534,7 +604,11 @@ DraftHouse supports three phases of document authoring/review. This section docu
 
 ### Shadow DOM migration approach
 
-All existing E2E tests use selectors that don't penetrate Shadow DOM (`#render-a`, `#body-a`, `[data-diff-chunk]`, `#topbar`, `#btn-sync`, `#btn-swap`). All panels use `attachShadow({ mode: 'open' })` — Playwright can query open Shadow DOM with the `>>>` piercing combinator.
+Existing E2E tests use selectors that fall into two categories:
+
+**Panel-internal selectors (need Shadow DOM migration):** `#render-a`, `#render-b`, `#body-a`, `#body-b`, `[data-diff-chunk]`, `.diff-del`, `.diff-ins`, `.diff-word-a`, `.diff-word-b`, `#label-a`, `#label-b`. These will be inside `<drafthouse-diff>`'s shadow root.
+
+**Shell topbar selectors (no migration needed):** `#topbar`, `#btn-sync`, `#btn-swap`, `#btn-prev`, `#btn-next`, `#diff-counter`, `#diff-summary`, `#diff-legend`. These remain in shell light DOM.
 
 **Migration approach:**
 - Add a `shadowLocator(page, hostType, selector)` helper to `PlaywrightFixtures`:
@@ -543,37 +617,36 @@ All existing E2E tests use selectors that don't penetrate Shadow DOM (`#render-a
       return page.locator(hostType).locator(">>> " + selector);
   }
   ```
-- Selectors inside the diff panel migrate: `page.locator("#render-a")` → `shadowLocator(page, "drafthouse-diff", "#render-a")`
-- Topbar selectors (`#topbar`, `#btn-sync`, `#btn-swap`) remain unchanged — topbar is shell DOM (light DOM), not inside any Shadow DOM
+- Panel-internal selectors migrate: `page.locator("#render-a")` → `shadowLocator(page, "drafthouse-diff", "#render-a")`
 - `PlaywrightFixtures.waitForRender()` migrates: `page.waitForSelector("[data-diff-chunk]")` → `page.locator("drafthouse-diff").locator(">>> [data-diff-chunk]").first().waitFor()`
 
-**Affected test classes (all 9 E2E tests):**
-- `HappyPathE2ETest` — `#render-a`, `#render-b` selectors
+**Affected test classes (need Shadow DOM selector migration):**
+- `HappyPathE2ETest` — `#render-a`, `#render-b`
 - `DiffRenderingE2ETest` — `[data-diff-chunk]`, `.diff-del`, `.diff-ins`
 - `WordDiffE2ETest` — `.diff-word-a`, `.diff-word-b`
 - `ScrollSyncE2ETest` — `#body-a`, `#body-b` scroll state
 - `SwapPanelsE2ETest` — `#render-a`, `#render-b`, `#label-a`, `#label-b`
-- `NavigationE2ETest` — `#btn-prev`, `#btn-next`, `#diff-counter`
-- `DiffSummaryE2ETest` — `#diff-summary`
-- `DiffLegendE2ETest` — `#diff-legend`
 - `SubAgentE2ETest` — may need debate panel selectors (new)
 
-The migration is mechanical — same selectors, wrapped in `shadowLocator()`.
+**Unaffected test classes (topbar selectors only, no migration):**
+- `NavigationE2ETest` — `#btn-prev`, `#btn-next`, `#diff-counter` (topbar)
+- `DiffSummaryE2ETest` — `#diff-summary` (topbar)
+- `DiffLegendE2ETest` — `#diff-legend` (topbar)
 
 ### Panel contract tests
 
 - Each panel: `customElements.get()` returns the constructor after registration
-- `configure(props)` sets internal state correctly
-- `connectedCallback()` / `disconnectedCallback()` lifecycle (subscribes/unsubscribes from DebateEventBus)
+- `configure(props)` stores props; `connectedCallback()` reads them
+- `disconnectedCallback()` unsubscribes from DebateEventBus
 - Shadow DOM renders content (query `shadowRoot`)
 
 ### DebateEventBus tests
 
 - Single EventSource per session (connect twice with same ID → one connection)
-- Multiple subscribers receive the same events
-- Unsubscribe removes the subscriber; last unsubscribe closes the EventSource
-- Reconnect event clears subscriber state
-- Heartbeats filtered out
+- Multiple subscribers receive the same events via `onEntries`
+- `onReconnect` called on all subscribers when EventSource reconnects
+- Unsubscribe removes the subscriber; disconnect closes the EventSource
+- Heartbeats filtered out before `onEntries` delivery
 
 ### Diff panel
 
@@ -581,11 +654,15 @@ The migration is mechanical — same selectors, wrapped in `shadowLocator()`.
 - Diff navigation methods (`nextDiff()`, `prevDiff()`) work via public API
 - `diff-updated` event fires with correct chunk data
 - `selection-changed` event fires on text selection
-- `scrollToLocation(location)` scrolls to matching heading
+- `scrollToLocation()`:
+  - Numeric reference (`§3.2`) scrolls to heading 3, subheading 2
+  - Text reference (`§Error Handling`) scrolls to matching heading (case-insensitive)
+  - No match → no-op (no scroll, no error)
 
 ### Debate panel
 
-- Receives events from DebateEventBus subscription (not own EventSource)
+- Receives events from DebateEventBus `onEntries` callback (not own EventSource)
+- Clears state on `onReconnect`
 - `DebateStreamEntry` events render correct visual treatment per `EntryType`
 - SUB_TASK entries show their related `pointId`
 - Round grouping renders correctly
@@ -594,7 +671,7 @@ The migration is mechanical — same selectors, wrapped in `shadowLocator()`.
 
 ### Review tracker
 
-- Status derivation: correct `ReviewStatus` for each `EntryType` (aligned with Java `DebateChannelProjection` mappings)
+- Status derivation: correct `ReviewStatus` for each `EntryType` (aligned with Java `DebateChannelProjection` mappings, including DECLINED after prerequisite fix)
 - Progress bar: correct count of resolved vs total
 - Sorting: open first, then ACTIVE, then AGREED/DECLINED
 - Filter toggles: show/hide resolved works
