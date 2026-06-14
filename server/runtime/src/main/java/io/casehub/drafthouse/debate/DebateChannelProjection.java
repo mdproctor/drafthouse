@@ -53,7 +53,7 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
             case DISPUTE          -> handleDispute(state, message, meta);
             case QUALIFY          -> handleQualify(state, message, meta);
             case FLAG_HUMAN       -> handleFlagHuman(state, message, meta);
-            case DECLINED         -> state;
+            case DECLINED         -> appendToPoint(state, message, meta, EntryType.DECLINED, ReviewStatus.DECLINED);
             case MEMO             -> handleMemo(state, message, meta);
             case SUB_TASK_REQUEST -> handleSubTaskRequest(state, message, meta);
             case SUB_TASK_FINDING -> handleSubTaskFinding(state, message, meta);
