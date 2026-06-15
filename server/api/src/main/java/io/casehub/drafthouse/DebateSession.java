@@ -24,6 +24,7 @@ public class DebateSession {
     private final String channelName;
     private final ConcurrentHashMap<AgentType, String> participants = new ConcurrentHashMap<>();
     private final String specPath;
+    private final ContextTracker contextTracker = new ContextTracker();
 
     public DebateSession(final UUID channelId, final String debateSessionId,
                          final String channelName, final String specPath) {
@@ -69,4 +70,5 @@ public class DebateSession {
     public String debateSessionId() { return debateSessionId; }
     public String channelName()     { return channelName; }
     public String specPath()        { return specPath; }
+    public ContextTracker contextTracker() { return contextTracker; }
 }

@@ -126,4 +126,25 @@ class DebateSessionTest {
         assertThat(session.channelName()).isEqualTo(NAME);
         assertThat(session.specPath()).isEqualTo("my-spec.md");
     }
+
+    // ── contextTracker() ──────────────────────────────────────────────────
+
+    @Test
+    void contextTracker_isInitializedOnConstruction() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, "spec.md");
+        assertThat(session.contextTracker()).isNotNull();
+        var snap = session.contextTracker().snapshot(800_000, 80.0);
+        assertThat(snap.serverContributionChars()).isZero();
+        assertThat(snap.messageCount()).isZero();
+    }
+
+    @Test
+    void contextTracker_accumulatesAcrossMultipleCalls() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, "spec.md");
+        session.contextTracker().addContribution(1000);
+        session.contextTracker().addContribution(2000);
+        var snap = session.contextTracker().snapshot(800_000, 80.0);
+        assertThat(snap.serverContributionChars()).isEqualTo(3000);
+        assertThat(snap.messageCount()).isEqualTo(2);
+    }
 }

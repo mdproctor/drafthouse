@@ -15,6 +15,8 @@ public interface DraftHouseConfig {
 
     Storage storage();
 
+    Context context();
+
     interface Reviewer {
 
         String personality();
@@ -28,5 +30,14 @@ public interface DraftHouseConfig {
         /** Storage root for review session files. Defaults to ~/.drafthouse/reviews. */
         @WithDefault("${user.home}/.drafthouse/reviews")
         Path root();
+    }
+
+    interface Context {
+
+        @WithDefault("800000")
+        long windowSizeChars();
+
+        @WithDefault("80")
+        double thresholdPercent();
     }
 }

@@ -1,5 +1,7 @@
 package io.casehub.drafthouse;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -53,6 +55,8 @@ public class DebateMcpTools {
     @Inject ProjectionService projectionService;
     @Inject DebateSessionRegistry registry;
     @Inject DebateChannelProjection debateProjection;
+    @Inject DraftHouseConfig config;
+    @Inject DebateEventResource debateEventResource;
 
     @Tool(name = "start_debate",
           description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, and specPath.")
@@ -79,6 +83,13 @@ public class DebateMcpTools {
             sender(session, AgentType.IMP);
 
             channelGateway.initChannel(channel.id, new ChannelRef(channel.id, resolvedName));
+
+            try {
+                long specSize = Files.size(Path.of(specPath));
+                session.contextTracker().addInitialContribution(specSize);
+            } catch (Exception e) {
+                LOG.fine("Could not size spec file for context tracking: " + e.getMessage());
+            }
 
             return "{\"debateSessionId\":\"" + debateSessionId + "\",\"channel\":\"" + resolvedName
                     + "\",\"specPath\":" + jsonString(specPath) + "}";
@@ -135,6 +146,7 @@ public class DebateMcpTools {
                 .actorType(ActorType.AGENT)
                 .build());
 
+        trackAndPush(session, encodedContent.length());
         return "{\"pointId\":\"" + pointId + "\",\"status\":\"dispatched\"}";
     }
 
@@ -180,6 +192,7 @@ public class DebateMcpTools {
                 .actorType(ActorType.AGENT)
                 .build());
 
+        trackAndPush(session, encodedContent.length());
         return "{\"status\":\"dispatched\"}";
     }
 
@@ -215,6 +228,7 @@ public class DebateMcpTools {
                 .actorType(ActorType.AGENT)
                 .build());
 
+        trackAndPush(session, encodedContent.length());
         return "{\"status\":\"dispatched\"}";
     }
 
@@ -292,6 +306,7 @@ public class DebateMcpTools {
                     .content(encoded)
                     .actorType(ActorType.AGENT)
                     .build());
+            trackAndPush(session, encoded.length());
             return "{\"status\":\"dispatched\"}";
         } catch (Exception e) {
             LOG.warning("post_memo failed: " + e.getMessage());
@@ -333,6 +348,7 @@ public class DebateMcpTools {
                     .correlationId(subTaskId)
                     .actorType(ActorType.AGENT)
                     .build());
+            trackAndPush(session, encoded.length());
             return "{\"subTaskId\":\"" + subTaskId + "\",\"status\":\"dispatched\"}";
         } catch (Exception e) {
             LOG.warning("request_subagent failed: " + e.getMessage());
@@ -419,6 +435,12 @@ public class DebateMcpTools {
                     .actorType(ActorType.AGENT)
                     .build());
 
+            newSession.contextTracker().addInitialContribution(markerContent.length());
+            debateEventResource.pushContextSnapshot(newSession.channelId(),
+                    newSession.contextTracker().snapshot(
+                            config.context().windowSizeChars(),
+                            config.context().thresholdPercent()));
+
             String roundRange = round == 1 ? "1" : "1–" + round;
             String findingNote = findingsInOriginalOnly > 0
                     ? " " + findingsInOriginalOnly + " finding(s) from later rounds remain in the original session only."
@@ -450,7 +472,48 @@ public class DebateMcpTools {
         }
     }
 
+    @Tool(name = "report_context",
+          description = "Report current context window usage for a debate session. "
+                      + "Call periodically (e.g. every 2-3 rounds) to improve the accuracy "
+                      + "of the context meter. Returns advisory warning when threshold exceeded.")
+    public String reportContext(
+            @ToolArg(description = "Debate session ID") String debateSessionId,
+            @ToolArg(description = "Context usage as percentage (0-100)") double usagePercent) {
+        try {
+            DebateSession session = resolveSession(debateSessionId);
+            if (session == null) return sessionError(debateSessionId);
+
+            session.contextTracker().reportAgentUsage(usagePercent);
+            ContextSnapshot snap = session.contextTracker().snapshot(
+                    config.context().windowSizeChars(),
+                    config.context().thresholdPercent());
+            debateEventResource.pushContextSnapshot(session.channelId(), snap);
+
+            if (snap.thresholdExceeded()) {
+                return "{\"status\":\"warning\",\"effectivePercent\":" + snap.effectivePercent()
+                        + ",\"message\":\"Context usage at " + String.format("%.1f", snap.effectivePercent())
+                        + "% — consider committing state and restarting session\"}";
+            }
+            return "{\"status\":\"ok\",\"effectivePercent\":" + snap.effectivePercent() + "}";
+        } catch (Exception e) {
+            LOG.warning("report_context failed: " + e.getMessage());
+            return "error: " + e.getMessage();
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
+
+    private void trackAndPush(DebateSession session, long contentChars) {
+        session.contextTracker().addContribution(contentChars);
+        try {
+            debateEventResource.pushContextSnapshot(session.channelId(),
+                    session.contextTracker().snapshot(
+                            config.context().windowSizeChars(),
+                            config.context().thresholdPercent()));
+        } catch (Exception e) {
+            LOG.warning("Context push failed for " + session.debateSessionId() + ": " + e.getMessage());
+        }
+    }
 
     /** Renders a bounded state, returning a custom message when the state has no debate content. */
     private String renderBounded(ReviewState state, int round) {

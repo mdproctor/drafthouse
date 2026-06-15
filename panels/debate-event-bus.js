@@ -21,10 +21,18 @@ export class DebateEventBus {
       let data;
       try { data = JSON.parse(e.data); } catch { return; }
       if (data.type === 'heartbeat') return;
-      const entries = Array.isArray(data) ? data : [data];
-      for (const sub of this.#subscribers) {
-        try { sub.onEntries(entries); } catch (err) {
-          console.error('DebateEventBus subscriber error:', err);
+
+      if (Array.isArray(data)) {
+        for (const sub of this.#subscribers) {
+          try { sub.onEntries(data); } catch (err) {
+            console.error('DebateEventBus subscriber error:', err);
+          }
+        }
+      } else if (data.type) {
+        for (const sub of this.#subscribers) {
+          try { if (sub.onMeta) sub.onMeta(data); } catch (err) {
+            console.error('DebateEventBus onMeta error:', err);
+          }
         }
       }
     };
@@ -45,11 +53,11 @@ export class DebateEventBus {
     this.#sessionId = null;
   }
 
-  subscribe({ onEntries, onReconnect }) {
+  subscribe({ onEntries, onReconnect, onMeta }) {
     if (typeof onEntries !== 'function') {
       throw new Error('subscribe() requires onEntries callback');
     }
-    const sub = { onEntries, onReconnect: onReconnect || null };
+    const sub = { onEntries, onReconnect: onReconnect || null, onMeta: onMeta || null };
     this.#subscribers.add(sub);
     return () => { this.#subscribers.delete(sub); };
   }

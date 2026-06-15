@@ -94,6 +94,7 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `panels/drafthouse-diff.js` | `<drafthouse-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
 | `panels/drafthouse-debate.js` | `<drafthouse-debate>` — SSE debate event conversation feed |
 | `panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist |
+| `panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (SSE-driven, onMeta subscriber) |
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
 | `server/api/` | Pure Java domain model — no Quarkus, no Qhorus; includes `debate/` package |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
@@ -119,7 +120,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/watch?path=   ← SSE file-change stream
   ├── GET /                  ← serve index.html (from -Dui.dir)
   ├── MCP tools (review)     ← start_review, update_selection, query_review, end_review
-  ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate
+  ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate, report_context
   ├── GET /api/debate/{id}/events  ← SSE debate event stream
   └── GET /api/debate/sessions     ← active debate session list
 
@@ -136,8 +137,10 @@ Browser UI (Web Component panels + workspace shell)
   │   └── Scroll sync via anchors  ← heading-based anchor matching
   ├── <drafthouse-debate>          ← debate feed (Shadow DOM Web Component)
   │   └── DebateEventBus           ← SSE debate events, grouped by round
-  └── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
-      └── DebateEventBus           ← derives status per pointId from event stream
+  ├── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
+  │   └── DebateEventBus           ← derives status per pointId from event stream
+  └── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
+      └── DebateEventBus (onMeta)  ← context-usage metadata events
 ```
 
 ## Architectural Direction

@@ -27,6 +27,7 @@
 <script type="module" src="panels/drafthouse-diff.js"></script>
 <script type="module" src="panels/drafthouse-debate.js"></script>
 <script type="module" src="panels/drafthouse-review-tracker.js"></script>
+<script type="module" src="panels/drafthouse-context-gauge.js"></script>
 </head>
 <body>
 
@@ -84,6 +85,9 @@ $('slot-right-top').appendChild(debatePanel);
 
 const reviewPanel = registry.create('drafthouse-review-tracker', {});
 $('slot-right-bottom').appendChild(reviewPanel);
+
+const contextGauge = registry.create('drafthouse-context-gauge', {});
+$('topbar').insertBefore(contextGauge, $('topbar-spacer'));
 
 // ── Topbar button wiring ────────────────────────────────────────────
 function updateSyncButton() {

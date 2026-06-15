@@ -44,6 +44,8 @@ class DebateMcpToolsTest {
     private ProjectionService projectionService;
     private DebateSessionRegistry registry;
     private DebateChannelProjection debateProjection;
+    private DraftHouseConfig config;
+    private DebateEventResource debateEventResource;
     private DebateMcpTools tools;
 
     private Channel stubChannel;
@@ -57,6 +59,13 @@ class DebateMcpToolsTest {
         projectionService = mock(ProjectionService.class);
         registry          = mock(DebateSessionRegistry.class);
         debateProjection  = mock(DebateChannelProjection.class);
+        config            = mock(DraftHouseConfig.class);
+        debateEventResource = mock(DebateEventResource.class);
+
+        DraftHouseConfig.Context contextConfig = mock(DraftHouseConfig.Context.class);
+        when(contextConfig.windowSizeChars()).thenReturn(800_000L);
+        when(contextConfig.thresholdPercent()).thenReturn(80.0);
+        when(config.context()).thenReturn(contextConfig);
 
         tools = new DebateMcpTools();
         tools.channelService    = channelService;
@@ -66,6 +75,8 @@ class DebateMcpToolsTest {
         tools.projectionService = projectionService;
         tools.registry          = registry;
         tools.debateProjection  = debateProjection;
+        tools.config            = config;
+        tools.debateEventResource = debateEventResource;
 
         stubChannel      = new Channel();
         stubChannel.id   = UUID.randomUUID();
@@ -678,6 +689,101 @@ class DebateMcpToolsTest {
         assertThat(result).contains("\"findingsPending\":1");
         assertThat(result).contains("\"findingsInOriginalOnly\":2");
         assertThat(result).doesNotContain("findingsIncluded");
+    }
+
+    // ── report_context ────────────────────────────────────────────────────────
+
+    @Test
+    void reportContext_validSession_returnsOk() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.reportContext(channelId.toString(), 42.0);
+
+        assertThat(result).contains("\"status\":\"ok\"");
+        assertThat(result).contains("\"effectivePercent\":42.0");
+    }
+
+    @Test
+    void reportContext_thresholdExceeded_returnsWarning() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.reportContext(channelId.toString(), 85.0);
+
+        assertThat(result).contains("\"status\":\"warning\"");
+        assertThat(result).contains("\"effectivePercent\":85.0");
+        assertThat(result).contains("consider committing state");
+    }
+
+    @Test
+    void reportContext_negativePercent_clampedToZero() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.reportContext(channelId.toString(), -5.0);
+
+        assertThat(result).contains("\"status\":\"ok\"");
+        assertThat(result).contains("\"effectivePercent\":0.0");
+    }
+
+    @Test
+    void reportContext_over100_accepted() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        String result = tools.reportContext(channelId.toString(), 120.0);
+
+        assertThat(result).contains("\"status\":\"warning\"");
+        assertThat(result).contains("\"effectivePercent\":120.0");
+    }
+
+    @Test
+    void reportContext_invalidSession_returnsError() {
+        when(registry.find(any(UUID.class))).thenReturn(Optional.empty());
+
+        String result = tools.reportContext(UUID.randomUUID().toString(), 50.0);
+
+        assertThat(result).startsWith("error:");
+    }
+
+    @Test
+    void reportContext_pushesSnapshotToEventResource() {
+        UUID channelId = stubChannel.id;
+        when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
+
+        tools.reportContext(channelId.toString(), 42.0);
+
+        verify(debateEventResource).pushContextSnapshot(eq(channelId), any(ContextSnapshot.class));
+    }
+
+    // ── context tracking at dispatch sites ────────────────────────────────────
+
+    @Test
+    void raisePoint_tracksContextContribution() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        tools.raisePoint(channelId.toString(), "REV", 1, "content", "P1", "ISOLATED", null);
+
+        assertThat(session.contextTracker().snapshot(800_000, 80.0).serverContributionChars()).isGreaterThan(0);
+        assertThat(session.contextTracker().snapshot(800_000, 80.0).messageCount()).isEqualTo(1);
+        verify(debateEventResource).pushContextSnapshot(eq(channelId), any(ContextSnapshot.class));
+    }
+
+    @Test
+    void respondTo_tracksContextContribution() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        Message stubMsg = new Message(); stubMsg.id = 1L;
+        when(messageService.findByCorrelationId(anyString())).thenReturn(Optional.of(stubMsg));
+
+        tools.respondTo(channelId.toString(), "IMP", 2, "pt-1", "agree", "Agreed.");
+
+        assertThat(session.contextTracker().snapshot(800_000, 80.0).serverContributionChars()).isGreaterThan(0);
+        verify(debateEventResource).pushContextSnapshot(eq(channelId), any(ContextSnapshot.class));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

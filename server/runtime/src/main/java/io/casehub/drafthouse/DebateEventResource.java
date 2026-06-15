@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 import jakarta.enterprise.context.ApplicationScoped;
@@ -29,9 +30,23 @@ public class DebateEventResource {
 
     @Inject DebateSessionRegistry registry;
     @Inject MessageService messageService;
+    @Inject DraftHouseConfig config;
     @Inject ObjectMapper mapper;
 
+    private final ConcurrentHashMap<UUID, String> pendingContextSnapshots = new ConcurrentHashMap<>();
+
     record SessionInfo(String debateSessionId, String channelName, String specPath) {}
+
+    public void pushContextSnapshot(UUID channelId, ContextSnapshot snapshot) {
+        try {
+            String json = serializeContextSnapshot(snapshot, false);
+            if (json != null) {
+                pendingContextSnapshots.put(channelId, json);
+            }
+        } catch (Exception e) {
+            LOG.warning("Failed to serialize context snapshot: " + e.getMessage());
+        }
+    }
 
     @GET
     @Path("/sessions")
@@ -61,6 +76,14 @@ public class DebateEventResource {
 
         AtomicLong lastSentId = new AtomicLong(0L);
 
+        Multi<String> initialContext = Multi.createFrom().item(
+                () -> serializeContextSnapshot(
+                        session.contextTracker().snapshot(
+                                config.context().windowSizeChars(),
+                                config.context().thresholdPercent()),
+                        true)
+        ).filter(Objects::nonNull);
+
         Multi<String> catchUp = Multi.createFrom().uni(
                 Uni.createFrom().item(() -> {
                     List<Message> messages = messageService.pollAfter(channelId, 0L, 500);
@@ -69,19 +92,30 @@ public class DebateEventResource {
         ).filter(Objects::nonNull);
 
         Multi<String> live = Multi.createFrom().ticks().every(Duration.ofMillis(500))
-                .onItem().transformToUniAndConcatenate(tick ->
-                        Uni.createFrom().item(() -> {
-                            List<Message> messages = messageService.pollAfter(
-                                    channelId, lastSentId.get(), 50);
-                            if (messages.isEmpty()) return "{\"type\":\"heartbeat\"}";
-                            return serializeMessages(messages, lastSentId);
-                        })
-                        .onFailure().invoke(e -> LOG.warning(
-                                "SSE tick failed for " + debateSessionId + ": " + e.getMessage()))
-                        .onFailure().recoverWithItem("{\"type\":\"heartbeat\"}")
-                );
+                .onItem().transformToMultiAndConcatenate(tick -> {
+                    String pendingCtx = pendingContextSnapshots.remove(channelId);
+                    String entries;
+                    try {
+                        List<Message> messages = messageService.pollAfter(
+                                channelId, lastSentId.get(), 50);
+                        entries = messages.isEmpty() ? "{\"type\":\"heartbeat\"}"
+                                : serializeMessages(messages, lastSentId);
+                    } catch (Exception e) {
+                        LOG.warning("SSE tick failed for " + debateSessionId + ": " + e.getMessage());
+                        entries = "{\"type\":\"heartbeat\"}";
+                    }
+                    if (pendingCtx != null && entries != null) {
+                        return Multi.createFrom().items(pendingCtx, entries);
+                    } else if (pendingCtx != null) {
+                        return Multi.createFrom().item(pendingCtx);
+                    } else if (entries != null) {
+                        return Multi.createFrom().item(entries);
+                    } else {
+                        return Multi.createFrom().item("{\"type\":\"heartbeat\"}");
+                    }
+                });
 
-        return Multi.createBy().concatenating().streams(catchUp, live);
+        return Multi.createBy().concatenating().streams(initialContext, catchUp, live);
     }
 
     private String serializeMessages(List<Message> messages, AtomicLong lastSentId) {
@@ -104,6 +138,29 @@ public class DebateEventResource {
             return mapper.writeValueAsString(entries);
         } catch (Exception e) {
             LOG.warning("Failed to serialize debate events: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private String serializeContextSnapshot(ContextSnapshot snapshot, boolean includeWindowSize) {
+        try {
+            StringBuilder sb = new StringBuilder("{\"type\":\"context-usage\"");
+            sb.append(",\"serverContributionChars\":").append(snapshot.serverContributionChars());
+            if (includeWindowSize) {
+                sb.append(",\"windowSizeChars\":").append(snapshot.windowSizeChars());
+            }
+            if (snapshot.agentReportedPercent() != null) {
+                sb.append(",\"agentReportedPercent\":").append(snapshot.agentReportedPercent());
+            } else {
+                sb.append(",\"agentReportedPercent\":null");
+            }
+            sb.append(",\"effectivePercent\":").append(snapshot.effectivePercent());
+            sb.append(",\"messageCount\":").append(snapshot.messageCount());
+            sb.append(",\"thresholdExceeded\":").append(snapshot.thresholdExceeded());
+            sb.append("}");
+            return sb.toString();
+        } catch (Exception e) {
+            LOG.warning("Failed to build context snapshot JSON: " + e.getMessage());
             return null;
         }
     }
