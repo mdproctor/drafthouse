@@ -31,6 +31,8 @@ import io.casehub.drafthouse.debate.ReviewState;
 import io.casehub.drafthouse.debate.SubTaskFinding;
 import io.casehub.drafthouse.debate.SubTaskStatus;
 import io.casehub.drafthouse.debate.SubTaskType;
+import io.casehub.drafthouse.SelectionScope;
+import io.casehub.drafthouse.DocumentSide;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -804,6 +806,58 @@ class DebateMcpToolsTest {
 
         assertThat(session.contextTracker().snapshot(800_000, 80.0).serverContributionChars()).isGreaterThan(0);
         verify(debateEventResource).pushContextSnapshot(eq(channelId), any(ContextSnapshot.class));
+    }
+
+    @Test
+    void getDebateSummary_includesSelectionContext() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        session.updateSelection(new SelectionScope(DocumentSide.A, 5, 12, "The selected passage."));
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
+        when(debateProjection.render(result)).thenReturn("# Summary");
+
+        String summary = tools.getDebateSummary(channelId.toString());
+
+        assertThat(summary).contains("## Active Selection");
+        assertThat(summary).contains("**Document A**, lines 5–12:");
+        assertThat(summary).contains("The selected passage.");
+    }
+
+    @Test
+    void getDebateSummary_noSelection_noSelectionSection() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
+        when(debateProjection.render(result)).thenReturn("# Summary");
+
+        String summary = tools.getDebateSummary(channelId.toString());
+
+        assertThat(summary).doesNotContain("Active Selection");
+    }
+
+    @Test
+    void getDebateSummary_selectionWithZeroLines_omitsLineNumbers() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        session.updateSelection(new SelectionScope(DocumentSide.B, 0, 0, "Review text only."));
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
+        when(debateProjection.render(result)).thenReturn("# Summary");
+
+        String summary = tools.getDebateSummary(channelId.toString());
+
+        assertThat(summary).contains("## Active Selection");
+        assertThat(summary).contains("**Document B**:");
+        assertThat(summary).doesNotContain("lines 0");
+        assertThat(summary).contains("Review text only.");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

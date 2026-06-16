@@ -242,7 +242,20 @@ public class DebateMcpTools {
         if (session == null) return sessionError(debateSessionId);
 
         var result = projectionService.project(session.channelId(), debateProjection);
-        return debateProjection.render(result);
+        String summary = debateProjection.render(result);
+
+        SelectionScope sel = session.currentSelection();
+        if (sel != null) {
+            StringBuilder sb = new StringBuilder(summary);
+            sb.append("\n\n## Active Selection\n");
+            sb.append("**Document ").append(sel.side().name()).append("**");
+            if (sel.startLine() > 0) {
+                sb.append(", lines ").append(sel.startLine()).append("–").append(sel.endLine());
+            }
+            sb.append(":\n> ").append(sel.selectedText()).append("\n");
+            return sb.toString();
+        }
+        return summary;
     }
 
     @Tool(name = "end_debate",
