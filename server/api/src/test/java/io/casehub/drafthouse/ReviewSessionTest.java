@@ -17,7 +17,6 @@ class ReviewSessionTest {
                 "Content of document A",
                 "Content of document B",
                 null,
-                null,
                 "You are a reviewer."
         );
     }
@@ -31,29 +30,26 @@ class ReviewSessionTest {
         assertEquals("drafthouse-reviewer-" + CHANNEL_ID, s.instanceId());
         assertEquals("Content of document A", s.docAContent());
         assertEquals("Content of document B", s.docBContent());
-        assertNull(s.selectionSide());
-        assertNull(s.selectionText());
+        assertNull(s.selection());
         assertEquals("You are a reviewer.", s.personality());
     }
 
     @Test
     void constructsWithSelection() {
+        var scope = new SelectionScope(DocumentSide.A, 0, 0, "selected text");
         var s = new ReviewSession(
                 CHANNEL_ID, "sid", "cname", "iid", "docA", "docB",
-                DocumentSide.A, "selected text", "persona"
+                scope, "persona"
         );
-        assertEquals(DocumentSide.A, s.selectionSide());
-        assertEquals("selected text", s.selectionText());
+        assertNotNull(s.selection());
+        assertEquals(DocumentSide.A, s.selection().side());
+        assertEquals("selected text", s.selection().selectedText());
     }
 
     @Test
-    void halfNullSelectionStateRejected() {
-        assertThrows(IllegalArgumentException.class, () ->
-                new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b",
-                        DocumentSide.A, null, "p"));
-        assertThrows(IllegalArgumentException.class, () ->
-                new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b",
-                        null, "text", "p"));
+    void nullSelectionIsValid() {
+        var s = new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b", null, "p");
+        assertNull(s.selection());
     }
 
     @Test
@@ -64,10 +60,11 @@ class ReviewSessionTest {
     @Test
     void withSelectionReturnsNewRecord() {
         var original = minimal();
-        var updated = original.withSelection(DocumentSide.B, "some text");
-        assertNull(original.selectionSide());
-        assertEquals(DocumentSide.B, updated.selectionSide());
-        assertEquals("some text", updated.selectionText());
+        var scope = new SelectionScope(DocumentSide.B, 0, 0, "some text");
+        var updated = original.withSelection(scope);
+        assertNull(original.selection());
+        assertEquals(DocumentSide.B, updated.selection().side());
+        assertEquals("some text", updated.selection().selectedText());
         assertEquals(original.channelId(), updated.channelId());
         assertEquals(original.sessionId(), updated.sessionId());
         assertEquals(original.channelName(), updated.channelName());
@@ -79,11 +76,11 @@ class ReviewSessionTest {
 
     @Test
     void withSelectionClearsSelection() {
+        var scope = new SelectionScope(DocumentSide.A, 0, 0, "text");
         var withSel = new ReviewSession(
-                CHANNEL_ID, "s", "cn", "i", "a", "b", DocumentSide.A, "text", "p"
+                CHANNEL_ID, "s", "cn", "i", "a", "b", scope, "p"
         );
-        var cleared = withSel.withSelection(null, null);
-        assertNull(cleared.selectionSide());
-        assertNull(cleared.selectionText());
+        var cleared = withSel.withSelection(null);
+        assertNull(cleared.selection());
     }
 }

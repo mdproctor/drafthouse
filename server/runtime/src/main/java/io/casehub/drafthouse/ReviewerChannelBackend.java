@@ -112,8 +112,8 @@ public class ReviewerChannelBackend implements ChannelBackend {
     }
 
     private static String buildSelectionContext(ReviewSession session) {
-        if (session.selectionSide() == null || session.selectionText() == null) return "";
-        return "Selected text (Document " + session.selectionSide().name() + "): "
-                + session.selectionText();
+        if (session.selection() == null) return "";
+        return "Selected text (Document " + session.selection().side().name() + "): "
+                + session.selection().selectedText();
     }
 }

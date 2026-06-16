@@ -29,8 +29,7 @@ public interface ReviewSessionRegistry {
      * Atomically replaces the ReviewSession with an updated selection state.
      * No-op if no session exists for the given channelId.
      *
-     * @param side null to clear the selection; text must also be null when side is null
-     * @param text null to clear the selection; side must also be null when text is null
+     * @param selection the new selection, or null to clear
      */
-    void updateSelection(UUID channelId, DocumentSide side, String text);
+    void updateSelection(UUID channelId, SelectionScope selection);
 }

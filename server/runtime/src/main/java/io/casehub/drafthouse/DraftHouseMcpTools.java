@@ -92,7 +92,7 @@ public class DraftHouseMcpTools {
 
             ReviewSession session = new ReviewSession(
                     channel.id, sessionId, resolvedChannelName, instanceId,
-                    docAContent, docBContent, null, null, config.reviewer().personality());
+                    docAContent, docBContent, null, config.reviewer().personality());
 
             // MUST put session in registry before initChannel — onChannelInitialised()
             // reads from the registry synchronously during the CDI event.
@@ -132,22 +132,23 @@ public class DraftHouseMcpTools {
             return "error: no active session for sessionId: " + sessionId;
         }
 
-        DocumentSide docSide;
-        if (side == null) {
-            docSide = null;
-        } else {
-            try {
-                docSide = DocumentSide.valueOf(side);
-            } catch (IllegalArgumentException e) {
-                return "error: invalid side value '" + side + "' — must be 'A' or 'B'";
-            }
+        if (side == null && selectedText == null) {
+            registry.updateSelection(channelId, null);
+            return "{\"sessionId\":\"" + sessionId + "\",\"status\":\"ok\"}";
         }
 
-        if ((docSide == null) != (selectedText == null)) {
+        DocumentSide docSide;
+        try {
+            docSide = DocumentSide.valueOf(side);
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return "error: invalid side value '" + side + "' — must be 'A' or 'B'";
+        }
+
+        if (selectedText == null) {
             return "error: side and selectedText must both be provided or both be null";
         }
 
-        registry.updateSelection(channelId, docSide, selectedText);
+        registry.updateSelection(channelId, new SelectionScope(docSide, 0, 0, selectedText));
         return "{\"sessionId\":\"" + sessionId + "\",\"status\":\"ok\"}";
     }
 

@@ -63,7 +63,7 @@ class ReviewerChannelBackendTest {
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
                 "drafthouse-reviewer-" + CHANNEL_ID,
                 "Original text", "Revised text",
-                null, null, "You are a reviewer.");
+                null, "You are a reviewer.");
 
         backend = new ReviewerChannelBackend(registry, CHANNEL_ID, messageService, llm, 100_000,
                 projectionService, projection);
@@ -157,7 +157,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryWithSelection_passesSelectionContext() {
-        ReviewSession withSelection = session.withSelection(DocumentSide.B, "key paragraph");
+        ReviewSession withSelection = session.withSelection(new SelectionScope(DocumentSide.B, 0, 0, "key paragraph"));
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(withSelection));
         when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(ReviewResult.agree("Noted."));
@@ -170,7 +170,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void liveSessionRead_reflectsSelectionUpdatedAfterConstruction() {
-        ReviewSession updated = session.withSelection(DocumentSide.A, "updated selection");
+        ReviewSession updated = session.withSelection(new SelectionScope(DocumentSide.A, 0, 0, "updated selection"));
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(updated));
         when(llm.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(ReviewResult.agree("OK"));
@@ -208,7 +208,7 @@ class ReviewerChannelBackendTest {
         ReviewSession bigSession = new ReviewSession(
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
                 session.instanceId(), huge, "Revised text",
-                null, null, "You are a reviewer.");
+                null, "You are a reviewer.");
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(bigSession));
 
         backend.post(channelRef, query("Review this"));

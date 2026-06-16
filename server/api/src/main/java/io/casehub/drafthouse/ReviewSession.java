@@ -5,9 +5,8 @@ import java.util.UUID;
 /**
  * Immutable snapshot of an active document review session.
  *
- * selectionSide and selectionText are both null when no selection is active,
- * or both non-null when a selection is active. Mixed state is rejected by the
- * compact constructor.
+ * selection is nullable: null when no selection is active, non-null when a
+ * user has selected text in one of the document panels.
  *
  * channelName is stored explicitly because the naming slug ("drafthouse/{uuid}")
  * is independent from channel.id — it cannot be reconstructed from sessionId.
@@ -23,21 +22,13 @@ public record ReviewSession(
         String instanceId,    // "drafthouse-reviewer-{sessionId}"
         String docAContent,   // full text of document A (bounded by maxDocChars)
         String docBContent,   // full text of document B (bounded by maxDocChars)
-        DocumentSide selectionSide,  // null = no selection active (must match selectionText)
-        String selectionText,        // null = no selection active (must match selectionSide)
+        SelectionScope selection,  // null = no selection active
         String personality
 ) {
-    public ReviewSession {
-        if ((selectionSide == null) != (selectionText == null)) {
-            throw new IllegalArgumentException(
-                    "selectionSide and selectionText must both be null or both be non-null");
-        }
-    }
-
-    public ReviewSession withSelection(final DocumentSide side, final String text) {
+    public ReviewSession withSelection(final SelectionScope selection) {
         return new ReviewSession(
                 channelId, sessionId, channelName, instanceId,
-                docAContent, docBContent, side, text, personality
+                docAContent, docBContent, selection, personality
         );
     }
 }

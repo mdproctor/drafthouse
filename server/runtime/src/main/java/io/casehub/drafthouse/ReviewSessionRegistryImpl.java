@@ -31,7 +31,7 @@ public class ReviewSessionRegistryImpl implements ReviewSessionRegistry {
     }
 
     @Override
-    public void updateSelection(final UUID channelId, final DocumentSide side, final String text) {
-        sessions.computeIfPresent(channelId, (id, s) -> s.withSelection(side, text));
+    public void updateSelection(final UUID channelId, final SelectionScope selection) {
+        sessions.computeIfPresent(channelId, (id, s) -> s.withSelection(selection));
     }
 }

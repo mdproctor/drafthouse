@@ -36,15 +36,16 @@ class ReviewSessionRegistryTest {
     void updateSelection_replacesSelectionFields() {
         final UUID channelId = UUID.randomUUID();
         registry.put(minimal(channelId));
-        registry.updateSelection(channelId, DocumentSide.A, "selected text");
+        registry.updateSelection(channelId, new SelectionScope(DocumentSide.A, 0, 0, "selected text"));
         final ReviewSession updated = registry.find(channelId).orElseThrow();
-        assertThat(updated.selectionSide()).isEqualTo(DocumentSide.A);
-        assertThat(updated.selectionText()).isEqualTo("selected text");
+        assertThat(updated.selection()).isNotNull();
+        assertThat(updated.selection().side()).isEqualTo(DocumentSide.A);
+        assertThat(updated.selection().selectedText()).isEqualTo("selected text");
     }
 
     private ReviewSession minimal(final UUID channelId) {
         return new ReviewSession(
                 channelId, channelId.toString(), "drafthouse/test",
-                "iid", "docA", "docB", null, null, "personality");
+                "iid", "docA", "docB", null, "personality");
     }
 }

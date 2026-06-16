@@ -93,8 +93,7 @@ class DraftHouseMcpToolsTest {
         assertThat(session.docAContent()).isEqualTo("Content A");
         assertThat(session.docBContent()).isEqualTo("Content B");
         assertThat(session.personality()).isEqualTo("You are a reviewer.");
-        assertThat(session.selectionSide()).isNull();
-        assertThat(session.selectionText()).isNull();
+        assertThat(session.selection()).isNull();
     }
 
     @Test
@@ -152,7 +151,8 @@ class DraftHouseMcpToolsTest {
         String result = tools.updateSelection(channelId.toString(), "A", "selected text");
 
         assertThat(result).contains("ok");
-        verify(registry).updateSelection(channelId, DocumentSide.A, "selected text");
+        verify(registry).updateSelection(eq(channelId), argThat(sel ->
+                sel != null && sel.side() == DocumentSide.A && sel.selectedText().equals("selected text")));
     }
 
     @Test
@@ -163,7 +163,7 @@ class DraftHouseMcpToolsTest {
         String result = tools.updateSelection(channelId.toString(), null, null);
 
         assertThat(result).contains("ok");
-        verify(registry).updateSelection(channelId, null, null);
+        verify(registry).updateSelection(channelId, null);
     }
 
     @Test
@@ -174,7 +174,7 @@ class DraftHouseMcpToolsTest {
         String result = tools.updateSelection(channelId.toString(), "LEFT", "text");
 
         assertThat(result).startsWith("error:");
-        verify(registry, never()).updateSelection(any(), any(), any());
+        verify(registry, never()).updateSelection(any(UUID.class), any());
     }
 
     @Test
@@ -206,7 +206,7 @@ class DraftHouseMcpToolsTest {
         String result2 = tools.updateSelection(channelId.toString(), null, "some text");
         assertThat(result2).startsWith("error:");
 
-        verify(registry, never()).updateSelection(any(), any(), any());
+        verify(registry, never()).updateSelection(any(UUID.class), any());
     }
 
     // ── query_review ──────────────────────────────────────────────────────────
@@ -322,6 +322,6 @@ class DraftHouseMcpToolsTest {
         return new ReviewSession(
                 channelId, channelId.toString(), "drafthouse/test",
                 "drafthouse-reviewer-" + channelId,
-                "Doc A", "Doc B", null, null, "You are a reviewer.");
+                "Doc A", "Doc B", null, "You are a reviewer.");
     }
 }
