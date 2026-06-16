@@ -62,12 +62,18 @@ conversation in the selected passage.
 // server/api — io.casehub.drafthouse
 public record SelectionScope(DocumentSide side, int startLine, int endLine, String selectedText) {
     public SelectionScope {
+        java.util.Objects.requireNonNull(side, "side");
         if (selectedText == null || selectedText.isBlank()) {
             throw new IllegalArgumentException("selectedText must be non-null and non-blank");
         }
+        if (startLine < 0) throw new IllegalArgumentException("startLine must be >= 0");
+        if (endLine < startLine) throw new IllegalArgumentException("endLine must be >= startLine");
     }
 }
 ```
+
+`startLine=0, endLine=0` is a valid sentinel for "line numbers not known" (review path).
+Negative values and inverted ranges are rejected.
 
 **Unification with the review path:** The review path currently stores selection as two
 separate fields on `ReviewSession` — `selectionSide` (DocumentSide) and `selectionText`
@@ -194,6 +200,14 @@ diffPanel.addEventListener('selection-changed', async (e) => {
 This is cleaner than the shell reaching into Shadow DOM — the component owns its state
 extraction, and the text is captured at the moment of selection rather than asynchronously.
 
+**Selection stickiness (deliberate):** The diff panel's `mouseup` handler ignores collapsed
+selections (`sel.isCollapsed` check). A click-to-deselect fires no `selection-changed` event,
+so no `DELETE` is sent. The server-side selection persists until the user selects different
+text or the session ends. This is the intended behaviour — "the user was last looking at
+lines 5–12" is useful grounding context for LLM agents even after the visual selection is
+cleared. The `DELETE` endpoint exists for programmatic clearing (e.g. MCP tools or future
+panel controls), not for tracking browser deselection.
+
 #### §2e Summary integration: selection in `DebateMcpTools.getDebateSummary()`
 
 The selection context append happens in `DebateMcpTools.getDebateSummary()` after the
@@ -205,11 +219,19 @@ The selection context append happens in `DebateMcpTools.getDebateSummary()` afte
   `session.currentSelection()` directly
 - `getDebateSummaryAtRound()` correctly does NOT include live selection (historical state)
 
-If the session has a `currentSelection`, append after the rendered summary:
+If the session has a `currentSelection`, append after the rendered summary. Line numbers
+are conditionally included — `startLine == 0` is the sentinel for "lines not known" (review
+path passes `startLine=0, endLine=0`):
 
 ```
+// With line numbers (debate path, startLine > 0):
 ## Active Selection
 **Document A**, lines 5–12:
+> The selected passage...
+
+// Without line numbers (review path, startLine == 0):
+## Active Selection
+**Document A**:
 > The selected passage...
 ```
 
@@ -261,7 +283,9 @@ Both tests in `DebateEventResourceTest.java`:
 | `panels/drafthouse-diff.js` | Add `selectedText` to `selection-changed` event detail |
 | `index.html` | `selection-changed` listener, POST to server via `debateEventBus.sessionId` |
 | `server/runtime/test/.../DebateEventResourceTest.java` | §1 + §2 integration tests |
-| `server/runtime/test/.../DebateMcpToolsTest.java` | §2 unit tests + review path selection tests updated |
+| `server/runtime/test/.../DebateMcpToolsTest.java` | §2 debate summary unit tests (selection context) |
+| `server/runtime/test/.../DraftHouseMcpToolsTest.java` | Review path: `updateSelection` tests, `minimalSession()` helper, `startReview` assertions — all updated for `SelectionScope` |
+| `server/runtime/test/.../ReviewSessionRegistryTest.java` | `updateSelection_replacesSelectionFields()` and `minimal()` helper — updated for `SelectionScope` |
 | `server/runtime/test/.../e2e/CrossPanelE2ETest.java` | §2 E2E test |
 
 ---
