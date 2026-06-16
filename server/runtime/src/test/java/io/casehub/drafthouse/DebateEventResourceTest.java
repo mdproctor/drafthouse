@@ -12,6 +12,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import io.casehub.drafthouse.e2e.DebateE2EFixtures;
+import io.casehub.qhorus.runtime.message.MessageService;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
 
@@ -22,6 +24,8 @@ class DebateEventResourceTest {
             Pattern.compile("\"debateSessionId\":\"([^\"]+)\"");
 
     @Inject DebateMcpTools tools;
+    @Inject MessageService messageService;
+    @Inject DebateSessionRegistry registry;
 
     private String activeDebateSessionId;
 
@@ -132,6 +136,152 @@ class DebateEventResourceTest {
                 .extract().body().asString();
 
         assertThat(body).isEqualTo("[]");
+    }
+
+    @Test
+    void initialContextSnapshot_emittedOnConnect() throws Exception {
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<String> received =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        String url = "http://localhost:8081/api/debate/" + sessionId + "/events";
+
+        Thread sseThread = Thread.ofVirtual().start(() -> {
+            try {
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setRequestProperty("Accept", "text/event-stream");
+                conn.connect();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        // Skip empty lines and event: comments
+                        if (line.trim().isEmpty() || line.startsWith("event:")) {
+                            continue;
+                        }
+                        // Look for data: lines
+                        if (line.startsWith("data:")) {
+                            String data = line.substring(5).trim(); // Remove "data:" prefix
+                            // First non-heartbeat event should be context-usage
+                            if (!data.contains("\"type\":\"heartbeat\"")
+                                    && data.contains("\"type\":\"context-usage\"")) {
+                                received.set(data);
+                                latch.countDown();
+                                return;
+                            }
+                        }
+                    }
+                }
+            } catch (java.io.IOException e) {
+                // expected when connection closes
+            }
+        });
+
+        assertThat(latch.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                .as("Initial context-usage event was not received within 5 seconds")
+                .isTrue();
+
+        String body = received.get();
+        assertThat(body).contains("\"type\":\"context-usage\"");
+        assertThat(body).contains("\"windowSizeChars\"");
+        assertThat(body).contains("\"serverContributionChars\"");
+        assertThat(body).contains("\"messageCount\"");
+        assertThat(body).contains("\"effectivePercent\"");
+        assertThat(body).contains("\"thresholdExceeded\"");
+
+        sseThread.interrupt();
+    }
+
+    @Test
+    void pushedContextSnapshot_deliveredViaSse() throws Exception {
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        // Raise a point to generate some context
+        DebateE2EFixtures.dispatchRaise(tools, messageService, sessionId, "REV", 1,
+                "Test point content", "P1", "ISOLATED", null);
+
+        java.util.concurrent.CountDownLatch initialLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch pushedLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<String> pushedContext =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        java.util.List<String> allContextUsageEvents =
+                java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        String url = "http://localhost:8081/api/debate/" + sessionId + "/events";
+
+        Thread sseThread = Thread.ofVirtual().start(() -> {
+            try {
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setRequestProperty("Accept", "text/event-stream");
+                conn.connect();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.trim().isEmpty() || line.startsWith("event:")) {
+                            continue;
+                        }
+                        if (line.startsWith("data:")) {
+                            String data = line.substring(5).trim();
+                            if (data.contains("\"type\":\"context-usage\"")) {
+                                allContextUsageEvents.add(data);
+                                // Initial snapshot has windowSizeChars; pushed does not
+                                if (data.contains("\"windowSizeChars\"")) {
+                                    initialLatch.countDown();
+                                } else if (data.contains("\"agentReportedPercent\":42.0")) {
+                                    // This is the pushed snapshot we're waiting for
+                                    pushedContext.set(data);
+                                    pushedLatch.countDown();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (java.io.IOException e) {
+                // expected when connection closes
+            }
+        });
+
+        // Wait for initial context-usage
+        assertThat(initialLatch.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                .as("Initial context-usage was not received within 5 seconds")
+                .isTrue();
+
+        // Now push a new context snapshot
+        tools.reportContext(sessionId, 42.0);
+
+        // Wait for the pushed context-usage event
+        boolean receivedPushed = pushedLatch.await(5, java.util.concurrent.TimeUnit.SECONDS);
+
+        // If we didn't receive the pushed snapshot, print all events for debugging
+        if (!receivedPushed) {
+            System.err.println("All context-usage events received:");
+            for (String event : allContextUsageEvents) {
+                System.err.println("  " + event);
+            }
+        }
+
+        assertThat(receivedPushed)
+                .as("Pushed context-usage event with agentReportedPercent:42.0 was not received within 5 seconds")
+                .isTrue();
+
+        String body = pushedContext.get();
+        assertThat(body).contains("\"type\":\"context-usage\"");
+        assertThat(body).contains("\"agentReportedPercent\":42.0");
+        assertThat(body).contains("\"effectivePercent\"");
+        // The pushed snapshot should NOT include windowSizeChars
+        assertThat(body).doesNotContain("\"windowSizeChars\"");
+
+        sseThread.interrupt();
     }
 
     private static String extractGroup(Pattern pattern, String input) {
