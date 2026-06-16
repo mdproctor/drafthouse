@@ -151,13 +151,13 @@ public class DebateMcpTools {
     }
 
     @Tool(name = "respond_to",
-          description = "Respond to a debate point. entryType must be: agree, dispute, qualify, or counter.")
+          description = "Respond to a debate point. entryType must be: agree, dispute, qualify, counter, or declined.")
     public String respondTo(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
             @ToolArg(description = "Current debate round number") int round,
             @ToolArg(description = "The pointId returned by raise_point") String pointId,
-            @ToolArg(description = "Response type: agree, dispute, qualify, counter") String entryType,
+            @ToolArg(description = "Response type: agree, dispute, qualify, counter, declined") String entryType,
             @ToolArg(description = "Your response content") String content) {
 
         DebateSession session = resolveSession(debateSessionId);
@@ -169,11 +169,12 @@ public class DebateMcpTools {
         MessageType qhorusType = switch (entryType) {
             case "agree"   -> MessageType.DONE;
             case "dispute" -> MessageType.DECLINE;
+            case "declined" -> MessageType.DECLINE;
             case "qualify", "counter" -> MessageType.RESPONSE;
             default -> null;
         };
         if (qhorusType == null) {
-            return "error: invalid entryType '" + entryType + "' — must be agree, dispute, qualify, or counter";
+            return "error: invalid entryType '" + entryType + "' — must be agree, dispute, qualify, counter, or declined";
         }
 
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);

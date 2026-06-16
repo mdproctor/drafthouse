@@ -312,6 +312,26 @@ class DebateMcpToolsTest {
         assertThat(result).startsWith("error: point not found:");
     }
 
+    @Test
+    void respondTo_declined_dispatchesDeclinedEntry() {
+        UUID chId = stubChannel.id;
+        DebateSession session = sessionFor(chId);
+        when(registry.find(chId)).thenReturn(Optional.of(session));
+        Message stubMsg = new Message();
+        stubMsg.id = 1L;
+        when(messageService.findByCorrelationId("pt-1")).thenReturn(Optional.of(stubMsg));
+
+        String result = tools.respondTo(chId.toString(), "IMP", 2, "pt-1", "declined", "Cannot engage with this point.");
+
+        assertThat(result).contains("dispatched");
+        ArgumentCaptor<MessageDispatch> captor = ArgumentCaptor.forClass(MessageDispatch.class);
+        verify(messageService).dispatch(captor.capture());
+        MessageDispatch dispatched = captor.getValue();
+        assertThat(dispatched.type()).isEqualTo(MessageType.DECLINE);
+        assertThat(dispatched.content()).contains("entryType=DECLINED");
+        assertThat(dispatched.content()).contains("Cannot engage with this point.");
+    }
+
     // ── flag_human ────────────────────────────────────────────────────────────
 
     @Test
