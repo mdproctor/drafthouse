@@ -333,7 +333,7 @@ class DraftHouseDiff extends HTMLElement {
         }
         this.dispatchEvent(new CustomEvent('selection-changed', {
           bubbles: true,
-          detail: { side, startLine, endLine },
+          detail: { side: side.toUpperCase(), startLine, endLine, selectedText: sel.toString() },
         }));
       });
     }

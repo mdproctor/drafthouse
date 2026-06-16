@@ -172,6 +172,17 @@ document.addEventListener('point-selected', e => {
   if (location) diffPanel.scrollToLocation(location);
 });
 
+diffPanel.addEventListener('selection-changed', async (e) => {
+  if (!debateEventBus.sessionId) return;
+  const { side, startLine, endLine, selectedText } = e.detail;
+  if (!selectedText) return;
+  await fetch(`/api/debate/${debateEventBus.sessionId}/selection`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ side, startLine, endLine, selectedText })
+  });
+});
+
 // ── Session discovery polling (§7a) ─────────────────────────────────
 let discoveryInterval = null;
 
