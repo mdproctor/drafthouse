@@ -126,6 +126,61 @@ class DebateEventResourceTest {
     }
 
     @Test
+    void selectionPost_storesSelection() {
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body("{\"side\":\"A\",\"startLine\":5,\"endLine\":12,\"selectedText\":\"The passage\"}")
+                .when()
+                .post("/api/debate/" + sessionId + "/selection")
+                .then()
+                .statusCode(200);
+
+        DebateSession session = registry.find(java.util.UUID.fromString(sessionId)).orElseThrow();
+        assertThat(session.currentSelection()).isNotNull();
+        assertThat(session.currentSelection().side()).isEqualTo(DocumentSide.A);
+        assertThat(session.currentSelection().startLine()).isEqualTo(5);
+        assertThat(session.currentSelection().endLine()).isEqualTo(12);
+        assertThat(session.currentSelection().selectedText()).isEqualTo("The passage");
+    }
+
+    @Test
+    void selectionDelete_clearsSelection() {
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body("{\"side\":\"B\",\"startLine\":1,\"endLine\":3,\"selectedText\":\"Some text\"}")
+                .post("/api/debate/" + sessionId + "/selection")
+                .then().statusCode(200);
+
+        RestAssured.given()
+                .when()
+                .delete("/api/debate/" + sessionId + "/selection")
+                .then()
+                .statusCode(200);
+
+        DebateSession session = registry.find(java.util.UUID.fromString(sessionId)).orElseThrow();
+        assertThat(session.currentSelection()).isNull();
+    }
+
+    @Test
+    void selectionPost_invalidSession_returns404() {
+        RestAssured.given()
+                .contentType("application/json")
+                .body("{\"side\":\"A\",\"startLine\":0,\"endLine\":0,\"selectedText\":\"text\"}")
+                .when()
+                .post("/api/debate/00000000-0000-0000-0000-000000000000/selection")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
     void activeSessions_emptyWhenNoDebates() {
         String body = RestAssured.given()
                 .accept(MediaType.APPLICATION_JSON)

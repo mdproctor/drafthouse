@@ -10,7 +10,14 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.NotFoundException;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,8 +41,10 @@ public class DebateEventResource {
     @Inject ObjectMapper mapper;
 
     private final ConcurrentHashMap<UUID, String> pendingContextSnapshots = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, String> pendingSelections = new ConcurrentHashMap<>();
 
     record SessionInfo(String debateSessionId, String channelName, String specPath) {}
+    record SelectionRequest(String side, int startLine, int endLine, String selectedText) {}
 
     public void pushContextSnapshot(UUID channelId, ContextSnapshot snapshot) {
         try {
@@ -140,6 +149,81 @@ public class DebateEventResource {
             LOG.warning("Failed to serialize debate events: " + e.getMessage());
             return null;
         }
+    }
+
+    @POST
+    @Path("/{debateSessionId}/selection")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public jakarta.ws.rs.core.Response postSelection(
+            @PathParam("debateSessionId") String debateSessionId,
+            SelectionRequest request) {
+        UUID channelId;
+        try {
+            channelId = UUID.fromString(debateSessionId);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException("Invalid session id: " + debateSessionId);
+        }
+
+        DebateSession session = registry.find(channelId).orElse(null);
+        if (session == null) {
+            throw new NotFoundException("No active debate session: " + debateSessionId);
+        }
+
+        DocumentSide side;
+        try {
+            side = DocumentSide.valueOf(request.side());
+        } catch (IllegalArgumentException | NullPointerException e) {
+            return jakarta.ws.rs.core.Response.status(400)
+                    .entity("{\"error\":\"invalid side: " + request.side() + "\"}").build();
+        }
+
+        SelectionScope scope = new SelectionScope(side, request.startLine(), request.endLine(),
+                request.selectedText());
+        session.updateSelection(scope);
+        pushSelectionEvent(channelId, scope);
+        return jakarta.ws.rs.core.Response.ok("{\"status\":\"ok\"}").build();
+    }
+
+    @DELETE
+    @Path("/{debateSessionId}/selection")
+    @Produces(MediaType.APPLICATION_JSON)
+    public jakarta.ws.rs.core.Response deleteSelection(
+            @PathParam("debateSessionId") String debateSessionId) {
+        UUID channelId;
+        try {
+            channelId = UUID.fromString(debateSessionId);
+        } catch (IllegalArgumentException e) {
+            throw new NotFoundException("Invalid session id: " + debateSessionId);
+        }
+
+        DebateSession session = registry.find(channelId).orElse(null);
+        if (session == null) {
+            throw new NotFoundException("No active debate session: " + debateSessionId);
+        }
+
+        session.updateSelection(null);
+        pendingSelections.put(channelId, "{\"type\":\"selection-scope\",\"cleared\":true}");
+        return jakarta.ws.rs.core.Response.ok("{\"status\":\"ok\"}").build();
+    }
+
+    private void pushSelectionEvent(UUID channelId, SelectionScope scope) {
+        try {
+            String json = "{\"type\":\"selection-scope\""
+                    + ",\"side\":\"" + scope.side().name() + "\""
+                    + ",\"startLine\":" + scope.startLine()
+                    + ",\"endLine\":" + scope.endLine()
+                    + ",\"selectedText\":\"" + escapeJson(scope.selectedText()) + "\""
+                    + "}";
+            pendingSelections.put(channelId, json);
+        } catch (Exception e) {
+            LOG.warning("Failed to build selection event JSON: " + e.getMessage());
+        }
+    }
+
+    private static String escapeJson(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
     private String serializeContextSnapshot(ContextSnapshot snapshot, boolean includeWindowSize) {

@@ -25,6 +25,7 @@ public class DebateSession {
     private final ConcurrentHashMap<AgentType, String> participants = new ConcurrentHashMap<>();
     private final String specPath;
     private final ContextTracker contextTracker = new ContextTracker();
+    private volatile SelectionScope currentSelection;
 
     public DebateSession(final UUID channelId, final String debateSessionId,
                          final String channelName, final String specPath) {
@@ -71,4 +72,12 @@ public class DebateSession {
     public String channelName()     { return channelName; }
     public String specPath()        { return specPath; }
     public ContextTracker contextTracker() { return contextTracker; }
+
+    public void updateSelection(SelectionScope selection) {
+        this.currentSelection = selection;
+    }
+
+    public SelectionScope currentSelection() {
+        return currentSelection;
+    }
 }
