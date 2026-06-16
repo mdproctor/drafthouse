@@ -176,7 +176,7 @@ event detail — the component owns its DOM state:
 // Inside drafthouse-diff.js mouseup handler (replaces current lines 334-337):
 this.dispatchEvent(new CustomEvent('selection-changed', {
   bubbles: true,
-  detail: { side, startLine, endLine, selectedText: sel.toString() },
+  detail: { side: side.toUpperCase(), startLine, endLine, selectedText: sel.toString() },
 }));
 ```
 
