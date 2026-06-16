@@ -30,16 +30,18 @@ reader + latch pattern from `catchUp_deliversHistoricalEvents`:
   `serverContributionChars`, `messageCount`, `effectivePercent`, `thresholdExceeded`
 
 **Test 2: `pushedContextSnapshot_deliveredViaSse`**
-- Start debate, raise a point (creates message activity), connect SSE
-- Drain initial context + catch-up events
-- Call `tools.reportContext(sessionId, 42.0)` to push a snapshot
+- Start debate via injected `DebateMcpTools`
+- Raise a point using `DebateE2EFixtures.dispatchRaise()` (needs the frontier exception
+  wrapper — `raisePoint` dispatches a Qhorus message which triggers the ledger frontier
+  query)
+- Connect SSE, drain initial context + catch-up events
+- Call `tools.reportContext(sessionId, 42.0)` directly (no wrapper needed —
+  `reportContext` writes to `ContextTracker` and `pendingContextSnapshots` only; no Qhorus
+  dispatch, no frontier query, no possible frontier exception)
 - Wait for the next `context-usage` event in the stream
 - Assert: `agentReportedPercent` is `42.0`, `effectivePercent` reflects the reported value
 
-Both tests scan for `"type":"context-usage"` instead of `"entryType":"RAISE"`. The
-`reportContext` call absorbs ledger frontier exceptions via the same `DebateE2EFixtures`
-pattern — `reportContext` does not dispatch a Qhorus message, so no frontier exception
-is expected, but the test is defensive.
+Both tests scan for `"type":"context-usage"` instead of `"entryType":"RAISE"`.
 
 ---
 
@@ -54,14 +56,44 @@ conversation in the selected passage.
 
 ### Design
 
-#### §2a Domain model: `SelectionScope` record
+#### §2a Domain model: unified `SelectionScope` record
 
 ```java
 // server/api — io.casehub.drafthouse
-public record SelectionScope(DocumentSide side, int startLine, int endLine, String selectedText) {}
+public record SelectionScope(DocumentSide side, int startLine, int endLine, String selectedText) {
+    public SelectionScope {
+        if (selectedText == null || selectedText.isBlank()) {
+            throw new IllegalArgumentException("selectedText must be non-null and non-blank");
+        }
+    }
+}
 ```
 
-`DebateSession` gets:
+**Unification with the review path:** The review path currently stores selection as two
+separate fields on `ReviewSession` — `selectionSide` (DocumentSide) and `selectionText`
+(String) — with a compact constructor invariant requiring both null or both non-null.
+`ReviewerChannelBackend.buildSelectionContext()` reads them.
+
+Two selection representations for the same concept is unnecessary complexity. `SelectionScope`
+becomes the single selection type for both paths:
+
+- `ReviewSession` record fields collapse from `selectionSide` + `selectionText` to a single
+  `SelectionScope selection` field (nullable — null means no selection)
+- `ReviewSession.withSelection(DocumentSide, String)` becomes
+  `withSelection(SelectionScope selection)` (null to clear)
+- `ReviewSessionRegistry.updateSelection(UUID, DocumentSide, String)` becomes
+  `updateSelection(UUID, SelectionScope)` (null to clear)
+- `ReviewerChannelBackend.buildSelectionContext()` reads `session.selection().selectedText()`
+- The `update_selection` MCP tool passes `startLine=0, endLine=0` when the caller does not
+  supply line numbers (review path — text-only selection)
+- The `update_selection` MCP tool gains optional `startLine` and `endLine` parameters for
+  future use
+
+Migration: ~5 files, zero test logic change. The compact constructor invariant in
+`ReviewSession` (both-null-or-both-non-null) is subsumed by `SelectionScope` being nullable
+at the field level with non-null fields internally.
+
+**`DebateSession`** gets:
 ```java
 private volatile SelectionScope currentSelection;
 public void updateSelection(SelectionScope selection) { this.currentSelection = selection; }
@@ -88,6 +120,8 @@ DELETE /api/debate/{debateSessionId}/selection
 Lives on `DebateEventResource` — a UI-facing REST concern alongside SSE events and
 session listings. Not an MCP tool.
 
+No GET endpoint — agents read selection via `get_debate_summary`, not a dedicated REST call.
+
 #### §2c SSE delivery: selection events in the live stream
 
 On selection change, the SSE stream emits a `selection-scope` metadata event (non-array
@@ -105,43 +139,79 @@ drains and emits it. A cleared selection (DELETE) emits:
 {"type":"selection-scope","cleared":true}
 ```
 
-#### §2d Browser: shell wiring in `index.html`
+**Live tick refactoring:** The current live tick has 4 conditional branches for context +
+entries. Adding selection would double the combinatorics. Instead, refactor the tick to a
+collect-then-emit pattern:
 
-The workspace shell listens for `selection-changed` on the diff panel and POSTs to the
-server. Only active when a debate session is connected:
+```java
+// Drain all pending metadata
+List<String> items = new ArrayList<>();
+String pendingCtx = pendingContextSnapshots.remove(channelId);
+if (pendingCtx != null) items.add(pendingCtx);
+String pendingSel = pendingSelections.remove(channelId);
+if (pendingSel != null) items.add(pendingSel);
+// Add message entries (or heartbeat if nothing else to emit)
+String entries = serializeMessages(messages, lastSentId);
+if (entries != null) items.add(entries);
+if (items.isEmpty()) items.add("{\"type\":\"heartbeat\"}");
+return Multi.createFrom().iterable(items);
+```
+
+This eliminates O(2^n) conditional branches — metadata types can be added without
+touching the emission logic.
+
+#### §2d Browser: diff panel event enrichment + shell wiring
+
+**Diff panel change (`panels/drafthouse-diff.js`):** The `mouseup` handler already has the
+`Selection` object in scope (lines 318-321). Extract the text there and include it in the
+event detail — the component owns its DOM state:
+
+```javascript
+// Inside drafthouse-diff.js mouseup handler (replaces current lines 334-337):
+this.dispatchEvent(new CustomEvent('selection-changed', {
+  bubbles: true,
+  detail: { side, startLine, endLine, selectedText: sel.toString() },
+}));
+```
+
+**Shell wiring (`index.html`):** The shell listens for the enriched event and POSTs to the
+server. Uses `debateEventBus.sessionId` (the existing accessor, line 11 of
+`debate-event-bus.js`) — no shell-scoped session ID variable exists:
 
 ```javascript
 diffPanel.addEventListener('selection-changed', async (e) => {
-  if (!currentDebateSessionId) return;
-  const { side, startLine, endLine } = e.detail;
-  const sel = diffPanel.shadowRoot.getSelection
-    ? diffPanel.shadowRoot.getSelection()
-    : document.getSelection();
-  const text = sel?.toString() || '';
-  if (!text) return;
-  await fetch(`/api/debate/${currentDebateSessionId}/selection`, {
+  if (!debateEventBus.sessionId) return;
+  const { side, startLine, endLine, selectedText } = e.detail;
+  if (!selectedText) return;
+  await fetch(`/api/debate/${debateEventBus.sessionId}/selection`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ side, startLine, endLine, selectedText: text })
+    body: JSON.stringify({ side, startLine, endLine, selectedText })
   });
 });
 ```
 
-The selected text is extracted from the browser's selection API at event time — no
-round-trip to re-derive from line numbers.
+This is cleaner than the shell reaching into Shadow DOM — the component owns its state
+extraction, and the text is captured at the moment of selection rather than asynchronously.
 
-#### §2e Summary integration: selection in `get_debate_summary`
+#### §2e Summary integration: selection in `DebateMcpTools.getDebateSummary()`
 
-After rendering the projection summary, if the session has a `currentSelection`, append:
+The selection context append happens in `DebateMcpTools.getDebateSummary()` after the
+`debateProjection.render()` call — not in `SummaryRenderer`. Rationale:
+
+- `SummaryRenderer` is a pure-Java class in `server/api/` rendering from `ReviewState`,
+  which correctly does not contain volatile UI state like the current selection
+- `getDebateSummary()` already has the `DebateSession` resolved — it reads
+  `session.currentSelection()` directly
+- `getDebateSummaryAtRound()` correctly does NOT include live selection (historical state)
+
+If the session has a `currentSelection`, append after the rendered summary:
 
 ```
 ## Active Selection
 **Document A**, lines 5–12:
 > The selected passage...
 ```
-
-This gives LLM agents grounding context — same pattern as
-`ReviewerChannelBackend.buildSelectionContext()` but for the debate path.
 
 ---
 
@@ -157,8 +227,8 @@ Both tests in `DebateEventResourceTest.java`:
 
 **Unit tests (`DebateMcpToolsTest`):**
 - `getDebateSummary_includesSelectionContext` — set `SelectionScope` on session, call
-  `getDebateSummary()`, assert output contains selection section
-- `getDebateSummary_noSelection_noSelectionSection` — no selection, assert no
+  `getDebateSummary()`, assert output contains selection section with line numbers
+- `getDebateSummary_noSelection_noSelectionSection` — no selection set, assert no
   "Active Selection" in output
 
 **Integration tests (`DebateEventResourceTest`):**
@@ -168,10 +238,10 @@ Both tests in `DebateEventResourceTest.java`:
 - `selectionScope_deliveredViaSse` — POST selection while SSE connected, verify
   `selection-scope` event appears in stream
 
-**E2E tests (new or in `CrossPanelE2ETest`):**
+**E2E tests (`CrossPanelE2ETest`):**
 - `selectionInDiff_postsToDebateSession` — start debate, load page with `?debate=`,
   programmatically select text in diff panel via Playwright, verify selection POST reaches
-  server (session has `currentSelection`)
+  server (inject `DebateSessionRegistry` to read `session.currentSelection()`)
 
 ---
 
@@ -179,13 +249,19 @@ Both tests in `DebateEventResourceTest.java`:
 
 | File | Change |
 |------|--------|
-| `server/api/.../SelectionScope.java` | New record |
+| `server/api/.../SelectionScope.java` | New record — unified selection type for both paths |
 | `server/api/.../DebateSession.java` | Add `currentSelection` field + accessors |
-| `server/runtime/.../DebateEventResource.java` | POST/DELETE selection endpoints, pending selection map, SSE emission |
+| `server/api/.../ReviewSession.java` | Replace `selectionSide` + `selectionText` with `SelectionScope selection` |
+| `server/runtime/.../ReviewSessionRegistryImpl.java` | `updateSelection` takes `SelectionScope` |
+| `server/api/.../ReviewSessionRegistry.java` | `updateSelection` signature change |
+| `server/runtime/.../ReviewerChannelBackend.java` | Read from `session.selection()` |
+| `server/runtime/.../DraftHouseMcpTools.java` | `update_selection` builds `SelectionScope`; optional line params |
+| `server/runtime/.../DebateEventResource.java` | POST/DELETE selection endpoints, pending selection map, live tick refactoring (collect-then-emit) |
 | `server/runtime/.../DebateMcpTools.java` | Append selection context to `getDebateSummary()` |
-| `index.html` | `selection-changed` listener, POST to server |
+| `panels/drafthouse-diff.js` | Add `selectedText` to `selection-changed` event detail |
+| `index.html` | `selection-changed` listener, POST to server via `debateEventBus.sessionId` |
 | `server/runtime/test/.../DebateEventResourceTest.java` | §1 + §2 integration tests |
-| `server/runtime/test/.../DebateMcpToolsTest.java` | §2 unit tests |
+| `server/runtime/test/.../DebateMcpToolsTest.java` | §2 unit tests + review path selection tests updated |
 | `server/runtime/test/.../e2e/CrossPanelE2ETest.java` | §2 E2E test |
 
 ---
