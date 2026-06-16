@@ -102,26 +102,26 @@ public class DebateEventResource {
 
         Multi<String> live = Multi.createFrom().ticks().every(Duration.ofMillis(500))
                 .onItem().transformToMultiAndConcatenate(tick -> {
+                    java.util.ArrayList<String> items = new java.util.ArrayList<>();
+
                     String pendingCtx = pendingContextSnapshots.remove(channelId);
-                    String entries;
+                    if (pendingCtx != null) items.add(pendingCtx);
+
+                    String pendingSel = pendingSelections.remove(channelId);
+                    if (pendingSel != null) items.add(pendingSel);
+
                     try {
                         List<Message> messages = messageService.pollAfter(
                                 channelId, lastSentId.get(), 50);
-                        entries = messages.isEmpty() ? "{\"type\":\"heartbeat\"}"
+                        String entries = messages.isEmpty() ? null
                                 : serializeMessages(messages, lastSentId);
+                        if (entries != null) items.add(entries);
                     } catch (Exception e) {
                         LOG.warning("SSE tick failed for " + debateSessionId + ": " + e.getMessage());
-                        entries = "{\"type\":\"heartbeat\"}";
                     }
-                    if (pendingCtx != null && entries != null) {
-                        return Multi.createFrom().items(pendingCtx, entries);
-                    } else if (pendingCtx != null) {
-                        return Multi.createFrom().item(pendingCtx);
-                    } else if (entries != null) {
-                        return Multi.createFrom().item(entries);
-                    } else {
-                        return Multi.createFrom().item("{\"type\":\"heartbeat\"}");
-                    }
+
+                    if (items.isEmpty()) items.add("{\"type\":\"heartbeat\"}");
+                    return Multi.createFrom().iterable(items);
                 });
 
         return Multi.createBy().concatenating().streams(initialContext, catchUp, live);
@@ -178,8 +178,14 @@ public class DebateEventResource {
                     .entity("{\"error\":\"invalid side: " + request.side() + "\"}").build();
         }
 
-        SelectionScope scope = new SelectionScope(side, request.startLine(), request.endLine(),
-                request.selectedText());
+        SelectionScope scope;
+        try {
+            scope = new SelectionScope(side, request.startLine(), request.endLine(),
+                    request.selectedText());
+        } catch (IllegalArgumentException e) {
+            return jakarta.ws.rs.core.Response.status(400)
+                    .entity("{\"error\":\"" + escapeJson(e.getMessage()) + "\"}").build();
+        }
         session.updateSelection(scope);
         pushSelectionEvent(channelId, scope);
         return jakarta.ws.rs.core.Response.ok("{\"status\":\"ok\"}").build();

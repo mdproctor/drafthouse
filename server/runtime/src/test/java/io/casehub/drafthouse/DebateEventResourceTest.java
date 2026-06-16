@@ -339,6 +339,70 @@ class DebateEventResourceTest {
         sseThread.interrupt();
     }
 
+    @Test
+    void selectionScope_deliveredViaSse() throws Exception {
+        String startResult = tools.startDebate("test-spec.md");
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        java.util.concurrent.CountDownLatch initialCtxLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch selectionLatch = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicReference<String> selectionEvent =
+                new java.util.concurrent.atomic.AtomicReference<>();
+
+        String url = "http://localhost:8081/api/debate/" + sessionId + "/events";
+
+        Thread sseThread = Thread.ofVirtual().start(() -> {
+            try {
+                java.net.HttpURLConnection conn =
+                        (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setRequestProperty("Accept", "text/event-stream");
+                conn.connect();
+                try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                        new java.io.InputStreamReader(conn.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (!line.startsWith("data:")) continue;
+                        String data = line.substring(5).trim();
+                        if (data.contains("\"type\":\"heartbeat\"")) continue;
+                        if (data.contains("\"type\":\"context-usage\"")) {
+                            initialCtxLatch.countDown();
+                            continue;
+                        }
+                        if (data.contains("\"type\":\"selection-scope\"")) {
+                            selectionEvent.set(data);
+                            selectionLatch.countDown();
+                            return;
+                        }
+                    }
+                }
+            } catch (java.io.IOException e) {
+                // expected when connection closes
+            }
+        });
+
+        assertThat(initialCtxLatch.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                .as("Initial context-usage was not received").isTrue();
+
+        RestAssured.given()
+                .contentType("application/json")
+                .body("{\"side\":\"A\",\"startLine\":5,\"endLine\":12,\"selectedText\":\"Hello world\"}")
+                .post("/api/debate/" + sessionId + "/selection")
+                .then().statusCode(200);
+
+        assertThat(selectionLatch.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                .as("selection-scope event was not received via SSE").isTrue();
+
+        String body = selectionEvent.get();
+        assertThat(body).contains("\"type\":\"selection-scope\"");
+        assertThat(body).contains("\"side\":\"A\"");
+        assertThat(body).contains("\"startLine\":5");
+        assertThat(body).contains("\"endLine\":12");
+        assertThat(body).contains("Hello world");
+
+        sseThread.interrupt();
+    }
+
     private static String extractGroup(Pattern pattern, String input) {
         Matcher m = pattern.matcher(input);
         return m.find() ? m.group(1) : "";
