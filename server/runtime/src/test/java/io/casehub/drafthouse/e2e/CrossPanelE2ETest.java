@@ -3,6 +3,9 @@ package io.casehub.drafthouse.e2e;
 import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.Page;
 import io.casehub.drafthouse.DebateMcpTools;
+import io.casehub.drafthouse.DebateSession;
+import io.casehub.drafthouse.DebateSessionRegistry;
+import io.casehub.drafthouse.DocumentSide;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.quarkiverse.playwright.InjectPlaywright;
 import io.quarkiverse.playwright.WithPlaywright;
@@ -14,8 +17,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.URL;
+import java.util.UUID;
 
 import static io.casehub.drafthouse.e2e.DebateE2EFixtures.*;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -49,6 +54,7 @@ class CrossPanelE2ETest {
 
     @Inject DebateMcpTools tools;
     @Inject MessageService messageService;
+    @Inject DebateSessionRegistry debateRegistry;
 
     private Page page;
     private String sessionId;
@@ -147,6 +153,35 @@ class CrossPanelE2ETest {
 
         assertTrue(scrollTopA() > 0, "Panel A should have scrolled to 'Scroll Sync' heading");
         assertTrue(scrollTopB() > 0, "Panel B should have scrolled to 'Scroll Sync' heading");
+    }
+
+    // ── cross-panel: browser selection → server ────────────────────────
+
+    @Test
+    void selectionInDiff_postsToDebateSession() {
+        sessionId = startDebateSession(tools);
+        loadWithDebate(page, index, sessionId);
+
+        // Dispatch selection-changed custom event from the diff panel.
+        // This exercises the shell listener → REST POST → DebateSession pipeline
+        // without depending on the Shadow DOM Selection API (which varies by browser).
+        page.evaluate("() => {"
+                + "const diff = document.querySelector('drafthouse-diff');"
+                + "diff.dispatchEvent(new CustomEvent('selection-changed', {"
+                + "  bubbles: true,"
+                + "  detail: { side: 'A', startLine: 0, endLine: 0, selectedText: 'test selection' }"
+                + "}));"
+                + "}");
+
+        // Wait for the async POST to reach the server
+        page.waitForTimeout(1500);
+
+        DebateSession session = debateRegistry.find(UUID.fromString(sessionId)).orElseThrow();
+        assertThat(session.currentSelection()).isNotNull();
+        assertThat(session.currentSelection().side()).isEqualTo(DocumentSide.A);
+        assertThat(session.currentSelection().selectedText()).isEqualTo("test selection");
+        assertThat(session.currentSelection().startLine()).isEqualTo(0);
+        assertThat(session.currentSelection().endLine()).isEqualTo(0);
     }
 
     // ── shadow DOM scroll helpers ──────────────────────────────────────
