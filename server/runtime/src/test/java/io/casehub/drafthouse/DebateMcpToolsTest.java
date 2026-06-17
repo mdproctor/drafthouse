@@ -35,6 +35,7 @@ import io.casehub.drafthouse.SelectionScope;
 import io.casehub.drafthouse.DocumentSide;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 
 class DebateMcpToolsTest {
@@ -957,6 +958,45 @@ class DebateMcpToolsTest {
         assertThat(result).contains("**spec**");
         assertThat(result).contains("**impl**");
         assertThat(result).contains("Comparing:");
+    }
+
+    // ── export_debate_summary ─────────────────────────────────────────────────
+
+    @Test
+    void exportDebateSummary_writesFileAndReturnsPath(@TempDir java.nio.file.Path dir) throws Exception {
+        java.nio.file.Path outputFile = dir.resolve("summary.md");
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        when(projectionService.project(eq(channelId), any()))
+                .thenReturn(new ProjectionResult<>(emptyState(), null));
+        when(debateProjection.render(any())).thenReturn("# Review Summary\n**Updated:** now\n");
+
+        String result = tools.exportDebateSummary(channelId.toString(), outputFile.toString());
+        assertThat(result).contains("\"status\":\"exported\"");
+        assertThat(result).contains("\"bytes\":");
+        assertThat(java.nio.file.Files.readString(outputFile)).contains("# Review Summary");
+    }
+
+    @Test
+    void exportDebateSummary_createsParentDirectories(@TempDir java.nio.file.Path dir) throws Exception {
+        java.nio.file.Path outputFile = dir.resolve("sub/dir/summary.md");
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+        when(projectionService.project(eq(channelId), any()))
+                .thenReturn(new ProjectionResult<>(emptyState(), null));
+        when(debateProjection.render(any())).thenReturn("summary");
+
+        String result = tools.exportDebateSummary(channelId.toString(), outputFile.toString());
+        assertThat(result).contains("\"status\":\"exported\"");
+        assertThat(java.nio.file.Files.exists(outputFile)).isTrue();
+    }
+
+    @Test
+    void exportDebateSummary_invalidSession_returnsError() {
+        String result = tools.exportDebateSummary(java.util.UUID.randomUUID().toString(), "/tmp/out.md");
+        assertThat(result).startsWith("error:");
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

@@ -601,6 +601,48 @@ public class DebateMcpTools {
                 + ",\"pathB\":" + jsonString(pathB) + "}";
     }
 
+    @Tool(name = "export_debate_summary",
+          description = "Export the current debate summary to a markdown file on disk. Creates parent directories if needed.")
+    public String exportDebateSummary(
+            @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
+            @ToolArg(description = "Absolute path for the output markdown file") String outputPath) {
+
+        DebateSession session = resolveSession(debateSessionId);
+        if (session == null) return sessionError(debateSessionId);
+
+        try {
+            var result = projectionService.project(session.channelId(), debateProjection);
+            String summary = debateProjection.render(result);
+
+            SelectionScope sel = session.currentSelection();
+            if (sel != null) {
+                StringBuilder sb = new StringBuilder(summary);
+                sb.append("\n\n## Active Selection\n");
+                sb.append("**Document ").append(sel.side().name()).append("**");
+                if (sel.startLine() > 0) {
+                    sb.append(", lines ").append(sel.startLine()).append("–").append(sel.endLine());
+                }
+                sb.append(":\n> ").append(sel.selectedText()).append("\n");
+                summary = sb.toString();
+            }
+
+            summary = appendWorkingSet(summary, session);
+
+            java.nio.file.Path path = java.nio.file.Path.of(outputPath);
+            if (path.getParent() != null) {
+                java.nio.file.Files.createDirectories(path.getParent());
+            }
+            byte[] bytes = summary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            java.nio.file.Files.write(path, bytes);
+
+            return "{\"status\":\"exported\",\"path\":" + jsonString(path.toAbsolutePath().toString())
+                    + ",\"bytes\":" + bytes.length + "}";
+        } catch (Exception e) {
+            LOG.warning("export_debate_summary failed: " + e.getMessage());
+            return "error: " + e.getMessage();
+        }
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void trackAndPush(DebateSession session, long contentChars) {
