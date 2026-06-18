@@ -5,20 +5,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public class DocumentSet {
+class DocumentSet {
 
     private final ArrayList<DocumentEntry> documents = new ArrayList<>();
     private ComparisonPair currentComparison;
-
-    public record DocumentEntry(String path, String label) {
-        public DocumentEntry {
-            Objects.requireNonNull(path, "path");
-            if (path.isBlank()) throw new IllegalArgumentException("path must be non-blank");
-            Objects.requireNonNull(label, "label");
-        }
-    }
-
-    public record ComparisonPair(String pathA, String pathB) {}
 
     public synchronized boolean add(String path, String label) {
         for (DocumentEntry e : documents) {

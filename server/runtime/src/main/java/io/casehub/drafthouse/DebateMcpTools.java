@@ -76,7 +76,7 @@ public class DebateMcpTools {
             String resolvedName = channel.name;
 
             session = new DebateSession(channel.id, debateSessionId, resolvedName);
-            session.documentSet().add(specPath, "spec");
+            session.addDocument(specPath, "spec");
             registry.put(session);
 
             // Register REV and IMP eagerly; all other roles lazy-register on first use via sender()
@@ -433,8 +433,7 @@ public class DebateMcpTools {
                     ChannelSemantic.APPEND, null);
             String newSessionId = newChannel.id.toString();
 
-            newSession = new DebateSession(newChannel.id, newSessionId, newChannel.name,
-                    DocumentSet.copyOf(original.documentSet()));
+            newSession = DebateSession.branchFrom(original, newChannel.id, newSessionId, newChannel.name);
             registry.put(newSession);
             channelGateway.initChannel(newChannel.id, new ChannelRef(newChannel.id, newChannel.name));
 
@@ -463,7 +462,7 @@ public class DebateMcpTools {
             String findingNote = findingsInOriginalOnly > 0
                     ? " " + findingsInOriginalOnly + " finding(s) from later rounds remain in the original session only."
                     : "";
-            String specPathJson = jsonString(original.specPath());
+            String specPathJson = jsonString(original.primaryPath());
             return """
                     {"newDebateSessionId":"%s","originalDebateSessionId":"%s","specPath":%s,\
                     "summary":%s,"contextCarried":{"roundsIncluded":"%s","pointCount":%d,\
@@ -528,12 +527,13 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        boolean added = session.documentSet().add(path, label);
+        boolean added = session.addDocument(path, label);
         if (!added) {
             return "error: path already in document set: " + path;
         }
-        debateEventResource.pushDocumentsChanged(session.channelId(), session.documentSet());
-        int count = session.documentSet().documents().size();
+        registry.persist(session);
+        debateEventResource.pushDocumentsChanged(session.channelId(), session);
+        int count = session.documents().size();
         return "{\"status\":\"added\",\"documentCount\":" + count + "}";
     }
 
@@ -545,24 +545,18 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        if (session.documentSet().primary().isPresent()
-                && session.documentSet().primary().get().path().equals(path)) {
-            return "error: cannot remove primary document: " + path;
+        try {
+            boolean comparisonCleared = session.removeDocument(path);
+            registry.persist(session);
+            debateEventResource.pushDocumentsChanged(session.channelId(), session);
+            if (comparisonCleared) {
+                debateEventResource.pushComparisonChanged(session.channelId(), null);
+            }
+            int count = session.documents().size();
+            return "{\"status\":\"removed\",\"documentCount\":" + count + "}";
+        } catch (IllegalArgumentException e) {
+            return "error: " + e.getMessage();
         }
-
-        var comparisonBefore = session.documentSet().currentComparison();
-        if (!session.documentSet().remove(path)) {
-            return "error: path not in document set: " + path;
-        }
-        var comparisonAfter = session.documentSet().currentComparison();
-
-        debateEventResource.pushDocumentsChanged(session.channelId(), session.documentSet());
-        if (comparisonBefore != null && comparisonAfter == null) {
-            debateEventResource.pushComparisonChanged(session.channelId(), null);
-        }
-
-        int count = session.documentSet().documents().size();
-        return "{\"status\":\"removed\",\"documentCount\":" + count + "}";
     }
 
     @Tool(name = "list_documents",
@@ -572,7 +566,7 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        return DocumentSetJson.documentsAndComparisonToJson(session.documentSet());
+        return DocumentSetJson.documentsAndComparisonToJson(session);
     }
 
     @Tool(name = "set_comparison",
@@ -584,21 +578,15 @@ public class DebateMcpTools {
         DebateSession session = resolveSession(debateSessionId);
         if (session == null) return sessionError(debateSessionId);
 
-        var docs = session.documentSet().documents();
-        boolean hasA = docs.stream().anyMatch(d -> d.path().equals(pathA));
-        boolean hasB = docs.stream().anyMatch(d -> d.path().equals(pathB));
-
-        if (!hasA) {
-            return "error: pathA not in document set: " + pathA;
+        try {
+            session.setComparison(pathA, pathB);
+            registry.persist(session);
+            debateEventResource.pushComparisonChanged(session.channelId(), session.currentComparison());
+            return "{\"status\":\"set\",\"pathA\":" + jsonString(pathA)
+                    + ",\"pathB\":" + jsonString(pathB) + "}";
+        } catch (IllegalArgumentException e) {
+            return "error: " + e.getMessage();
         }
-        if (!hasB) {
-            return "error: pathB not in document set: " + pathB;
-        }
-
-        session.documentSet().setComparison(pathA, pathB);
-        debateEventResource.pushComparisonChanged(session.channelId(), session.documentSet().currentComparison());
-        return "{\"status\":\"set\",\"pathA\":" + jsonString(pathA)
-                + ",\"pathB\":" + jsonString(pathB) + "}";
     }
 
     @Tool(name = "export_debate_summary",
@@ -658,19 +646,19 @@ public class DebateMcpTools {
     }
 
     private String appendWorkingSet(String summary, DebateSession session) {
-        var docs = session.documentSet().documents();
+        var docs = session.documents();
         if (docs.size() <= 1) return summary;
         StringBuilder sb = new StringBuilder(summary);
         sb.append("\n\n## Working Set\n");
         for (var doc : docs) {
             sb.append("- **").append(doc.label()).append("** — `").append(doc.path()).append("`\n");
         }
-        var cp = session.documentSet().currentComparison();
+        var cp = session.currentComparison();
         if (cp != null) {
             String labelA = docs.stream().filter(d -> d.path().equals(cp.pathA()))
-                    .map(DocumentSet.DocumentEntry::label).findFirst().orElse(cp.pathA());
+                    .map(DocumentEntry::label).findFirst().orElse(cp.pathA());
             String labelB = docs.stream().filter(d -> d.path().equals(cp.pathB()))
-                    .map(DocumentSet.DocumentEntry::label).findFirst().orElse(cp.pathB());
+                    .map(DocumentEntry::label).findFirst().orElse(cp.pathB());
             sb.append("\n**Comparing:** ").append(labelA).append(" ↔ ").append(labelB).append("\n");
         }
         return sb.toString();
@@ -727,12 +715,17 @@ public class DebateMcpTools {
      * The registration is idempotent — InstanceService.register() is an upsert.
      */
     private String sender(final DebateSession session, final AgentType role) {
-        return session.registerIfAbsent(role, () -> {
-            final String instanceId = DebateSession.instanceId(role, session.debateSessionId());
-            instanceService.register(instanceId,
+        String existing = session.instanceIdFor(role);
+        String instanceId = session.registerIfAbsent(role, () -> {
+            final String id = DebateSession.instanceId(role, session.debateSessionId());
+            instanceService.register(id,
                     "DraftHouse " + role.name().toLowerCase() + " " + session.debateSessionId(),
                     List.of("document-debate-" + role.name().toLowerCase()));
-            return instanceId;
+            return id;
         });
+        if (existing == null) {
+            registry.persist(session);
+        }
+        return instanceId;
     }
 }

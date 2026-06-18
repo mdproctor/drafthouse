@@ -6,7 +6,7 @@ class DocumentSetJson {
 
     private DocumentSetJson() {}
 
-    static String documentsToJson(List<DocumentSet.DocumentEntry> docs) {
+    static String documentsToJson(List<DocumentEntry> docs) {
         StringBuilder sb = new StringBuilder("[");
         for (int i = 0; i < docs.size(); i++) {
             if (i > 0) sb.append(",");
@@ -17,15 +17,15 @@ class DocumentSetJson {
         return sb.toString();
     }
 
-    static String comparisonToJson(DocumentSet.ComparisonPair cp) {
+    static String comparisonToJson(ComparisonPair cp) {
         if (cp == null) return "null";
         return "{\"pathA\":" + escapeAndQuote(cp.pathA())
                 + ",\"pathB\":" + escapeAndQuote(cp.pathB()) + "}";
     }
 
-    static String documentsAndComparisonToJson(DocumentSet documentSet) {
-        return "{\"documents\":" + documentsToJson(documentSet.documents())
-                + ",\"currentComparison\":" + comparisonToJson(documentSet.currentComparison()) + "}";
+    static String documentsAndComparisonToJson(DebateSession session) {
+        return "{\"documents\":" + documentsToJson(session.documents())
+                + ",\"currentComparison\":" + comparisonToJson(session.currentComparison()) + "}";
     }
 
     private static String escapeAndQuote(String s) {

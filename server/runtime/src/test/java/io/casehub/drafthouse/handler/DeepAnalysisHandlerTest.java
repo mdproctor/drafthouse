@@ -66,7 +66,7 @@ class DeepAnalysisHandlerTest {
     private DebateSession sessionWithSpec() {
         var session = new DebateSession(channelId, channelId.toString(),
                 "drafthouse/debate/d-" + channelId);
-        session.documentSet().add(specFile.toString(), "spec");
+        session.addDocument(specFile.toString(), "spec");
         return session;
     }
 

@@ -76,7 +76,7 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
     }
 
     protected String requireSpecPath(DebateSession session) {
-        return session.documentSet().primary()
+        return session.primary()
                 .orElseThrow(() -> new IllegalArgumentException(taskType()
                         + " requires a document in the working set — start_debate must receive a spec path"))
                 .path();

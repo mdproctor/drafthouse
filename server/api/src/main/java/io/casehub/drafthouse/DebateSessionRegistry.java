@@ -19,6 +19,9 @@ public interface DebateSessionRegistry {
     /** Removes the session for the given channel. No-op if not found. */
     void remove(UUID channelId);
 
+    /** Persists the current session state to the store without re-registering in the cache. */
+    void persist(DebateSession session);
+
     /** Returns a snapshot of all active sessions. Safe to iterate concurrently. */
     Collection<DebateSession> activeSessions();
 }

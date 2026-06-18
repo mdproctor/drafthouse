@@ -86,21 +86,21 @@ class DocumentSetTest {
 
     @Test
     void documentEntry_rejectsNullPath() {
-        assertThatThrownBy(() -> new DocumentSet.DocumentEntry(null, "label"))
+        assertThatThrownBy(() -> new DocumentEntry(null, "label"))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("path");
     }
 
     @Test
     void documentEntry_rejectsBlankPath() {
-        assertThatThrownBy(() -> new DocumentSet.DocumentEntry("  ", "label"))
+        assertThatThrownBy(() -> new DocumentEntry("  ", "label"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("non-blank");
     }
 
     @Test
     void documentEntry_rejectsNullLabel() {
-        assertThatThrownBy(() -> new DocumentSet.DocumentEntry("/a.md", null))
+        assertThatThrownBy(() -> new DocumentEntry("/a.md", null))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("label");
     }
@@ -126,7 +126,7 @@ class DocumentSetTest {
         var set = new DocumentSet();
         set.add("/a.md", "spec");
         var list = set.documents();
-        assertThatThrownBy(() -> list.add(new DocumentSet.DocumentEntry("/b.md", "x")))
+        assertThatThrownBy(() -> list.add(new DocumentEntry("/b.md", "x")))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 

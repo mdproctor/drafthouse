@@ -215,6 +215,34 @@ class DebateMcpToolsTest {
     }
 
     @Test
+    void raisePoint_supervisorRole_persistsNewParticipant() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        // SUPERVISOR not pre-registered in sessionFor() — sender() will register it
+        tools.raisePoint(channelId.toString(), "SUPERVISOR", 1,
+                "Meta concern.", "P2", "SYSTEMIC", null);
+
+        // persist called once for the new participant registration
+        verify(registry, atLeastOnce()).persist(session);
+    }
+
+    @Test
+    void raisePoint_revRole_doesNotPersist() {
+        UUID channelId = stubChannel.id;
+        DebateSession session = sessionFor(channelId);
+        when(registry.find(channelId)).thenReturn(Optional.of(session));
+
+        // REV already registered in sessionFor() — sender() returns existing, no persist
+        tools.raisePoint(channelId.toString(), "REV", 1,
+                "content", "P1", "ISOLATED", null);
+
+        // persist never called because REV was already registered
+        verify(registry, never()).persist(any());
+    }
+
+    @Test
     void raisePoint_unknownRole_returnsErrorListingAllValidRoles() {
         UUID channelId = stubChannel.id;
         when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
@@ -871,6 +899,7 @@ class DebateMcpToolsTest {
         String result = tools.addDocument(channelId.toString(), "/impl.java", "impl");
         assertThat(result).contains("\"status\":\"added\"");
         assertThat(result).contains("\"documentCount\":2"); // spec.md + impl.java
+        verify(registry).persist(session);
     }
 
     @Test
@@ -880,6 +909,7 @@ class DebateMcpToolsTest {
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.addDocument(channelId.toString(), "spec.md", "duplicate");
         assertThat(result).startsWith("error:");
+        verify(registry, never()).persist(any());
     }
 
     // ── remove_document ───────────────────────────────────────────────────────
@@ -888,10 +918,11 @@ class DebateMcpToolsTest {
     void removeDocument_removesNonPrimary() {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
-        session.documentSet().add("/impl.java", "impl");
+        session.addDocument("/impl.java", "impl");
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.removeDocument(channelId.toString(), "/impl.java");
         assertThat(result).contains("\"status\":\"removed\"");
+        verify(registry).persist(session);
     }
 
     @Test
@@ -901,6 +932,7 @@ class DebateMcpToolsTest {
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.removeDocument(channelId.toString(), "spec.md");
         assertThat(result).startsWith("error:");
+        verify(registry, never()).persist(any());
     }
 
     // ── list_documents ────────────────────────────────────────────────────────
@@ -909,7 +941,7 @@ class DebateMcpToolsTest {
     void listDocuments_returnsWrapperObject() {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
-        session.documentSet().add("/impl.java", "impl");
+        session.addDocument("/impl.java", "impl");
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.listDocuments(channelId.toString());
         assertThat(result).contains("\"documents\":");
@@ -924,11 +956,12 @@ class DebateMcpToolsTest {
     void setComparison_setsActivePair() {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
-        session.documentSet().add("/impl.java", "impl");
+        session.addDocument("/impl.java", "impl");
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.setComparison(channelId.toString(), "spec.md", "/impl.java");
         assertThat(result).contains("\"status\":\"set\"");
-        assertThat(session.documentSet().currentComparison().pathA()).isEqualTo("spec.md");
+        assertThat(session.currentComparison().pathA()).isEqualTo("spec.md");
+        verify(registry).persist(session);
     }
 
     @Test
@@ -938,6 +971,7 @@ class DebateMcpToolsTest {
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         String result = tools.setComparison(channelId.toString(), "spec.md", "/not-in-set.md");
         assertThat(result).startsWith("error:");
+        verify(registry, never()).persist(any());
     }
 
     // ── working set in summary ────────────────────────────────────────────────
@@ -946,8 +980,8 @@ class DebateMcpToolsTest {
     void getDebateSummary_includesWorkingSetSection() {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
-        session.documentSet().add("/impl.java", "impl");
-        session.documentSet().setComparison("spec.md", "/impl.java");
+        session.addDocument("/impl.java", "impl");
+        session.setComparison("spec.md", "/impl.java");
         when(registry.find(channelId)).thenReturn(Optional.of(session));
         when(projectionService.project(eq(channelId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
@@ -1009,7 +1043,7 @@ class DebateMcpToolsTest {
     private DebateSession sessionFor(final UUID channelId) {
         final DebateSession session = new DebateSession(channelId, channelId.toString(),
                 "drafthouse/debate/d-" + channelId);
-        session.documentSet().add("spec.md", "spec");
+        session.addDocument("spec.md", "spec");
         session.registerIfAbsent(AgentType.REV,
                 () -> DebateSession.instanceId(AgentType.REV, channelId.toString()));
         session.registerIfAbsent(AgentType.IMP,

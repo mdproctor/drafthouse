@@ -22,7 +22,6 @@ import jakarta.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.casehub.drafthouse.DocumentSet;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
@@ -61,17 +60,17 @@ public class DebateEventResource {
         }
     }
 
-    public void pushDocumentsChanged(UUID channelId, DocumentSet documentSet) {
+    public void pushDocumentsChanged(UUID channelId, DebateSession session) {
         try {
             String json = "{\"type\":\"documents-changed\",\"documents\":"
-                    + DocumentSetJson.documentsToJson(documentSet.documents()) + "}";
+                    + DocumentSetJson.documentsToJson(session.documents()) + "}";
             pendingDocuments.put(channelId, json);
         } catch (Exception e) {
             LOG.warning("Failed to build documents-changed JSON: " + e.getMessage());
         }
     }
 
-    public void pushComparisonChanged(UUID channelId, DocumentSet.ComparisonPair cp) {
+    public void pushComparisonChanged(UUID channelId, ComparisonPair cp) {
         try {
             String json;
             if (cp != null) {
@@ -91,7 +90,7 @@ public class DebateEventResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Collection<SessionInfo> activeSessions() {
         return registry.activeSessions().stream()
-                .map(s -> new SessionInfo(s.debateSessionId(), s.channelName(), s.specPath()))
+                .map(s -> new SessionInfo(s.debateSessionId(), s.channelName(), s.primaryPath()))
                 .toList();
     }
 
@@ -234,7 +233,7 @@ public class DebateEventResource {
                 .orElseThrow(() -> new NotFoundException("No active debate session: " + debateSessionId));
 
         return jakarta.ws.rs.core.Response.ok(
-                DocumentSetJson.documentsAndComparisonToJson(session.documentSet())).build();
+                DocumentSetJson.documentsAndComparisonToJson(session)).build();
     }
 
     @POST
@@ -248,16 +247,14 @@ public class DebateEventResource {
         DebateSession session = registry.find(channelId)
                 .orElseThrow(() -> new NotFoundException("No active debate session: " + debateSessionId));
 
-        var docs = session.documentSet().documents();
-        boolean hasA = docs.stream().anyMatch(d -> d.path().equals(request.pathA()));
-        boolean hasB = docs.stream().anyMatch(d -> d.path().equals(request.pathB()));
-        if (!hasA) return jakarta.ws.rs.core.Response.status(400)
-                .entity("{\"error\":\"path not in document set: " + escapeJson(request.pathA()) + "\"}").build();
-        if (!hasB) return jakarta.ws.rs.core.Response.status(400)
-                .entity("{\"error\":\"path not in document set: " + escapeJson(request.pathB()) + "\"}").build();
-
-        session.documentSet().setComparison(request.pathA(), request.pathB());
-        pushComparisonChanged(channelId, session.documentSet().currentComparison());
+        try {
+            session.setComparison(request.pathA(), request.pathB());
+            registry.persist(session);
+        } catch (IllegalArgumentException e) {
+            return jakarta.ws.rs.core.Response.status(400)
+                    .entity("{\"error\":\"" + escapeJson(e.getMessage()) + "\"}").build();
+        }
+        pushComparisonChanged(channelId, session.currentComparison());
         return jakarta.ws.rs.core.Response.ok("{\"status\":\"ok\"}").build();
     }
 

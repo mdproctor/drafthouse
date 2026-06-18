@@ -50,7 +50,7 @@ class VerifyHandlerTest {
 
     private DebateSession sessionWithSpec(String specPath) {
         var session = new DebateSession(channelId, channelId.toString(), "ch");
-        if (specPath != null) session.documentSet().add(specPath, "spec");
+        if (specPath != null) session.addDocument(specPath, "spec");
         return session;
     }
 

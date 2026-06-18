@@ -2,30 +2,30 @@ package io.casehub.drafthouse;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.*;
 
 class DocumentSetJsonTest {
 
     @Test
     void documentsToJson_emptyList() {
-        var set = new DocumentSet();
-        assertThat(DocumentSetJson.documentsToJson(set.documents())).isEqualTo("[]");
+        assertThat(DocumentSetJson.documentsToJson(List.of())).isEqualTo("[]");
     }
 
     @Test
     void documentsToJson_singleDocument() {
-        var set = new DocumentSet();
-        set.add("/a.md", "spec");
-        assertThat(DocumentSetJson.documentsToJson(set.documents()))
+        assertThat(DocumentSetJson.documentsToJson(List.of(new DocumentEntry("/a.md", "spec"))))
                 .isEqualTo("[{\"path\":\"/a.md\",\"label\":\"spec\"}]");
     }
 
     @Test
     void documentsToJson_multipleDocuments() {
-        var set = new DocumentSet();
-        set.add("/a.md", "spec");
-        set.add("/b.md", "impl");
-        String json = DocumentSetJson.documentsToJson(set.documents());
+        String json = DocumentSetJson.documentsToJson(List.of(
+                new DocumentEntry("/a.md", "spec"),
+                new DocumentEntry("/b.md", "impl")
+        ));
         assertThat(json).startsWith("[{");
         assertThat(json).contains("\"path\":\"/a.md\"");
         assertThat(json).contains("\"path\":\"/b.md\"");
@@ -34,16 +34,16 @@ class DocumentSetJsonTest {
 
     @Test
     void documentsToJson_escapesSpecialChars() {
-        var set = new DocumentSet();
-        set.add("/path/with \"quotes\".md", "label\nwith\nnewlines");
-        String json = DocumentSetJson.documentsToJson(set.documents());
+        String json = DocumentSetJson.documentsToJson(List.of(
+                new DocumentEntry("/path/with \"quotes\".md", "label\nwith\nnewlines")
+        ));
         assertThat(json).contains("\\\"quotes\\\"");
         assertThat(json).contains("\\n");
     }
 
     @Test
     void comparisonToJson_nonNull() {
-        var cp = new DocumentSet.ComparisonPair("/a.md", "/b.md");
+        var cp = new ComparisonPair("/a.md", "/b.md");
         assertThat(DocumentSetJson.comparisonToJson(cp))
                 .isEqualTo("{\"pathA\":\"/a.md\",\"pathB\":\"/b.md\"}");
     }
@@ -55,11 +55,11 @@ class DocumentSetJsonTest {
 
     @Test
     void documentsAndComparisonToJson_withComparison() {
-        var set = new DocumentSet();
-        set.add("/a.md", "spec");
-        set.add("/b.md", "impl");
-        set.setComparison("/a.md", "/b.md");
-        String json = DocumentSetJson.documentsAndComparisonToJson(set);
+        var session = new DebateSession(UUID.randomUUID(), "id", "ch");
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        session.setComparison("/a.md", "/b.md");
+        String json = DocumentSetJson.documentsAndComparisonToJson(session);
         assertThat(json).startsWith("{\"documents\":[");
         assertThat(json).contains("\"currentComparison\":{\"pathA\":\"/a.md\",\"pathB\":\"/b.md\"}");
         assertThat(json).endsWith("}");
@@ -67,15 +67,15 @@ class DocumentSetJsonTest {
 
     @Test
     void documentsAndComparisonToJson_withoutComparison() {
-        var set = new DocumentSet();
-        set.add("/a.md", "spec");
-        String json = DocumentSetJson.documentsAndComparisonToJson(set);
+        var session = new DebateSession(UUID.randomUUID(), "id", "ch");
+        session.addDocument("/a.md", "spec");
+        String json = DocumentSetJson.documentsAndComparisonToJson(session);
         assertThat(json).contains("\"currentComparison\":null");
     }
 
     @Test
     void comparisonToJson_pathsWithSpecialChars() {
-        var cp = new DocumentSet.ComparisonPair("/path\twith\ttabs.md", "/normal.md");
+        var cp = new ComparisonPair("/path\twith\ttabs.md", "/normal.md");
         String json = DocumentSetJson.comparisonToJson(cp);
         assertThat(json).contains("\\t");
     }

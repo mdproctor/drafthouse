@@ -17,6 +17,15 @@ public interface DraftHouseConfig {
 
     Context context();
 
+    Persistence persistence();
+
+    interface Persistence {
+
+        /** Enable JPA debate session persistence (default: false). */
+        @WithDefault("false")
+        boolean enabled();
+    }
+
     interface Reviewer {
 
         String personality();

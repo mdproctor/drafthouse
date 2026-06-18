@@ -3,6 +3,8 @@ package io.casehub.drafthouse;
 import io.casehub.drafthouse.debate.AgentType;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -16,7 +18,7 @@ class DebateSessionTest {
 
     private static DebateSession sessionWithSpec(String specPath) {
         var session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
-        if (specPath != null) session.documentSet().add(specPath, "spec");
+        if (specPath != null) session.addDocument(specPath, "spec");
         return session;
     }
 
@@ -133,15 +135,15 @@ class DebateSessionTest {
     }
 
     @Test
-    void specPath_derivedFromDocumentSetPrimary() {
+    void primaryPath_derivedFromFirstDocument() {
         DebateSession session = sessionWithSpec("my-spec.md");
-        assertThat(session.specPath()).isEqualTo("my-spec.md");
+        assertThat(session.primaryPath()).isEqualTo("my-spec.md");
     }
 
     @Test
-    void specPath_nullWhenNoDocuments() {
+    void primaryPath_nullWhenNoDocuments() {
         DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
-        assertThat(session.specPath()).isNull();
+        assertThat(session.primaryPath()).isNull();
     }
 
     // ── contextTracker() ──────────────────────────────────────────────────
@@ -163,5 +165,183 @@ class DebateSessionTest {
         var snap = session.contextTracker().snapshot(800_000, 80.0);
         assertThat(snap.serverContributionChars()).isEqualTo(3000);
         assertThat(snap.messageCount()).isEqualTo(2);
+    }
+
+    // ── addDocument() ─────────────────────────────────────────────────────
+    @Test
+    void addDocument_newPath_returnsTrue() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        assertThat(session.addDocument("/a.md", "spec")).isTrue();
+        assertThat(session.documents()).hasSize(1);
+        assertThat(session.documents().get(0).path()).isEqualTo("/a.md");
+    }
+
+    @Test
+    void addDocument_duplicatePath_returnsFalse() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        assertThat(session.addDocument("/a.md", "other")).isFalse();
+        assertThat(session.documents()).hasSize(1);
+    }
+
+    // ── removeDocument() ──────────────────────────────────────────────────
+    @Test
+    void removeDocument_existingNonPrimary_returnsComparisonCleared() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        session.setComparison("/a.md", "/b.md");
+
+        boolean comparisonCleared = session.removeDocument("/b.md");
+        assertThat(comparisonCleared).isTrue();
+        assertThat(session.documents()).hasSize(1);
+        assertThat(session.currentComparison()).isNull();
+    }
+
+    @Test
+    void removeDocument_noComparisonAffected_returnsFalse() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        session.addDocument("/c.md", "test");
+        session.setComparison("/a.md", "/b.md");
+
+        boolean comparisonCleared = session.removeDocument("/c.md");
+        assertThat(comparisonCleared).isFalse();
+        assertThat(session.currentComparison()).isNotNull();
+    }
+
+    @Test
+    void removeDocument_primary_throwsIllegalArgument() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+
+        assertThatThrownBy(() -> session.removeDocument("/a.md"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("primary");
+    }
+
+    @Test
+    void removeDocument_notFound_throwsIllegalArgument() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+
+        assertThatThrownBy(() -> session.removeDocument("/no-such.md"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not in document set");
+    }
+
+    // ── setComparison() ───────────────────────────────────────────────────
+    @Test
+    void setComparison_validPaths_sets() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        session.setComparison("/a.md", "/b.md");
+        assertThat(session.currentComparison().pathA()).isEqualTo("/a.md");
+        assertThat(session.currentComparison().pathB()).isEqualTo("/b.md");
+    }
+
+    @Test
+    void setComparison_pathNotInSet_throwsIllegalArgument() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+
+        assertThatThrownBy(() -> session.setComparison("/a.md", "/missing.md"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // ── documents() and primary() ─────────────────────────────────────────
+    @Test
+    void documents_returnsDefensiveCopy() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        assertThatThrownBy(() -> session.documents().add(new DocumentEntry("/b.md", "x")))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void primary_returnsFirstDocument() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        assertThat(session.primary()).isPresent();
+        assertThat(session.primary().get().path()).isEqualTo("/a.md");
+    }
+
+    @Test
+    void primary_empty_returnsEmpty() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        assertThat(session.primary()).isEmpty();
+    }
+
+    // ── branchFrom() ──────────────────────────────────────────────────────
+    @Test
+    void branchFrom_copiesDocumentsAndComparison() {
+        DebateSession original = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        original.addDocument("/a.md", "spec");
+        original.addDocument("/b.md", "impl");
+        original.setComparison("/a.md", "/b.md");
+
+        UUID newId = UUID.randomUUID();
+        DebateSession branched = DebateSession.branchFrom(original,
+                newId, newId.toString(), "new-channel");
+
+        assertThat(branched.channelId()).isEqualTo(newId);
+        assertThat(branched.documents()).hasSize(2);
+        assertThat(branched.currentComparison().pathA()).isEqualTo("/a.md");
+
+        // mutations on branch don't affect original
+        branched.addDocument("/c.md", "test");
+        assertThat(original.documents()).hasSize(2);
+    }
+
+    // ── snapshot() / fromSnapshot() ───────────────────────────────────────
+    @Test
+    void snapshot_capturesAllDurableState() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        session.addDocument("/b.md", "impl");
+        session.setComparison("/a.md", "/b.md");
+        session.registerIfAbsent(AgentType.REV, () -> "rev-id");
+
+        DebateSessionSnapshot snap = session.snapshot();
+        assertThat(snap.channelId()).isEqualTo(CHANNEL_ID);
+        assertThat(snap.debateSessionId()).isEqualTo(SESSION_ID);
+        assertThat(snap.channelName()).isEqualTo(NAME);
+        assertThat(snap.documents()).hasSize(2);
+        assertThat(snap.documents().get(0).path()).isEqualTo("/a.md");
+        assertThat(snap.comparison()).isNotNull();
+        assertThat(snap.comparison().pathA()).isEqualTo("/a.md");
+        assertThat(snap.participants()).containsEntry(AgentType.REV, "rev-id");
+    }
+
+    @Test
+    void fromSnapshot_reconstitutesLiveSession() {
+        var snap = new DebateSessionSnapshot(
+                CHANNEL_ID, SESSION_ID, NAME,
+                List.of(new DocumentEntry("/a.md", "spec"), new DocumentEntry("/b.md", "impl")),
+                new ComparisonPair("/a.md", "/b.md"),
+                Map.of(AgentType.REV, "rev-id", AgentType.IMP, "imp-id"));
+
+        DebateSession session = DebateSession.fromSnapshot(snap);
+        assertThat(session.channelId()).isEqualTo(CHANNEL_ID);
+        assertThat(session.documents()).hasSize(2);
+        assertThat(session.currentComparison().pathA()).isEqualTo("/a.md");
+        assertThat(session.instanceIdFor(AgentType.REV)).isEqualTo("rev-id");
+        assertThat(session.instanceIdFor(AgentType.IMP)).isEqualTo("imp-id");
+        assertThat(session.contextTracker()).isNotNull();
+        assertThat(session.currentSelection()).isNull();
+    }
+
+    @Test
+    void snapshot_documentsAreImmutableCopy() {
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        session.addDocument("/a.md", "spec");
+        DebateSessionSnapshot snap = session.snapshot();
+
+        session.addDocument("/b.md", "impl");
+        assertThat(snap.documents()).hasSize(1);
     }
 }
