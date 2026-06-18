@@ -6,7 +6,41 @@
 
 **Type:** CaseHub application (Quarkus)
 
-**Blog directory:** `wksp/blog/` (workspace blog — do not commit diary entries to the project repo; they are routed via blog-routing.yaml)
+## Artifact Locations
+
+| Skill | Writes to |
+|-------|-----------|
+| brainstorming (specs) | `specs/` (workspace staging) |
+| writing-plans (plans) | `plans/` |
+| handover | `HANDOFF.md` |
+| idea-log | `IDEAS.md` |
+| design-snapshot | `snapshots/` |
+| java-update-design / update-primary-doc | `design/JOURNAL.md` (created by `epic`) |
+| adr | `adr/` (workspace staging) |
+| write-blog | `blog/` |
+
+## Structure
+
+- `HANDOFF.md` — session handover (single file, overwritten each session)
+- `IDEAS.md` — idea log (single file)
+- `specs/` — brainstorming / design specs (staging; promoted to project `docs/specs/` at epic close)
+- `plans/` — implementation plans (ephemeral; stay in workspace only)
+- `snapshots/` — design snapshots with INDEX.md (auto-pruned, max 10)
+- `adr/` — architecture decision records (staging; promoted to project `docs/adr/` at epic close)
+- `blog/` — project diary entries with INDEX.md
+- `design/` — epic journal (created by `epic` at branch start)
+
+## Routing
+
+| Artifact   | Destination | Notes |
+|------------|-------------|-------|
+| adr        | project     | lands in `docs/adr/` — promoted at epic close |
+| specs      | project     | lands in `docs/specs/` — promoted at epic close |
+| blog       | workspace   | staged here; published to mdproctor.github.io via publish-blog |
+| plans      | workspace   | stay in workspace permanently |
+| design     | workspace   | epic journal stays in workspace |
+| snapshots  | workspace   | stay in workspace permanently |
+| handover   | workspace   | |
 
 ## Overview
 
