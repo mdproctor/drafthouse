@@ -129,12 +129,17 @@ class DebateStreamEntryTest {
     }
 
     @Test
-    void from_restartContext_returnsNull() {
+    void from_restartContext_parsesWithoutAgent() {
         String content = "DHMETA:entryType=RESTART_CONTEXT|originChannelId="
                 + UUID.randomUUID() + "|originRound=3\n\n# Full summary...";
         Message msg = makeMessage(content, null, null, MessageType.STATUS);
 
-        assertThat(DebateStreamEntry.from(msg)).isNull();
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.entryType()).isEqualTo(EntryType.RESTART_CONTEXT);
+        assertThat(entry.agentRole()).isNull();
+        assertThat(entry.content()).isEqualTo("# Full summary...");
     }
 
     @Test

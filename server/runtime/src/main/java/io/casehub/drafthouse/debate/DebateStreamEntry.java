@@ -31,12 +31,14 @@ public record DebateStreamEntry(
         }
 
         String agentStr = meta.get("agent");
-        if (agentStr == null) return null;
-
-        AgentType agentRole;
-        try {
-            agentRole = AgentType.valueOf(agentStr);
-        } catch (IllegalArgumentException e) {
+        AgentType agentRole = null;
+        if (agentStr != null) {
+            try {
+                agentRole = AgentType.valueOf(agentStr);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        } else if (entryType != EntryType.RESTART_CONTEXT) {
             return null;
         }
 
