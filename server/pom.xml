@@ -22,6 +22,7 @@
     <quarkus-playwright.version>2.3.4</quarkus-playwright.version>
     <casehub.qhorus.version>0.2-SNAPSHOT</casehub.qhorus.version>
     <casehub.platform.version>0.2-SNAPSHOT</casehub.platform.version>
+    <casehub.eidos.version>0.2-SNAPSHOT</casehub.eidos.version>
     <!-- 0.26.1 incompatible with Quarkus 3.33+; 1.9.1 built against 3.33.1, verified on 3.34.3 -->
     <quarkus-langchain4j.version>1.9.1</quarkus-langchain4j.version>
     <maven.compiler.release>21</maven.compiler.release>

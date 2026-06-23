@@ -53,7 +53,7 @@ class DebateEventResourceTest {
 
     @Test
     void catchUp_deliversHistoricalEvents() throws Exception {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -109,7 +109,7 @@ class DebateEventResourceTest {
 
     @Test
     void activeSessions_returnsCurrentDebates() {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -127,7 +127,7 @@ class DebateEventResourceTest {
 
     @Test
     void selectionPost_storesSelection() {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -149,7 +149,7 @@ class DebateEventResourceTest {
 
     @Test
     void selectionDelete_clearsSelection() {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -195,7 +195,7 @@ class DebateEventResourceTest {
 
     @Test
     void initialContextSnapshot_emittedOnConnect() throws Exception {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -254,7 +254,7 @@ class DebateEventResourceTest {
 
     @Test
     void pushedContextSnapshot_deliveredViaSse() throws Exception {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -341,7 +341,7 @@ class DebateEventResourceTest {
 
     @Test
     void selectionScope_deliveredViaSse() throws Exception {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 

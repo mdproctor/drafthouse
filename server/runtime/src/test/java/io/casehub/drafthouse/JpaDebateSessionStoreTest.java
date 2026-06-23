@@ -39,7 +39,7 @@ class JpaDebateSessionStoreTest {
                 id, id.toString(), "ch-name",
                 List.of(new DocumentEntry("/a.md", "spec"), new DocumentEntry("/b.md", "impl")),
                 new ComparisonPair("/a.md", "/b.md"),
-                Map.of(AgentType.REV, "rev-id", AgentType.IMP, "imp-id"));
+                Map.of(AgentType.REV, "rev-id", AgentType.IMP, "imp-id"), null);
 
         store.save(snap);
         var loaded = store.load(id);
@@ -55,13 +55,13 @@ class JpaDebateSessionStoreTest {
     void save_update_overwritesExisting() {
         UUID id = UUID.randomUUID();
         var snap = new DebateSessionSnapshot(id, id.toString(), "ch",
-                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of());
+                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of(), null);
         store.save(snap);
 
         var updated = new DebateSessionSnapshot(id, id.toString(), "ch",
                 List.of(new DocumentEntry("/a.md", "spec"), new DocumentEntry("/b.md", "impl")),
                 new ComparisonPair("/a.md", "/b.md"),
-                Map.of(AgentType.REV, "rev-id"));
+                Map.of(AgentType.REV, "rev-id"), null);
         store.save(updated);
 
         var loaded = store.load(id);
@@ -74,7 +74,7 @@ class JpaDebateSessionStoreTest {
     void remove_makesLoadReturnEmpty() {
         UUID id = UUID.randomUUID();
         store.save(new DebateSessionSnapshot(id, id.toString(), "ch",
-                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of()));
+                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of(), null));
         store.remove(id);
         assertThat(store.load(id)).isEmpty();
     }
@@ -83,7 +83,7 @@ class JpaDebateSessionStoreTest {
     void save_nullComparison_persistsCorrectly() {
         UUID id = UUID.randomUUID();
         store.save(new DebateSessionSnapshot(id, id.toString(), "ch",
-                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of()));
+                List.of(new DocumentEntry("/a.md", "spec")), null, Map.of(), null));
         var loaded = store.load(id);
         assertThat(loaded.get().comparison()).isNull();
     }
@@ -95,7 +95,7 @@ class JpaDebateSessionStoreTest {
                 new DocumentEntry("/c.md", "third"),
                 new DocumentEntry("/a.md", "first"),
                 new DocumentEntry("/b.md", "second"));
-        store.save(new DebateSessionSnapshot(id, id.toString(), "ch", docs, null, Map.of()));
+        store.save(new DebateSessionSnapshot(id, id.toString(), "ch", docs, null, Map.of(), null));
         var loaded = store.load(id);
         assertThat(loaded.get().documents().get(0).path()).isEqualTo("/c.md");
         assertThat(loaded.get().documents().get(1).path()).isEqualTo("/a.md");

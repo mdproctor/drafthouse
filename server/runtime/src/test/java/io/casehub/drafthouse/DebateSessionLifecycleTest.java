@@ -45,7 +45,7 @@ class DebateSessionLifecycleTest {
 
     @Test
     void raiseAndAgree_summaryShowsAgreedPoint() {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         assertThat(sessionId).isNotBlank();
         activeDebateSessionId = sessionId;
@@ -68,7 +68,7 @@ class DebateSessionLifecycleTest {
     @Test
     void supervisorRaise_foldsCorrectly_appearsInSummary() {
         // Exercises the projection fold path for a new AgentType (SUPERVISOR) end-to-end.
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 
@@ -83,7 +83,7 @@ class DebateSessionLifecycleTest {
 
     @Test
     void raiseAndDispute_summaryShowsDisputedPoint_noStrikethrough() {
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         activeDebateSessionId = sessionId;
 

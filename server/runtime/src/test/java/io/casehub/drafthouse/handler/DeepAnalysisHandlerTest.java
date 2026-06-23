@@ -65,7 +65,7 @@ class DeepAnalysisHandlerTest {
 
     private DebateSession sessionWithSpec() {
         var session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-" + channelId);
+                "drafthouse/debate/d-" + channelId, (String) null);
         session.addDocument(specFile.toString(), "spec");
         return session;
     }
@@ -118,7 +118,7 @@ class DeepAnalysisHandlerTest {
     @Test
     void missing_spec_path_throws() {
         DebateSession sessionNoSpec = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-" + channelId);
+                "drafthouse/debate/d-" + channelId, (String) null);
         when(registry.find(channelId)).thenReturn(Optional.of(sessionNoSpec));
 
         assertThatThrownBy(() -> handler.prepareTask(requestFor(null)))

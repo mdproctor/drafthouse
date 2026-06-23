@@ -24,6 +24,9 @@ class DebateSessionEntity {
     @Column(name = "comparison_path_b", length = 1024)
     String comparisonPathB;
 
+    @Column(name = "agent_id")
+    String agentId;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "debate_session_document",
             joinColumns = @JoinColumn(name = "session_channel_id"))
@@ -62,7 +65,7 @@ class DebateSessionEntity {
                 ? new ComparisonPair(comparisonPathA, comparisonPathB)
                 : null;
         return new DebateSessionSnapshot(channelId, debateSessionId, channelName,
-                docs, cp, Map.copyOf(participants));
+                docs, cp, Map.copyOf(participants), agentId);
     }
 
     static DebateSessionEntity fromSnapshot(DebateSessionSnapshot snap) {
@@ -78,6 +81,7 @@ class DebateSessionEntity {
             entity.comparisonPathB = snap.comparison().pathB();
         }
         entity.participants = new HashMap<>(snap.participants());
+        entity.agentId = snap.agentId();
         return entity;
     }
 }

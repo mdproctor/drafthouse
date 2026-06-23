@@ -48,7 +48,7 @@ DraftHouse is an MCP-driven document review tool. An LLM client opens a document
 |---|---|
 | Java 17 | Sealed types, exhaustive switches on `EntryType` |
 | Quarkus 3.34.3 | Platform BOM version |
-| casehub-qhorus 0.2-SNAPSHOT | Pre-release; `ChannelProjection` SPI (qhorus#230) required |
+| casehub-qhorus 0.2-SNAPSHOT | Pre-release; `ChannelProjection` SPI (qhorus#230 ✅ shipped) |
 | quarkus-langchain4j 1.9.1 | Built against Quarkus 3.33.1; validated on 3.34.3; 0.x line incompatible |
 | CaseHub parent BOM | `casehubio/parent` — no dependency version overrides outside BOM |
 | Browser-only UI | No Electron, no npm build step |
@@ -677,7 +677,7 @@ What this layer adds:
 - **Provider abstraction** — `DebateAgentProvider` SPI; `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; `ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` displaces it transparently when platform#55 ships
 - **JGit session persistence** — `ReviewSessionService` stores sessions under `~/.drafthouse/reviews/` by default (configurable via `casehub.drafthouse.storage.root`); each session is a Git repo; state recovered on restart by replaying commits through `SummaryProjector`
 
-Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally; qhorus#232 ✅ shipped — migration to `ChannelProjection` SPI tracked in #31)
+Not closed here: `ProjectionRenderer` SPI (`SummaryRenderer` renders locally; qhorus#232 ✅ shipped — migration to `ChannelProjection` SPI completed in #31 ✅)
 
 #### Accountability gaps closed
 
@@ -863,7 +863,7 @@ Cross-cutting decisions not captured inline in layer or Chapter entries.
 | Risk / Debt | Impact | Mitigation | Issue |
 |---|---|---|---|
 | `claude-agent-sdk-java` not on Maven Central | `ClaudeAgentSdkDebateAgentProvider` is a permanent stub until resolved | `LangChain4jDebateAgentProvider @DefaultBean` runs in all environments; stub is `@Alternative`; no CI impact | platform#55 |
-| `SummaryRenderer` not implementing `ChannelProjection` SPI | Projection remains local file-parser; deterministic fold via Qhorus SPI unavailable | qhorus#230 ✅ shipped; migration to `ChannelProjection<ReviewState>` tracked in #31 | #31 |
+| `SummaryRenderer` not implementing `ChannelProjection` SPI | Projection remains local file-parser; deterministic fold via Qhorus SPI unavailable | qhorus#230 ✅ shipped; #31 ✅ closed — `DebateChannelProjection implements ChannelProjection<ReviewState>` shipped in C5 | #31 ✅ |
 | Session storage path hardcoded to `~/.drafthouse/reviews/` | Can't configure for CI isolation or run multiple instances | ✅ Closed #28 — `casehub.drafthouse.storage.root` config key; default via `@WithDefault("${user.home}/.drafthouse/reviews")` | #28 ✅ |
 | REST stubs (`POST /api/review/sessions`) in production code | Confusion for any client discovering the REST API | Removed at #24 close — `ReviewSessionResource` deleted, `DraftHouseMcpTools` ships all session control | #24 ✅ |
 

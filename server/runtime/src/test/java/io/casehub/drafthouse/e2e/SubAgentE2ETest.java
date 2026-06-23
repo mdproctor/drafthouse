@@ -55,7 +55,7 @@ class SubAgentE2ETest {
     @Test
     void subAgent_dispatchesAndCompletes_findingAppearsInSummary() {
         // 1. start_debate
-        String startResult = tools.startDebate("test-spec.md");
+        String startResult = tools.startDebate("test-spec.md", null);
         String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
         assertThat(sessionId).isNotBlank();
         activeDebateSessionId = sessionId;
@@ -102,7 +102,7 @@ class SubAgentE2ETest {
 
     @Test
     void subAgent_pointAnchoredFinding_appearsInsidePointSection() {
-        String sessionId = extractGroup(DEBATE_ID_PATTERN, tools.startDebate("spec.md"));
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, tools.startDebate("spec.md", null));
         activeDebateSessionId = sessionId;
 
         String pointId = extractGroup(POINT_ID_PATTERN,

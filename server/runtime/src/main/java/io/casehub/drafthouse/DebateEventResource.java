@@ -45,7 +45,7 @@ public class DebateEventResource {
     private final ConcurrentHashMap<UUID, String> pendingDocuments = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<UUID, String> pendingComparisons = new ConcurrentHashMap<>();
 
-    record SessionInfo(String debateSessionId, String channelName, String specPath) {}
+    record SessionInfo(String debateSessionId, String channelName, String specPath, String agentId) {}
     record SelectionRequest(String side, int startLine, int endLine, String selectedText) {}
     record ComparisonRequest(String pathA, String pathB) {}
 
@@ -90,7 +90,7 @@ public class DebateEventResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Collection<SessionInfo> activeSessions() {
         return registry.activeSessions().stream()
-                .map(s -> new SessionInfo(s.debateSessionId(), s.channelName(), s.primaryPath()))
+                .map(s -> new SessionInfo(s.debateSessionId(), s.channelName(), s.primaryPath(), s.agentId()))
                 .toList();
     }
 

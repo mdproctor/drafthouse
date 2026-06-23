@@ -17,7 +17,7 @@ class DebateSessionTest {
     private static final String NAME       = "drafthouse/debate/d-" + SESSION_ID;
 
     private static DebateSession sessionWithSpec(String specPath) {
-        var session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        var session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         if (specPath != null) session.addDocument(specPath, "spec");
         return session;
     }
@@ -59,7 +59,7 @@ class DebateSessionTest {
 
     @Test
     void registerIfAbsent_secondCall_returnsSameIdWithoutInvokingSupplier() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.registerIfAbsent(AgentType.IMP, () -> "imp-id");
 
         AtomicInteger calls = new AtomicInteger();
@@ -74,7 +74,7 @@ class DebateSessionTest {
 
     @Test
     void registerIfAbsent_supplierThrows_keyRemainsAbsent_nextCallRetries() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         AtomicInteger calls = new AtomicInteger();
 
         // First call throws
@@ -99,7 +99,7 @@ class DebateSessionTest {
 
     @Test
     void participants_returnsUnmodifiableView() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.registerIfAbsent(AgentType.REV, () -> "rev-id");
 
         assertThatThrownBy(() -> session.participants().put(AgentType.IMP, "imp-id"))
@@ -108,7 +108,7 @@ class DebateSessionTest {
 
     @Test
     void participants_reflectsRegisteredRoles() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.registerIfAbsent(AgentType.REV, () -> "rev");
         session.registerIfAbsent(AgentType.IMP, () -> "imp");
 
@@ -120,7 +120,7 @@ class DebateSessionTest {
 
     @Test
     void instanceIdFor_returnsNullBeforeRegistration() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         assertThat(session.instanceIdFor(AgentType.MODERATOR)).isNull();
     }
 
@@ -128,7 +128,7 @@ class DebateSessionTest {
 
     @Test
     void getters_returnConstructorValues() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         assertThat(session.channelId()).isEqualTo(CHANNEL_ID);
         assertThat(session.debateSessionId()).isEqualTo(SESSION_ID);
         assertThat(session.channelName()).isEqualTo(NAME);
@@ -142,7 +142,7 @@ class DebateSessionTest {
 
     @Test
     void primaryPath_nullWhenNoDocuments() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         assertThat(session.primaryPath()).isNull();
     }
 
@@ -170,7 +170,7 @@ class DebateSessionTest {
     // ── addDocument() ─────────────────────────────────────────────────────
     @Test
     void addDocument_newPath_returnsTrue() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         assertThat(session.addDocument("/a.md", "spec")).isTrue();
         assertThat(session.documents()).hasSize(1);
         assertThat(session.documents().get(0).path()).isEqualTo("/a.md");
@@ -178,7 +178,7 @@ class DebateSessionTest {
 
     @Test
     void addDocument_duplicatePath_returnsFalse() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         assertThat(session.addDocument("/a.md", "other")).isFalse();
         assertThat(session.documents()).hasSize(1);
@@ -187,7 +187,7 @@ class DebateSessionTest {
     // ── removeDocument() ──────────────────────────────────────────────────
     @Test
     void removeDocument_existingNonPrimary_returnsComparisonCleared() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         session.setComparison("/a.md", "/b.md");
@@ -200,7 +200,7 @@ class DebateSessionTest {
 
     @Test
     void removeDocument_noComparisonAffected_returnsFalse() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         session.addDocument("/c.md", "test");
@@ -213,7 +213,7 @@ class DebateSessionTest {
 
     @Test
     void removeDocument_primary_throwsIllegalArgument() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
 
@@ -224,7 +224,7 @@ class DebateSessionTest {
 
     @Test
     void removeDocument_notFound_throwsIllegalArgument() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
 
         assertThatThrownBy(() -> session.removeDocument("/no-such.md"))
@@ -235,7 +235,7 @@ class DebateSessionTest {
     // ── setComparison() ───────────────────────────────────────────────────
     @Test
     void setComparison_validPaths_sets() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         session.setComparison("/a.md", "/b.md");
@@ -245,7 +245,7 @@ class DebateSessionTest {
 
     @Test
     void setComparison_pathNotInSet_throwsIllegalArgument() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
 
         assertThatThrownBy(() -> session.setComparison("/a.md", "/missing.md"))
@@ -255,7 +255,7 @@ class DebateSessionTest {
     // ── documents() and primary() ─────────────────────────────────────────
     @Test
     void documents_returnsDefensiveCopy() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         assertThatThrownBy(() -> session.documents().add(new DocumentEntry("/b.md", "x")))
                 .isInstanceOf(UnsupportedOperationException.class);
@@ -263,7 +263,7 @@ class DebateSessionTest {
 
     @Test
     void primary_returnsFirstDocument() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         assertThat(session.primary()).isPresent();
@@ -272,14 +272,14 @@ class DebateSessionTest {
 
     @Test
     void primary_empty_returnsEmpty() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         assertThat(session.primary()).isEmpty();
     }
 
     // ── branchFrom() ──────────────────────────────────────────────────────
     @Test
     void branchFrom_copiesDocumentsAndComparison() {
-        DebateSession original = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession original = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         original.addDocument("/a.md", "spec");
         original.addDocument("/b.md", "impl");
         original.setComparison("/a.md", "/b.md");
@@ -300,7 +300,7 @@ class DebateSessionTest {
     // ── snapshot() / fromSnapshot() ───────────────────────────────────────
     @Test
     void snapshot_capturesAllDurableState() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         session.setComparison("/a.md", "/b.md");
@@ -323,7 +323,8 @@ class DebateSessionTest {
                 CHANNEL_ID, SESSION_ID, NAME,
                 List.of(new DocumentEntry("/a.md", "spec"), new DocumentEntry("/b.md", "impl")),
                 new ComparisonPair("/a.md", "/b.md"),
-                Map.of(AgentType.REV, "rev-id", AgentType.IMP, "imp-id"));
+                Map.of(AgentType.REV, "rev-id", AgentType.IMP, "imp-id"),
+                null);
 
         DebateSession session = DebateSession.fromSnapshot(snap);
         assertThat(session.channelId()).isEqualTo(CHANNEL_ID);
@@ -337,7 +338,7 @@ class DebateSessionTest {
 
     @Test
     void snapshot_documentsAreImmutableCopy() {
-        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME);
+        DebateSession session = new DebateSession(CHANNEL_ID, SESSION_ID, NAME, (String) null);
         session.addDocument("/a.md", "spec");
         DebateSessionSnapshot snap = session.snapshot();
 

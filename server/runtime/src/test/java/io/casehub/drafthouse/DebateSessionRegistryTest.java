@@ -36,7 +36,7 @@ class DebateSessionRegistryTest {
     void activeSessions_afterPut_containsSession() {
         UUID channelId = UUID.randomUUID();
         DebateSession session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-test");
+                "drafthouse/debate/d-test", (String) null);
         session.addDocument("test-spec.md", "spec");
         registry.put(session);
 
@@ -49,7 +49,7 @@ class DebateSessionRegistryTest {
     void activeSessions_afterRemove_doesNotContainSession() {
         UUID channelId = UUID.randomUUID();
         DebateSession session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-test");
+                "drafthouse/debate/d-test", (String) null);
         session.addDocument("test-spec.md", "spec");
         registry.put(session);
         registry.remove(channelId);
@@ -62,7 +62,7 @@ class DebateSessionRegistryTest {
     void put_delegatesToStore() {
         UUID channelId = UUID.randomUUID();
         DebateSession session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-test");
+                "drafthouse/debate/d-test", (String) null);
         session.addDocument("test-spec.md", "spec");
         registry.put(session);
 
@@ -75,7 +75,7 @@ class DebateSessionRegistryTest {
     void remove_delegatesToStore() {
         UUID channelId = UUID.randomUUID();
         DebateSession session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-test");
+                "drafthouse/debate/d-test", (String) null);
         session.addDocument("test-spec.md", "spec");
         registry.put(session);
         registry.remove(channelId);
@@ -87,7 +87,7 @@ class DebateSessionRegistryTest {
     void persist_savesSnapshotToStore() {
         UUID channelId = UUID.randomUUID();
         DebateSession session = new DebateSession(channelId, channelId.toString(),
-                "drafthouse/debate/d-test");
+                "drafthouse/debate/d-test", (String) null);
         session.addDocument("test-spec.md", "spec");
         registry.put(session);
         reset(store);
@@ -106,7 +106,7 @@ class DebateSessionRegistryTest {
         var snap = new DebateSessionSnapshot(
                 channelId, channelId.toString(), "ch-name",
                 List.of(new DocumentEntry("/a.md", "spec")),
-                null, Map.of());
+                null, Map.of(), null);
         when(store.loadAll()).thenReturn(List.of(snap));
 
         var freshRegistry = new DebateSessionRegistryImpl();

@@ -29,7 +29,7 @@ public final class DebateE2EFixtures {
     }
 
     public static String startDebateSession(DebateMcpTools tools, String specPath) {
-        String result = tools.startDebate(specPath);
+        String result = tools.startDebate(specPath, null);
         String sessionId = extractSessionId(result);
         if (sessionId.isBlank()) {
             throw new AssertionError("startDebate failed: " + result);

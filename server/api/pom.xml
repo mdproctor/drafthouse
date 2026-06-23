@@ -24,6 +24,11 @@
       <version>${casehub.qhorus.version}</version>
     </dependency>
     <dependency>
+      <groupId>io.casehub</groupId>
+      <artifactId>casehub-eidos-api</artifactId>
+      <version>${casehub.eidos.version}</version>
+    </dependency>
+    <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>

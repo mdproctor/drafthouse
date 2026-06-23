@@ -132,7 +132,7 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
 | `server/api/` | Pure Java domain model — no Quarkus, no Qhorus; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
-| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, debate/ |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, debate/ |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (stub, pending platform#55) |
 | `server/runtime/src/main/resources/application.properties` | Quarkus config |
 | `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
@@ -154,7 +154,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/watch?path=   ← SSE file-change stream
   ├── GET /                  ← serve index.html (from -Dui.dir)
   ├── MCP tools (review)     ← start_review, update_selection, query_review, end_review
-  ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate, report_context
+  ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate, report_context, list_reviewers, get_reviewer_instructions
   ├── MCP tools (documents)  ← add_document, remove_document, list_documents, set_comparison, export_debate_summary
   ├── GET /api/debate/{id}/events  ← SSE debate event stream (includes documents-changed, comparison-changed metadata)
   ├── POST /api/debate/{id}/selection  ← store selection scope on debate session

@@ -31,6 +31,7 @@ Planned and completed features for DraftHouse.
 - [x] **Keyboard shortcuts overlay** (#63) — `?` toggles overlay; Escape/backdrop dismiss; INPUT/TEXTAREA/SELECT/contenteditable guard with shadow DOM traversal
 - [x] **Multi-document working sets** (#59) — `DocumentSet` on `DebateSession`; `add_document`, `remove_document`, `list_documents`, `set_comparison` MCP tools; REST + SSE for browser sync; topbar document dropdown
 - [x] **Export debate summary** (#65) — `export_debate_summary` MCP tool writes summary to markdown file; same render path as `get_debate_summary`
+- [x] **Multi-LLM reviewer registry** (#62) — `DraftHouseReviewerRegistry` (in-memory AgentRegistry), `ReviewerDescriptorSeeder` (4 built-in reviewer personas), `SimplePromptRenderer`, `agentId` on DebateSession/SessionInfo, `list_reviewers` and `get_reviewer_instructions` MCP tools, reviewer resolution in `start_debate` and `get_debate_summary`
 
 ## Planned
 
@@ -50,7 +51,7 @@ See research spec: `docs/superpowers/specs/2026-05-26-document-review-tool-resea
 ### Post-MVP
 
 - [ ] Selection-scoped conversation channels
-- [ ] Multi-LLM reviewers with personality library
+- [x] Multi-LLM reviewers with personality library (#62) — registry, seeder, MCP tools, session discovery
 - [ ] ReviewStrategy SPI
 - [ ] GraalVM native image
 - [ ] Unified diff view mode (#66)

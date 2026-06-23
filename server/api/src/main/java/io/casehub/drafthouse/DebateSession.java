@@ -24,24 +24,27 @@ public class DebateSession {
     private final UUID channelId;
     private final String debateSessionId;
     private final String channelName;
+    private final String agentId;
     private final ConcurrentHashMap<AgentType, String> participants = new ConcurrentHashMap<>();
     private final DocumentSet documentSet;
     private final ContextTracker contextTracker = new ContextTracker();
     private volatile SelectionScope currentSelection;
 
     public DebateSession(final UUID channelId, final String debateSessionId,
-                         final String channelName) {
+                         final String channelName, final String agentId) {
         this.channelId       = channelId;
         this.debateSessionId = debateSessionId;
         this.channelName     = channelName;
+        this.agentId         = agentId;
         this.documentSet     = new DocumentSet();
     }
 
     public DebateSession(final UUID channelId, final String debateSessionId,
-                         final String channelName, final DocumentSet documentSet) {
+                         final String channelName, final String agentId, final DocumentSet documentSet) {
         this.channelId       = channelId;
         this.debateSessionId = debateSessionId;
         this.channelName     = channelName;
+        this.agentId         = agentId;
         this.documentSet     = documentSet;
     }
 
@@ -59,7 +62,7 @@ public class DebateSession {
      */
     public static DebateSession branchFrom(final DebateSession source, final UUID channelId,
                                            final String sessionId, final String channelName) {
-        return new DebateSession(channelId, sessionId, channelName, DocumentSet.copyOf(source.documentSet));
+        return new DebateSession(channelId, sessionId, channelName, source.agentId, DocumentSet.copyOf(source.documentSet));
     }
 
     /**
@@ -78,7 +81,7 @@ public class DebateSession {
         }
         DebateSession session = new DebateSession(
                 snapshot.channelId(), snapshot.debateSessionId(),
-                snapshot.channelName(), ds);
+                snapshot.channelName(), snapshot.agentId(), ds);
         for (var entry : snapshot.participants().entrySet()) {
             session.registerIfAbsent(entry.getKey(), entry::getValue);
         }
@@ -112,6 +115,7 @@ public class DebateSession {
     public UUID channelId()         { return channelId; }
     public String debateSessionId() { return debateSessionId; }
     public String channelName()     { return channelName; }
+    public String agentId()         { return agentId; }
     public String primaryPath()     { return documentSet.primary().map(DocumentEntry::path).orElse(null); }
     public ContextTracker contextTracker() { return contextTracker; }
 
@@ -224,6 +228,6 @@ public class DebateSession {
         }
         return new DebateSessionSnapshot(
                 channelId, debateSessionId, channelName,
-                docs, comp, Map.copyOf(participants));
+                docs, comp, Map.copyOf(participants), agentId);
     }
 }

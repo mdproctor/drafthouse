@@ -11,4 +11,5 @@ public record DebateSessionSnapshot(
         String channelName,
         List<DocumentEntry> documents,
         ComparisonPair comparison,
-        Map<AgentType, String> participants) {}
+        Map<AgentType, String> participants,
+        String agentId) {}

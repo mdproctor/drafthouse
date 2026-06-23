@@ -49,7 +49,7 @@ class VerifyHandlerTest {
     }
 
     private DebateSession sessionWithSpec(String specPath) {
-        var session = new DebateSession(channelId, channelId.toString(), "ch");
+        var session = new DebateSession(channelId, channelId.toString(), "ch", (String) null);
         if (specPath != null) session.addDocument(specPath, "spec");
         return session;
     }
@@ -88,7 +88,7 @@ class VerifyHandlerTest {
     @Test
     void throws_on_empty_document_set() {
         when(registry.find(channelId)).thenReturn(Optional.of(
-                new DebateSession(channelId, channelId.toString(), "ch")));
+                new DebateSession(channelId, channelId.toString(), "ch", (String) null)));
         setupState("pt-1", "Some claim.");
         assertThatThrownBy(() -> handler.prepareTask(requestFor("pt-1")))
                 .isInstanceOf(IllegalArgumentException.class)

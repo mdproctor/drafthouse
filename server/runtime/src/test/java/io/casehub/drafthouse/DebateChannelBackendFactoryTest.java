@@ -87,7 +87,7 @@ class DebateChannelBackendFactoryTest {
         OutboundMessage message = subTaskRequestMessage(correlationId);
 
         DebateSession session = new DebateSession(
-                channelId, channelId.toString(), "drafthouse/debate/d-" + channelId, null);
+                channelId, channelId.toString(), "drafthouse/debate/d-" + channelId, (String) null);
         when(debateRegistry.find(channelId)).thenReturn(Optional.of(session));
         when(channelAgentEvent.fireAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -124,7 +124,7 @@ class DebateChannelBackendFactoryTest {
         OutboundMessage message = subTaskRequestMessage(null);
 
         DebateSession session = new DebateSession(
-                channelId, channelId.toString(), "drafthouse/debate/d-" + channelId, null);
+                channelId, channelId.toString(), "drafthouse/debate/d-" + channelId, (String) null);
         when(debateRegistry.find(channelId)).thenReturn(Optional.of(session));
         when(channelAgentEvent.fireAsync(any())).thenReturn(CompletableFuture.completedFuture(null));
 

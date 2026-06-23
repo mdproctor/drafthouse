@@ -55,7 +55,7 @@ class DocumentSetJsonTest {
 
     @Test
     void documentsAndComparisonToJson_withComparison() {
-        var session = new DebateSession(UUID.randomUUID(), "id", "ch");
+        var session = new DebateSession(UUID.randomUUID(), "id", "ch", (String) null);
         session.addDocument("/a.md", "spec");
         session.addDocument("/b.md", "impl");
         session.setComparison("/a.md", "/b.md");
@@ -67,7 +67,7 @@ class DocumentSetJsonTest {
 
     @Test
     void documentsAndComparisonToJson_withoutComparison() {
-        var session = new DebateSession(UUID.randomUUID(), "id", "ch");
+        var session = new DebateSession(UUID.randomUUID(), "id", "ch", (String) null);
         session.addDocument("/a.md", "spec");
         String json = DocumentSetJson.documentsAndComparisonToJson(session);
         assertThat(json).contains("\"currentComparison\":null");
