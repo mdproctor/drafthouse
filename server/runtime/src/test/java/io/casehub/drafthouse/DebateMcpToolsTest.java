@@ -11,8 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import io.casehub.eidos.api.AgentDescriptor;
-import io.casehub.eidos.api.AgentRegistry;
-import io.casehub.eidos.api.SystemPromptRenderer;
+import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
@@ -52,8 +51,7 @@ class DebateMcpToolsTest {
     private DebateChannelProjection debateProjection;
     private DraftHouseConfig config;
     private DebateEventResource debateEventResource;
-    private AgentRegistry agentRegistry;
-    private SystemPromptRenderer systemPromptRenderer;
+    private ReviewerResolver resolver;
     private DebateMcpTools tools;
 
     private Channel stubChannel;
@@ -69,21 +67,13 @@ class DebateMcpToolsTest {
         debateProjection  = mock(DebateChannelProjection.class);
         config            = mock(DraftHouseConfig.class);
         debateEventResource = mock(DebateEventResource.class);
-        agentRegistry       = mock(AgentRegistry.class);
-        systemPromptRenderer = mock(SystemPromptRenderer.class);
+        resolver          = mock(ReviewerResolver.class);
 
-        // Default reviewer descriptor returned by the registry for all startDebate calls
-        AgentDescriptor defaultDescriptor = AgentDescriptor.builder()
-                .agentId(ReviewerDescriptorSeeder.DEFAULT_REVIEWER_ID)
-                .name("Structural Reviewer")
-                .slot("document-review")
-                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
-                .build();
-        when(agentRegistry.findById(ReviewerDescriptorSeeder.DEFAULT_REVIEWER_ID,
-                ReviewerDescriptorSeeder.TENANCY_ID)).thenReturn(Optional.of(defaultDescriptor));
-        when(systemPromptRenderer.render(any(), any())).thenReturn(
-                new SystemPromptRenderer.RenderedPrompt("mock instructions",
-                        SystemPromptRenderer.RenderFormat.MARKDOWN, "hash1", "hash2", false));
+        ResolvedReviewer defaultReviewer = new ResolvedReviewer(
+                ReviewerDescriptorSeeder.DEFAULT_REVIEWER_ID, "Structural Reviewer", "mock instructions");
+        when(resolver.resolve(isNull(), any(Resource[].class))).thenReturn(defaultReviewer);
+        when(resolver.resolve(eq(ReviewerDescriptorSeeder.DEFAULT_REVIEWER_ID), any(Resource[].class)))
+                .thenReturn(defaultReviewer);
 
         DraftHouseConfig.Context contextConfig = mock(DraftHouseConfig.Context.class);
         when(contextConfig.windowSizeChars()).thenReturn(800_000L);
@@ -100,8 +90,7 @@ class DebateMcpToolsTest {
         tools.debateProjection  = debateProjection;
         tools.config            = config;
         tools.debateEventResource = debateEventResource;
-        tools.agentRegistry     = agentRegistry;
-        tools.systemPromptRenderer = systemPromptRenderer;
+        tools.resolver          = resolver;
 
         stubChannel      = new Channel();
         stubChannel.id   = UUID.randomUUID();
@@ -1042,93 +1031,12 @@ class DebateMcpToolsTest {
 
     @Test
     void startDebate_withUnknownAgentId_returnsError() {
-        when(agentRegistry.findById("unknown-agent", ReviewerDescriptorSeeder.TENANCY_ID))
-                .thenReturn(Optional.empty());
+        when(resolver.resolve(eq("unknown-agent"), any(Resource[].class)))
+                .thenThrow(new IllegalArgumentException("unknown reviewer agent: unknown-agent"));
 
         String result = tools.startDebate("spec.md", "unknown-agent");
 
         assertThat(result).startsWith("error: unknown reviewer agent: unknown-agent");
-    }
-
-    @Test
-    void listReviewers_returns4Entries() {
-        // Mock all 4 reviewer descriptors with proper AgentDisposition and AgentCapability builders
-        io.casehub.eidos.api.AgentDisposition disposition = io.casehub.eidos.api.AgentDisposition.builder()
-                .conflictMode("collaborative").build();
-        io.casehub.eidos.api.AgentCapability cap = io.casehub.eidos.api.AgentCapability.builder()
-                .name("document-review").tags(List.of("structural")).build();
-
-        AgentDescriptor structural = AgentDescriptor.builder()
-                .agentId("drafthouse-structural-reviewer")
-                .name("Structural Reviewer")
-                .slot("document-reviewer")
-                .disposition(disposition)
-                .capabilities(List.of(cap))
-                .briefing("Reviews structure")
-                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
-                .build();
-        AgentDescriptor content = AgentDescriptor.builder()
-                .agentId("drafthouse-content-reviewer")
-                .name("Content Reviewer")
-                .slot("document-reviewer")
-                .disposition(disposition)
-                .capabilities(List.of(cap))
-                .briefing("Reviews content")
-                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
-                .build();
-        AgentDescriptor readability = AgentDescriptor.builder()
-                .agentId("drafthouse-readability-reviewer")
-                .name("Readability Reviewer")
-                .slot("document-reviewer")
-                .disposition(disposition)
-                .capabilities(List.of(cap))
-                .briefing("Reviews readability")
-                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
-                .build();
-        AgentDescriptor completeness = AgentDescriptor.builder()
-                .agentId("drafthouse-completeness-reviewer")
-                .name("Completeness Reviewer")
-                .slot("document-reviewer")
-                .disposition(disposition)
-                .capabilities(List.of(cap))
-                .briefing("Reviews completeness")
-                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
-                .build();
-
-        when(agentRegistry.find(io.casehub.eidos.api.AgentQuery.bySlot("document-reviewer", ReviewerDescriptorSeeder.TENANCY_ID)))
-                .thenReturn(List.of(structural, content, readability, completeness));
-
-        String result = tools.listReviewers();
-
-        assertThat(result).startsWith("[");
-        assertThat(result).endsWith("]");
-        assertThat(result).contains("\"agentId\":\"drafthouse-structural-reviewer\"");
-        assertThat(result).contains("\"agentId\":\"drafthouse-content-reviewer\"");
-        assertThat(result).contains("\"agentId\":\"drafthouse-readability-reviewer\"");
-        assertThat(result).contains("\"agentId\":\"drafthouse-completeness-reviewer\"");
-        assertThat(result).contains("\"name\":\"Structural Reviewer\"");
-        assertThat(result).contains("\"slot\":\"document-reviewer\"");
-        assertThat(result).contains("\"disposition\":");
-        assertThat(result).contains("\"capabilities\":");
-        assertThat(result).contains("\"briefingSummary\":");
-    }
-
-    @Test
-    void getReviewerInstructions_withoutSession_returnsRenderedPrompt() {
-        String result = tools.getReviewerInstructions("drafthouse-structural-reviewer", null);
-
-        assertThat(result).contains("\"instructions\":\"mock instructions\"");
-        assertThat(result).contains("\"agentId\":\"drafthouse-structural-reviewer\"");
-    }
-
-    @Test
-    void getReviewerInstructions_withUnknownAgent_returnsError() {
-        when(agentRegistry.findById("unknown", ReviewerDescriptorSeeder.TENANCY_ID))
-                .thenReturn(Optional.empty());
-
-        String result = tools.getReviewerInstructions("unknown", null);
-
-        assertThat(result).startsWith("error: unknown reviewer agent: unknown");
     }
 
     @Test
@@ -1146,6 +1054,15 @@ class DebateMcpToolsTest {
         ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary\n...");
+
+        AgentDescriptor descriptor = AgentDescriptor.builder()
+                .agentId("drafthouse-structural-reviewer")
+                .name("Structural Reviewer")
+                .slot("document-review")
+                .tenancyId(ReviewerDescriptorSeeder.TENANCY_ID)
+                .build();
+        when(resolver.findDescriptor("drafthouse-structural-reviewer"))
+                .thenReturn(Optional.of(descriptor));
 
         String json = tools.getDebateSummary(channelId.toString());
 

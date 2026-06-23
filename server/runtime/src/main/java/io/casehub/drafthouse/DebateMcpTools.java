@@ -13,13 +13,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import io.casehub.eidos.api.AgentDescriptor;
-import io.casehub.eidos.api.AgentPromptContext;
-import io.casehub.eidos.api.AgentQuery;
-import io.casehub.eidos.api.AgentRegistry;
-import io.casehub.eidos.api.DispositionAxis;
-import io.casehub.eidos.api.GoalContext;
 import io.casehub.eidos.api.Resource;
-import io.casehub.eidos.api.SystemPromptRenderer;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
@@ -65,8 +59,7 @@ public class DebateMcpTools {
     @Inject DebateChannelProjection debateProjection;
     @Inject DraftHouseConfig config;
     @Inject DebateEventResource debateEventResource;
-    @Inject AgentRegistry agentRegistry;
-    @Inject SystemPromptRenderer systemPromptRenderer;
+    @Inject ReviewerResolver resolver;
 
     @Tool(name = "start_debate",
           description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, specPath, and reviewer.")
@@ -82,20 +75,12 @@ public class DebateMcpTools {
         Channel channel = null;
         DebateSession session = null;
         try {
-            // Resolve reviewer before creating channel — fail fast on unknown agent
-            AgentDescriptor reviewerDescriptor;
-            String resolvedAgentId;
-            if (agentId != null && !agentId.isBlank()) {
-                reviewerDescriptor = agentRegistry.findById(agentId, ReviewerDescriptorSeeder.TENANCY_ID).orElse(null);
-                if (reviewerDescriptor == null) return "error: unknown reviewer agent: " + agentId;
-                resolvedAgentId = agentId;
-            } else {
-                reviewerDescriptor = agentRegistry.findById(ReviewerDescriptorSeeder.DEFAULT_REVIEWER_ID,
-                        ReviewerDescriptorSeeder.TENANCY_ID).orElse(null);
-                if (reviewerDescriptor == null) return "error: no reviewer agents registered";
-                resolvedAgentId = reviewerDescriptor.agentId();
+            ResolvedReviewer reviewer;
+            try {
+                reviewer = resolver.resolve(agentId, new Resource(specPath, "spec", "file"));
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                return "error: " + e.getMessage();
             }
-            String instructions = renderInstructions(reviewerDescriptor, specPath);
 
             channel = channelService.create(channelName, "DraftHouse debate session",
                     ChannelSemantic.APPEND, null);
@@ -103,7 +88,7 @@ public class DebateMcpTools {
             String debateSessionId = channel.id.toString();
             String resolvedName = channel.name;
 
-            session = new DebateSession(channel.id, debateSessionId, resolvedName, resolvedAgentId);
+            session = new DebateSession(channel.id, debateSessionId, resolvedName, reviewer.agentId());
             session.addDocument(specPath, "spec");
             registry.put(session);
 
@@ -121,10 +106,10 @@ public class DebateMcpTools {
             }
 
             return "{\"debateSessionId\":\"" + debateSessionId + "\",\"channel\":\"" + resolvedName
-                    + "\",\"specPath\":" + jsonString(specPath)
-                    + ",\"reviewer\":{\"agentId\":" + jsonString(resolvedAgentId)
-                    + ",\"name\":" + jsonString(reviewerDescriptor.name())
-                    + ",\"instructions\":" + jsonString(instructions) + "}}";
+                    + "\",\"specPath\":" + DraftHouseMcpTools.jsonString(specPath)
+                    + ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(reviewer.agentId())
+                    + ",\"name\":" + DraftHouseMcpTools.jsonString(reviewer.name())
+                    + ",\"instructions\":" + DraftHouseMcpTools.jsonString(reviewer.instructions()) + "}}";
 
         } catch (Exception e) {
             LOG.warning("start_debate failed: " + e.getMessage() + " — attempting cleanup");
@@ -292,13 +277,13 @@ public class DebateMcpTools {
 
         String reviewerJson = "";
         if (session.agentId() != null) {
-            var desc = agentRegistry.findById(session.agentId(), ReviewerDescriptorSeeder.TENANCY_ID);
-            if (desc.isPresent()) {
-                reviewerJson = ",\"reviewer\":{\"agentId\":" + jsonString(session.agentId())
-                        + ",\"name\":" + jsonString(desc.get().name()) + "}";
+            var name = resolver.findDescriptor(session.agentId()).map(AgentDescriptor::name).orElse(null);
+            if (name != null) {
+                reviewerJson = ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(session.agentId())
+                        + ",\"name\":" + DraftHouseMcpTools.jsonString(name) + "}";
             }
         }
-        return "{\"summary\":" + jsonString(summary) + reviewerJson + "}";
+        return "{\"summary\":" + DraftHouseMcpTools.jsonString(summary) + reviewerJson + "}";
     }
 
     @Tool(name = "end_debate",
@@ -502,16 +487,14 @@ public class DebateMcpTools {
             String findingNote = findingsInOriginalOnly > 0
                     ? " " + findingsInOriginalOnly + " finding(s) from later rounds remain in the original session only."
                     : "";
-            String specPathJson = jsonString(original.primaryPath());
+            String specPathJson = DraftHouseMcpTools.jsonString(original.primaryPath());
             String reviewerJson = "";
             if (original.agentId() != null) {
-                var desc = agentRegistry.findById(original.agentId(), ReviewerDescriptorSeeder.TENANCY_ID);
-                if (desc.isPresent()) {
-                    String restartInstructions = renderInstructions(desc.get(), original.primaryPath());
-                    reviewerJson = ",\"reviewer\":{\"agentId\":" + jsonString(original.agentId())
-                            + ",\"name\":" + jsonString(desc.get().name())
-                            + ",\"instructions\":" + jsonString(restartInstructions) + "}";
-                }
+                ResolvedReviewer restartReviewer = resolver.resolve(
+                        original.agentId(), new Resource(original.primaryPath(), "spec", "file"));
+                reviewerJson = ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(restartReviewer.agentId())
+                        + ",\"name\":" + DraftHouseMcpTools.jsonString(restartReviewer.name())
+                        + ",\"instructions\":" + DraftHouseMcpTools.jsonString(restartReviewer.instructions()) + "}";
             }
             return """
                     {"newDebateSessionId":"%s","originalDebateSessionId":"%s","specPath":%s,\
@@ -520,7 +503,7 @@ public class DebateMcpTools {
                     "message":"New session ready. Rounds %s from the original are visible here.%s \
                     Call end_debate on originalDebateSessionId when done with it."}""".formatted(
                     newSessionId, debateSessionId, specPathJson,
-                    jsonString(summary), roundRange, pointCount,
+                    DraftHouseMcpTools.jsonString(summary), roundRange, pointCount,
                     findingsComplete, findingsPending, findingsInOriginalOnly,
                     reviewerJson, roundRange, findingNote);
 
@@ -632,8 +615,8 @@ public class DebateMcpTools {
             session.setComparison(pathA, pathB);
             registry.persist(session);
             debateEventResource.pushComparisonChanged(session.channelId(), session.currentComparison());
-            return "{\"status\":\"set\",\"pathA\":" + jsonString(pathA)
-                    + ",\"pathB\":" + jsonString(pathB) + "}";
+            return "{\"status\":\"set\",\"pathA\":" + DraftHouseMcpTools.jsonString(pathA)
+                    + ",\"pathB\":" + DraftHouseMcpTools.jsonString(pathB) + "}";
         } catch (IllegalArgumentException e) {
             return "error: " + e.getMessage();
         }
@@ -667,9 +650,9 @@ public class DebateMcpTools {
             summary = appendWorkingSet(summary, session);
 
             if (session.agentId() != null) {
-                var desc = agentRegistry.findById(session.agentId(), ReviewerDescriptorSeeder.TENANCY_ID);
-                if (desc.isPresent()) {
-                    summary = "**Reviewer:** " + desc.get().name() + " (" + session.agentId() + ")\n\n" + summary;
+                var name = resolver.findDescriptor(session.agentId()).map(AgentDescriptor::name).orElse(null);
+                if (name != null) {
+                    summary = "**Reviewer:** " + name + " (" + session.agentId() + ")\n\n" + summary;
                 }
             }
 
@@ -680,7 +663,7 @@ public class DebateMcpTools {
             byte[] bytes = summary.getBytes(java.nio.charset.StandardCharsets.UTF_8);
             java.nio.file.Files.write(path, bytes);
 
-            return "{\"status\":\"exported\",\"path\":" + jsonString(path.toAbsolutePath().toString())
+            return "{\"status\":\"exported\",\"path\":" + DraftHouseMcpTools.jsonString(path.toAbsolutePath().toString())
                     + ",\"bytes\":" + bytes.length + "}";
         } catch (Exception e) {
             LOG.warning("export_debate_summary failed: " + e.getMessage());
@@ -688,106 +671,7 @@ public class DebateMcpTools {
         }
     }
 
-    @Tool(name = "list_reviewers",
-          description = "List available reviewer agents. Each agent has a distinct review perspective "
-                  + "defined by its disposition and briefing. Use the agentId with start_debate.")
-    public String listReviewers() {
-        var descriptors = agentRegistry.find(
-                AgentQuery.bySlot("document-reviewer", ReviewerDescriptorSeeder.TENANCY_ID));
-        if (descriptors.isEmpty()) return "[]";
-
-        var sb = new StringBuilder("[");
-        for (int i = 0; i < descriptors.size(); i++) {
-            if (i > 0) sb.append(",");
-            var d = descriptors.get(i);
-            sb.append("{\"agentId\":").append(jsonString(d.agentId()));
-            sb.append(",\"name\":").append(jsonString(d.name()));
-            sb.append(",\"slot\":").append(jsonString(d.slot()));
-
-            if (d.disposition() != null) {
-                sb.append(",\"disposition\":{");
-                boolean first = true;
-                for (DispositionAxis axis : DispositionAxis.values()) {
-                    var val = d.disposition().get(axis);
-                    if (val.isPresent()) {
-                        if (!first) sb.append(",");
-                        sb.append("\"").append(axis.jsonKey()).append("\":").append(jsonString(val.get()));
-                        first = false;
-                    }
-                }
-                sb.append("}");
-            }
-
-            if (!d.capabilities().isEmpty()) {
-                sb.append(",\"capabilities\":[");
-                for (int j = 0; j < d.capabilities().size(); j++) {
-                    if (j > 0) sb.append(",");
-                    var cap = d.capabilities().get(j);
-                    sb.append("{\"name\":").append(jsonString(cap.name()));
-                    if (cap.tags() != null && !cap.tags().isEmpty()) {
-                        sb.append(",\"tags\":[");
-                        for (int k = 0; k < cap.tags().size(); k++) {
-                            if (k > 0) sb.append(",");
-                            sb.append(jsonString(cap.tags().get(k)));
-                        }
-                        sb.append("]");
-                    }
-                    sb.append("}");
-                }
-                sb.append("]");
-            }
-
-            if (d.briefing() != null) {
-                String summary = d.briefing().length() > 200
-                        ? d.briefing().substring(0, 200) + "..."
-                        : d.briefing();
-                sb.append(",\"briefingSummary\":").append(jsonString(summary));
-            }
-            sb.append("}");
-        }
-        sb.append("]");
-        return sb.toString();
-    }
-
-    @Tool(name = "get_reviewer_instructions",
-          description = "Get the rendered system prompt for a reviewer agent. Use after reconnecting "
-                  + "to an existing debate session to re-obtain the reviewer persona. Pass debateSessionId "
-                  + "to render with session-specific context (spec path, goal). Without it, renders with "
-                  + "format only.")
-    public String getReviewerInstructions(
-            @ToolArg(description = "Eidos agent ID for the reviewer") String agentId,
-            @ToolArg(description = "Optional debate session ID for session-specific context") String debateSessionId) {
-
-        if (agentId == null || agentId.isBlank()) return "error: agentId is required";
-
-        var descriptor = agentRegistry.findById(agentId, ReviewerDescriptorSeeder.TENANCY_ID).orElse(null);
-        if (descriptor == null) return "error: unknown reviewer agent: " + agentId;
-
-        String specPath = null;
-        if (debateSessionId != null && !debateSessionId.isBlank()) {
-            DebateSession session = resolveSession(debateSessionId);
-            if (session != null) {
-                specPath = session.primaryPath();
-            }
-        }
-
-        String instructions = renderInstructions(descriptor, specPath);
-        return "{\"agentId\":" + jsonString(agentId)
-                + ",\"name\":" + jsonString(descriptor.name())
-                + ",\"instructions\":" + jsonString(instructions) + "}";
-    }
-
     // ── helpers ───────────────────────────────────────────────────────────────
-
-    private String renderInstructions(AgentDescriptor descriptor, String specPath) {
-        var context = AgentPromptContext.forFormat(SystemPromptRenderer.RenderFormat.MARKDOWN)
-                .withGoal(GoalContext.of("Review document changes from a "
-                        + descriptor.name().toLowerCase() + " perspective"))
-                .withResources(specPath != null
-                        ? List.of(new Resource(specPath, "spec", "file"))
-                        : List.of());
-        return systemPromptRenderer.render(descriptor, context).content();
-    }
 
     private void trackAndPush(DebateSession session, long contentChars) {
         session.contextTracker().addContribution(contentChars);
@@ -826,13 +710,6 @@ public class DebateMcpTools {
             return "No debate activity up to round " + round + ".";
         }
         return new SummaryRenderer().render(state);
-    }
-
-    /** Escapes a string for inclusion as a JSON string value (RFC 8259 §7). */
-    private static String jsonString(String s) {
-        if (s == null) return "null";
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t") + "\"";
     }
 
     private DebateSession resolveSession(String debateSessionId) {

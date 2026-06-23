@@ -20,6 +20,7 @@ public class ReviewerDescriptorSeeder {
 
     public static final String TENANCY_ID = "drafthouse";
     public static final String DEFAULT_REVIEWER_ID = "drafthouse-structural-reviewer";
+    public static final String SLOT = "document-reviewer";
 
     private final AgentRegistry registry;
 
@@ -40,7 +41,7 @@ public class ReviewerDescriptorSeeder {
         return AgentDescriptor.builder()
                 .agentId("drafthouse-structural-reviewer")
                 .name("Structural Reviewer")
-                .slot("document-reviewer")
+                .slot(SLOT)
                 .disposition(AgentDisposition.builder()
                         .conflictMode("collaborative")
                         .ruleFollowing("strict")
@@ -58,7 +59,7 @@ public class ReviewerDescriptorSeeder {
         return AgentDescriptor.builder()
                 .agentId("drafthouse-content-reviewer")
                 .name("Content Reviewer")
-                .slot("document-reviewer")
+                .slot(SLOT)
                 .disposition(AgentDisposition.builder()
                         .conflictMode("competing")
                         .riskAppetite("cautious")
@@ -76,7 +77,7 @@ public class ReviewerDescriptorSeeder {
         return AgentDescriptor.builder()
                 .agentId("drafthouse-readability-reviewer")
                 .name("Readability Reviewer")
-                .slot("document-reviewer")
+                .slot(SLOT)
                 .disposition(AgentDisposition.builder()
                         .conflictMode("accommodating")
                         .autonomy("directed")
@@ -94,7 +95,7 @@ public class ReviewerDescriptorSeeder {
         return AgentDescriptor.builder()
                 .agentId("drafthouse-completeness-reviewer")
                 .name("Completeness Reviewer")
-                .slot("document-reviewer")
+                .slot(SLOT)
                 .disposition(AgentDisposition.builder()
                         .conflictMode("collaborative")
                         .ruleFollowing("strict")

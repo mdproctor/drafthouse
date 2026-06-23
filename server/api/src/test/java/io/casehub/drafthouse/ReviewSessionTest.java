@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ReviewSessionTest {
 
     private static final UUID CHANNEL_ID = UUID.randomUUID();
+    private static final ResolvedReviewer REVIEWER = new ResolvedReviewer("agent-1", "Reviewer", "You are a reviewer.");
 
     private ReviewSession minimal() {
         return new ReviewSession(
@@ -17,7 +18,7 @@ class ReviewSessionTest {
                 "Content of document A",
                 "Content of document B",
                 null,
-                "You are a reviewer."
+                REVIEWER
         );
     }
 
@@ -31,15 +32,16 @@ class ReviewSessionTest {
         assertEquals("Content of document A", s.docAContent());
         assertEquals("Content of document B", s.docBContent());
         assertNull(s.selection());
-        assertEquals("You are a reviewer.", s.personality());
+        assertEquals(REVIEWER, s.reviewer());
     }
 
     @Test
     void constructsWithSelection() {
         var scope = new SelectionScope(DocumentSide.A, 0, 0, "selected text");
+        var reviewer = new ResolvedReviewer("agent-2", "Reviewer2", "Instructions");
         var s = new ReviewSession(
                 CHANNEL_ID, "sid", "cname", "iid", "docA", "docB",
-                scope, "persona"
+                scope, reviewer
         );
         assertNotNull(s.selection());
         assertEquals(DocumentSide.A, s.selection().side());
@@ -48,7 +50,8 @@ class ReviewSessionTest {
 
     @Test
     void nullSelectionIsValid() {
-        var s = new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b", null, "p");
+        var reviewer = new ResolvedReviewer("agent-3", "R3", "Instr");
+        var s = new ReviewSession(CHANNEL_ID, "s", "cn", "i", "a", "b", null, reviewer);
         assertNull(s.selection());
     }
 
@@ -71,14 +74,15 @@ class ReviewSessionTest {
         assertEquals(original.instanceId(), updated.instanceId());
         assertEquals(original.docAContent(), updated.docAContent());
         assertEquals(original.docBContent(), updated.docBContent());
-        assertEquals(original.personality(), updated.personality());
+        assertEquals(original.reviewer(), updated.reviewer());
     }
 
     @Test
     void withSelectionClearsSelection() {
         var scope = new SelectionScope(DocumentSide.A, 0, 0, "text");
+        var reviewer = new ResolvedReviewer("agent-4", "R4", "Instr4");
         var withSel = new ReviewSession(
-                CHANNEL_ID, "s", "cn", "i", "a", "b", scope, "p"
+                CHANNEL_ID, "s", "cn", "i", "a", "b", scope, reviewer
         );
         var cleared = withSel.withSelection(null);
         assertNull(cleared.selection());

@@ -84,7 +84,7 @@ public class ReviewerChannelBackend implements ChannelBackend {
         try {
             var historyResult = projectionService.project(channelId, projection);
             String reviewHistory = conversationRenderer.render(historyResult.state());
-            result = llm.review(session.personality(), session.docAContent(),
+            result = llm.review(session.reviewer().instructions(), session.docAContent(),
                     session.docBContent(), selectionContext, reviewHistory, message.content());
         } catch (Exception e) {
             LOG.warning("Backend error on channel " + channel.name() + ": " + e.getMessage());

@@ -7,7 +7,15 @@ import io.quarkiverse.langchain4j.RegisterAiService;
 @RegisterAiService
 public interface DocumentReviewer {
 
-    @SystemMessage("{{personality}}")
+    @SystemMessage("""
+            {{instructions}}
+
+            ## Response Protocol
+            outcome=DECLINE if the query is outside document review scope — explain why.
+            outcome=AGREE if you agree and consider this point resolved.
+            outcome=QUALIFY if you have more to say — discussion continues.
+            Always provide your analysis in the content field.
+            """)
     @UserMessage("""
             Document A (original):
             {{documentA}}
@@ -21,13 +29,7 @@ public interface DocumentReviewer {
             {{reviewHistory}}
 
             Current query: {{query}}
-
-            If this query is outside the scope of document review (e.g. general knowledge, \
-            unrelated topics): outcome=DECLINE, explain why in content.
-            Otherwise: outcome=AGREE if you agree and this point is resolved (discussion concludes); \
-            outcome=QUALIFY if you qualify your position (discussion continues, you have more to say). \
-            Provide your review in content.
             """)
-    ReviewResult review(String personality, String documentA, String documentB,
+    ReviewResult review(String instructions, String documentA, String documentB,
                         String selectionContext, String reviewHistory, String query);
 }

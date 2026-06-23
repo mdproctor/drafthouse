@@ -28,8 +28,6 @@ public interface DraftHouseConfig {
 
     interface Reviewer {
 
-        String personality();
-
         @WithDefault("100000")
         int maxDocChars();
     }

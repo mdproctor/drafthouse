@@ -63,7 +63,7 @@ class ReviewerChannelBackendTest {
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
                 "drafthouse-reviewer-" + CHANNEL_ID,
                 "Original text", "Revised text",
-                null, "You are a reviewer.");
+                null, new ResolvedReviewer("test-id", "Test Reviewer", "You are a reviewer."));
 
         backend = new ReviewerChannelBackend(registry, CHANNEL_ID, messageService, llm, 100_000,
                 projectionService, projection);
@@ -208,7 +208,7 @@ class ReviewerChannelBackendTest {
         ReviewSession bigSession = new ReviewSession(
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
                 session.instanceId(), huge, "Revised text",
-                null, "You are a reviewer.");
+                null, new ResolvedReviewer("test-id", "Test Reviewer", "You are a reviewer."));
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(bigSession));
 
         backend.post(channelRef, query("Review this"));

@@ -89,7 +89,7 @@ class ReviewSessionLifecycleTest {
 
     @Test
     void query_dispatchesDone_andFulfillsCommitment_whenReviewerAgrees() {
-        final String result = tools.startReview(docA.toString(), docB.toString());
+        final String result = tools.startReview(docA.toString(), docB.toString(), null);
         final String sessionId = extractSessionId(result);
         activeSessionId = sessionId;
         final UUID channelId = UUID.fromString(sessionId);
@@ -148,7 +148,7 @@ class ReviewSessionLifecycleTest {
         when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
                 .thenReturn(ReviewResult.decline("Out of scope."));
 
-        final String result = tools.startReview(docA.toString(), docB.toString());
+        final String result = tools.startReview(docA.toString(), docB.toString(), null);
         final String sessionId = extractSessionId(result);
         activeSessionId = sessionId;
         final UUID channelId = UUID.fromString(sessionId);
@@ -183,7 +183,7 @@ class ReviewSessionLifecycleTest {
         when(documentReviewer.review(any(), any(), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("sk-ant-api03-SECRET-KEY"));
 
-        final String result = tools.startReview(docA.toString(), docB.toString());
+        final String result = tools.startReview(docA.toString(), docB.toString(), null);
         final String sessionId = extractSessionId(result);
         activeSessionId = sessionId;
         final UUID channelId = UUID.fromString(sessionId);
@@ -216,7 +216,7 @@ class ReviewSessionLifecycleTest {
 
     @Test
     void secondQuery_receivesPriorExchangeInHistory() {
-        String result = tools.startReview(docA.toString(), docB.toString());
+        String result = tools.startReview(docA.toString(), docB.toString(), null);
         String sessionId = extractSessionId(result);
         activeSessionId = sessionId;
         UUID channelId = UUID.fromString(sessionId);

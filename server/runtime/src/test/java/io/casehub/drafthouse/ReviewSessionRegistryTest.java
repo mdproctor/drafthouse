@@ -46,6 +46,7 @@ class ReviewSessionRegistryTest {
     private ReviewSession minimal(final UUID channelId) {
         return new ReviewSession(
                 channelId, channelId.toString(), "drafthouse/test",
-                "iid", "docA", "docB", null, "personality");
+                "iid", "docA", "docB", null,
+                new ResolvedReviewer("test-id", "Test Reviewer", "test instructions"));
     }
 }
