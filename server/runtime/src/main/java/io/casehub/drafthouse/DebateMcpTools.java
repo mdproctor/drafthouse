@@ -20,6 +20,7 @@ import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
@@ -82,8 +83,9 @@ public class DebateMcpTools {
                 return "error: " + e.getMessage();
             }
 
-            channel = channelService.create(channelName, "DraftHouse debate session",
-                    ChannelSemantic.APPEND, null);
+            channel = channelService.create(ChannelCreateRequest.builder(channelName)
+                    .description("DraftHouse debate session")
+                    .semantic(ChannelSemantic.APPEND).build());
 
             String debateSessionId = channel.id.toString();
             String resolvedName = channel.name;
@@ -453,9 +455,9 @@ public class DebateMcpTools {
         Channel newChannel = null;
         DebateSession newSession = null;
         try {
-            newChannel = channelService.create(channelName,
-                    "DraftHouse debate session (restarted from round " + round + ")",
-                    ChannelSemantic.APPEND, null);
+            newChannel = channelService.create(ChannelCreateRequest.builder(channelName)
+                    .description("DraftHouse debate session (restarted from round " + round + ")")
+                    .semantic(ChannelSemantic.APPEND).build());
             String newSessionId = newChannel.id.toString();
 
             newSession = DebateSession.branchFrom(original, newChannel.id, newSessionId, newChannel.name);

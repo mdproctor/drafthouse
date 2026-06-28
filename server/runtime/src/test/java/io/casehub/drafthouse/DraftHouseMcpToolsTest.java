@@ -25,6 +25,7 @@ import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.Instance;
@@ -77,7 +78,7 @@ class DraftHouseMcpToolsTest {
         stubChannel = new Channel();
         stubChannel.id = UUID.randomUUID();
         stubChannel.name = "drafthouse/" + UUID.randomUUID();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(stubChannel);
 
         stubInstance = new Instance();
@@ -145,7 +146,7 @@ class DraftHouseMcpToolsTest {
     void startReview_channelServiceThrows_cleanupAttempted() throws IOException {
         Path docA = Files.writeString(tempDir.resolve("a.md"), "A");
         Path docB = Files.writeString(tempDir.resolve("b.md"), "B");
-        when(channelService.create(anyString(), anyString(), any(), any()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenThrow(new RuntimeException("DB error"));
 
         String result = tools.startReview(docA.toString(), docB.toString(), null);

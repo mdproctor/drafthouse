@@ -19,6 +19,7 @@ import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.spi.ProjectionResult;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.Instance;
@@ -95,7 +96,7 @@ class DebateMcpToolsTest {
         stubChannel      = new Channel();
         stubChannel.id   = UUID.randomUUID();
         stubChannel.name = "drafthouse/debate/d-" + UUID.randomUUID();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(stubChannel);
 
         Instance stubInstance = new Instance();
@@ -144,8 +145,7 @@ class DebateMcpToolsTest {
     void startDebate_channelName_hasDebatePrefix() {
         tools.startDebate("spec.md", null);
         verify(channelService).create(
-                argThat(name -> name.startsWith("drafthouse/debate/d-")),
-                anyString(), eq(ChannelSemantic.APPEND), isNull());
+                argThat((ChannelCreateRequest req) -> req.name().startsWith("drafthouse/debate/d-")));
     }
 
     // ── session precondition ──────────────────────────────────────────────────
@@ -602,7 +602,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         String result = tools.restartFromRound(originalId.toString(), 2);
@@ -620,7 +620,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         tools.restartFromRound(originalId.toString(), 2);
@@ -638,7 +638,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         tools.restartFromRound(originalId.toString(), 2);
@@ -660,7 +660,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         tools.restartFromRound(originalId.toString(), 2);
@@ -680,7 +680,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         String result = tools.restartFromRound(originalId.toString(), 2);
@@ -694,7 +694,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
         doThrow(new RuntimeException("marker post failed")).when(messageService).dispatch(any());
 
@@ -713,7 +713,7 @@ class DebateMcpToolsTest {
         when(projectionService.project(eq(originalId), any()))
                 .thenReturn(new ProjectionResult<>(emptyState(), null));
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
 
         tools.restartFromRound(originalId.toString(), 2);
@@ -739,7 +739,7 @@ class DebateMcpToolsTest {
                 finding("f5", SubTaskStatus.COMPLETE));
 
         Channel newCh = newChannel();
-        when(channelService.create(anyString(), anyString(), eq(ChannelSemantic.APPEND), isNull()))
+        when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(newCh);
         when(projectionService.project(eq(originalId), isA(DebateChannelProjection.RoundBoundedProjection.class)))
                 .thenReturn(new ProjectionResult<>(boundedState, 10L));

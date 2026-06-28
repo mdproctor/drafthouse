@@ -23,6 +23,7 @@ import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
@@ -97,8 +98,9 @@ public class DraftHouseMcpTools {
         String instanceId = null;
         Channel channel = null;
         try {
-            channel = channelService.create(channelName, "DraftHouse review session",
-                    ChannelSemantic.APPEND, null);
+            channel = channelService.create(ChannelCreateRequest.builder(channelName)
+                    .description("DraftHouse review session")
+                    .semantic(ChannelSemantic.APPEND).build());
 
             String sessionId = channel.id.toString();
             String resolvedChannelName = channel.name;

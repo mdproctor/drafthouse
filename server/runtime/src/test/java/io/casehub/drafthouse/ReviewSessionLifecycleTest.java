@@ -30,6 +30,7 @@ import io.casehub.qhorus.api.message.CommitmentState;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.runtime.channel.Channel;
+import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.message.MessageService;
@@ -118,9 +119,10 @@ class ReviewSessionLifecycleTest {
 
     @Test
     void orphanedChannel_dropsQuery() {
-        orphanedChannel = channelService.create(
-                "drafthouse/orphan-" + UUID.randomUUID(), "Orphan session",
-                ChannelSemantic.APPEND, null);
+        orphanedChannel = channelService.create(ChannelCreateRequest.builder(
+                "drafthouse/orphan-" + UUID.randomUUID())
+                .description("Orphan session")
+                .semantic(ChannelSemantic.APPEND).build());
         gateway.initChannel(orphanedChannel.id, new ChannelRef(orphanedChannel.id, orphanedChannel.name));
 
         final String correlationId = UUID.randomUUID().toString();
