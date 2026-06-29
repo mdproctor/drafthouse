@@ -1,5 +1,7 @@
 package io.casehub.drafthouse.handler;
 
+import io.casehub.blocks.channel.ChannelAgentRequest;
+import io.casehub.blocks.channel.AgentTask;
 import io.casehub.drafthouse.*;
 import io.casehub.drafthouse.debate.*;
 import io.casehub.qhorus.runtime.message.MessageService;

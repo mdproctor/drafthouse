@@ -1,5 +1,6 @@
 package io.casehub.drafthouse.e2e;
 
+import io.casehub.blocks.channel.ChannelAgentRequest;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;

@@ -1,5 +1,6 @@
 package io.casehub.drafthouse;
 
+import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelBackend;

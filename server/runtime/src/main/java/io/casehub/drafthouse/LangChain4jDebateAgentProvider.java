@@ -3,7 +3,7 @@ package io.casehub.drafthouse;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
-import io.casehub.drafthouse.debate.AgentTask;
+import io.casehub.blocks.channel.AgentTask;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
 import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;

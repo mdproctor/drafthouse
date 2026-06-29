@@ -1,6 +1,9 @@
 package io.casehub.drafthouse;
 
-import io.casehub.drafthouse.debate.AgentTask;
+import io.casehub.blocks.channel.AgentResultParseException;
+import io.casehub.blocks.channel.AgentTask;
+import io.casehub.blocks.channel.ChannelAgentHandler;
+import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
@@ -45,12 +48,10 @@ class ChannelAgentDispatcherTest {
 
     @BeforeEach
     void setUp() {
-        // lenient: these stubs are only used on error paths, not by handler_found_dispatches_finding
         lenient().when(outboundMessage.content()).thenReturn(
                 io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL
                 + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n");
         lenient().when(messageService.findByCorrelationId(any())).thenReturn(java.util.Optional.empty());
-        // instanceService null — @PostConstruct is never called in unit tests
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
                 List.of(matchingHandler), null);
     }

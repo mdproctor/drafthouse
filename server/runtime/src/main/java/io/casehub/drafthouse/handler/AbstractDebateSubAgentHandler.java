@@ -1,7 +1,7 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.drafthouse.ChannelAgentHandler;
-import io.casehub.drafthouse.ChannelAgentRequest;
+import io.casehub.blocks.channel.ChannelAgentHandler;
+import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.drafthouse.DebateSessionRegistry;
 import io.casehub.drafthouse.DebateSession;
 import io.casehub.drafthouse.debate.*;

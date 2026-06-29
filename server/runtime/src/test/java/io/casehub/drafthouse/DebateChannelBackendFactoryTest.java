@@ -1,5 +1,6 @@
 package io.casehub.drafthouse;
 
+import io.casehub.blocks.channel.ChannelAgentRequest;
 import static org.mockito.Mockito.*;
 
 import java.util.Optional;
