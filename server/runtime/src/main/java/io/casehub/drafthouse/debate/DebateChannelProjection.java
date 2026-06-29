@@ -1,5 +1,6 @@
 package io.casehub.drafthouse.debate;
 
+import io.casehub.blocks.channel.BoundedProjectionDecorator;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import io.casehub.qhorus.api.spi.ProjectionResult;
@@ -70,35 +71,14 @@ public class DebateChannelProjection implements RenderableProjection<ReviewState
     // ── RoundBoundedProjection ────────────────────────────────────────────────
 
     /**
-     * Decorator that skips messages whose {@code round} META field exceeds
-     * {@code maxRound}. Keeps {@link DebateChannelProjection} a pure fold —
-     * no service dependencies are added to it.
-     *
-     * <p>Sub-task findings filter correctly only when their {@code round} field
-     * is populated — which requires the fix to {@code request_subagent} that
-     * encodes {@code |round=N} in the {@code SUB_TASK_REQUEST} header, propagated
-     * by {@code AbstractDebateSubAgentHandler.buildResponse}.
+     * Debate-specific bounded projection — delegates to {@link BoundedProjectionDecorator}
+     * with round extraction via {@link DebateProtocol}.
      */
-    public static class RoundBoundedProjection implements ChannelProjection<ReviewState> {
-
-        private final int maxRound;
-        private final DebateChannelProjection delegate;
+    public static class RoundBoundedProjection extends BoundedProjectionDecorator<ReviewState> {
 
         public RoundBoundedProjection(final int maxRound, final DebateChannelProjection delegate) {
-            this.maxRound = maxRound;
-            this.delegate = delegate;
-        }
-
-        @Override
-        public ReviewState identity() {
-            return delegate.identity();
-        }
-
-        @Override
-        public ReviewState apply(final ReviewState state, final MessageView message) {
-            final int round = DebateProtocol.parseRound(DebateProtocol.parseMeta(message.content()));
-            if (round > maxRound) return state;
-            return delegate.apply(state, message);
+            super(maxRound, delegate,
+                    msg -> DebateProtocol.parseRound(DebateProtocol.parseMeta(msg.content())));
         }
     }
 

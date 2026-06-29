@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;

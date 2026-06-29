@@ -12,6 +12,7 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;

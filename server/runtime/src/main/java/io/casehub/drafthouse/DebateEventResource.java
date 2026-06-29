@@ -22,6 +22,7 @@ import jakarta.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
 import io.casehub.qhorus.runtime.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;

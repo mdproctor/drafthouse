@@ -130,7 +130,7 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist |
 | `panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (SSE-driven, onMeta subscriber) |
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
-| `server/api/` | Pure Java domain model — no Quarkus, no Qhorus; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer` |
+| `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
 | `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (stub, pending platform#55) |
@@ -198,7 +198,7 @@ DraftHouse uses **Web Component panels targeting the `@casehub/ui` `Component` m
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3 (quarkus-langchain4j 1.9.1, casehub-qhorus 0.2-SNAPSHOT)
+- Version: 3.34.3 (quarkus-langchain4j 1.9.1, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT)
 - Java package: `io.casehub.drafthouse`
 - `ui.dir` JVM property controls where `UiResource` reads static assets from
 - Port: 9001 (default), configurable via `quarkus.http.port`
@@ -247,7 +247,7 @@ DraftHouse is part of the casehubio platform. The peer repos are:
 
 | Tier | Repos |
 |---|---|
-| Foundation | casehub-engine, casehub-ledger, casehub-work, casehub-qhorus, casehub-connectors, casehub-eidos, casehub-platform |
+| Foundation | casehub-engine, casehub-ledger, casehub-work, casehub-qhorus, casehub-connectors, casehub-eidos, casehub-platform, casehub-blocks |
 | Application | casehub-devtown, casehub-aml, casehub-clinical, casehub-life, casehub-drafthouse |
 | Standalone | quarkmind, claudony, openclaw |
 
