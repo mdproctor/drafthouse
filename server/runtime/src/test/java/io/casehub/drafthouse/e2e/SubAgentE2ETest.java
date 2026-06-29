@@ -63,7 +63,7 @@ class SubAgentE2ETest {
 
         // 2. raise_point
         String raiseResult = tools.raisePoint(sessionId, "REV", 1,
-                "The API contract is underspecified.", "P1", "ISOLATED", "§3.2");
+                "The API contract is underspecified.", "HIGH", "ISOLATED", "§3.2");
         String pointId = extractGroup(POINT_ID_PATTERN, raiseResult);
         assertThat(pointId).isNotBlank();
 
@@ -107,7 +107,7 @@ class SubAgentE2ETest {
         activeDebateSessionId = sessionId;
 
         String pointId = extractGroup(POINT_ID_PATTERN,
-                tools.raisePoint(sessionId, "REV", 1, "Needs verification.", "P2", "ISOLATED", null));
+                tools.raisePoint(sessionId, "REV", 1, "Needs verification.", "MEDIUM", "ISOLATED", null));
 
         tools.requestSubagent(sessionId, "REV", "VERIFY", pointId, 1, null);
 

@@ -15,15 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
+import io.casehub.blocks.conversation.ThreadEntry;
 import io.casehub.drafthouse.debate.AgentType;
-import io.casehub.drafthouse.debate.EntryType;
-import io.casehub.drafthouse.debate.PointClassification;
-import io.casehub.drafthouse.debate.Priority;
-import io.casehub.drafthouse.debate.ReviewPoint;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.ReviewStatus;
-import io.casehub.drafthouse.debate.Scope;
-import io.casehub.drafthouse.debate.ThreadEntry;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;
@@ -44,7 +41,7 @@ class ReviewerChannelBackendTest {
     private MessageService messageService;
     private DocumentReviewer llm;
     private ProjectionService projectionService;
-    private ChannelProjection<ReviewState> projection;
+    private ChannelProjection<ConversationState> projection;
     private ReviewerChannelBackend backend;
     private ChannelRef channelRef;
     private ReviewSession session;
@@ -57,7 +54,7 @@ class ReviewerChannelBackendTest {
         projectionService = mock(ProjectionService.class);
         projection = mock(ChannelProjection.class);
         when(projectionService.project(CHANNEL_ID, projection))
-                .thenReturn(new ProjectionResult<>(new ReviewState(Map.of(), List.of(), List.of(), Map.of()), null));
+                .thenReturn(new ProjectionResult<>(new ConversationState(Map.of(), List.of(), List.of(), Map.of()), null));
 
         session = new ReviewSession(
                 CHANNEL_ID, CHANNEL_ID.toString(), "drafthouse/sess-1",
@@ -235,7 +232,7 @@ class ReviewerChannelBackendTest {
 
     @Test
     void queryDispatch_passesRenderedHistoryToLlm() {
-        ReviewState stateWithHistory = buildAgreedState();
+        ConversationState stateWithHistory = buildAgreedState();
         when(projectionService.project(CHANNEL_ID, projection))
                 .thenReturn(new ProjectionResult<>(stateWithHistory, 42L));
         when(llm.review(any(), any(), any(), any(), any(), any()))
@@ -250,16 +247,16 @@ class ReviewerChannelBackendTest {
                 .contains("A: Prior answer.");
     }
 
-    private static ReviewState buildAgreedState() {
+    private static ConversationState buildAgreedState() {
         var thread = new java.util.ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry("P1", AgentType.REV, 0, EntryType.RAISE, "Prior question?"));
-        thread.add(new ThreadEntry(null, AgentType.IMP, 0, EntryType.AGREE, "Prior answer."));
-        var point = new ReviewPoint(
+        thread.add(new ThreadEntry("P1", "REV", 0, "RAISE", "Prior question?"));
+        thread.add(new ThreadEntry(null, "IMP", 0, "AGREE", "Prior answer."));
+        var point = new ConversationPoint(
                 "P1",
-                new PointClassification(Priority.P3, Scope.ISOLATED, null),
+                new PointClassification(Priority.LOW, "ISOLATED", null),
                 thread,
-                ReviewStatus.AGREED);
-        return new ReviewState(Map.of("P1", point), List.of(), List.of(), Map.of());
+                "AGREED");
+        return new ConversationState(Map.of("P1", point), List.of(), List.of(), Map.of());
     }
 
     @Test

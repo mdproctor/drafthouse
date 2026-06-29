@@ -92,7 +92,7 @@ class ReviewTrackerE2ETest {
     @Test
     void raisedPoint_showsOpenStatus() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Unresolved API concern.", "P2", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Unresolved API concern.", "MEDIUM", "ISOLATED", null);
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
@@ -104,7 +104,7 @@ class ReviewTrackerE2ETest {
     @Test
     void agreedPoint_showsStrikethrough() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Agreed concern.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Agreed concern.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "agree", "Agreed.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -126,7 +126,7 @@ class ReviewTrackerE2ETest {
     @Test
     void declinedPoint_showsStrikethrough() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Declined concern.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Declined concern.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "declined", "Declined to address.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -145,7 +145,7 @@ class ReviewTrackerE2ETest {
     @Test
     void counteredPoint_showsActiveStatus() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for counter.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for counter.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "counter", "Counter-proposal.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -158,7 +158,7 @@ class ReviewTrackerE2ETest {
     @Test
     void disputedPoint_showsDisputedStatus() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for dispute.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for dispute.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "dispute", "Disputed.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -171,7 +171,7 @@ class ReviewTrackerE2ETest {
     @Test
     void qualifiedPoint_showsActiveWithAccentBorder() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for qualify.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for qualify.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "qualify", "Qualified.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -184,7 +184,7 @@ class ReviewTrackerE2ETest {
     @Test
     void flagHuman_showsPendingHumanStatus() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Ambiguous requirement.", "P1", "SYSTEMIC", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Ambiguous requirement.", "HIGH", "SYSTEMIC", null);
         dispatchFlag(tools, sessionId, "REV", 1, pointId, "Cannot resolve without human input.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -199,9 +199,9 @@ class ReviewTrackerE2ETest {
     @Test
     void progressBar_reflectsResolutionRatio() {
         sessionId = startDebateSession(tools);
-        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "P2", "ISOLATED", null);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "P2", "ISOLATED", null);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Third point.", "P2", "ISOLATED", null);
+        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "MEDIUM", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "MEDIUM", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Third point.", "MEDIUM", "ISOLATED", null);
 
         // Agree to first point only
         dispatchResponse(tools, sessionId, "IMP", 1, p1, "agree", "Agreed to first.");
@@ -225,9 +225,9 @@ class ReviewTrackerE2ETest {
     @Test
     void hideResolvedFilter_hidesAgreedAndDeclined() {
         sessionId = startDebateSession(tools);
-        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "P2", "ISOLATED", null);
-        String p2 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "P2", "ISOLATED", null);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Third point.", "P2", "ISOLATED", null);
+        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "MEDIUM", "ISOLATED", null);
+        String p2 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "MEDIUM", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Third point.", "MEDIUM", "ISOLATED", null);
 
         dispatchResponse(tools, sessionId, "IMP", 1, p1, "agree", "Agreed.");
         dispatchResponse(tools, sessionId, "IMP", 1, p2, "declined", "Declined.");
@@ -245,8 +245,8 @@ class ReviewTrackerE2ETest {
     @Test
     void hideResolvedFilter_allResolved_showsMessage() {
         sessionId = startDebateSession(tools);
-        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "P2", "ISOLATED", null);
-        String p2 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "P2", "ISOLATED", null);
+        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First point.", "MEDIUM", "ISOLATED", null);
+        String p2 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second point.", "MEDIUM", "ISOLATED", null);
 
         dispatchResponse(tools, sessionId, "IMP", 1, p1, "agree", "Agreed.");
         dispatchResponse(tools, sessionId, "IMP", 1, p2, "agree", "Agreed.");
@@ -265,8 +265,8 @@ class ReviewTrackerE2ETest {
     @Test
     void sortOrder_openBeforeAgreed() {
         sessionId = startDebateSession(tools);
-        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First raised point.", "P2", "ISOLATED", null);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second raised point.", "P2", "ISOLATED", null);
+        String p1 = dispatchRaise(tools, messageService, sessionId, "REV", 1, "First raised point.", "MEDIUM", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Second raised point.", "MEDIUM", "ISOLATED", null);
 
         // Agree to the first one — it should sort after the still-open second one
         dispatchResponse(tools, sessionId, "IMP", 1, p1, "agree", "Agreed.");
@@ -285,7 +285,7 @@ class ReviewTrackerE2ETest {
     @Test
     void agentTrail_showsActionSequence() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for trail.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for trail.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "counter", "Counter-proposal.");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
@@ -301,7 +301,7 @@ class ReviewTrackerE2ETest {
     @Test
     void locationReference_displayedOnPoint() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point at section.", "P2", "ISOLATED", "§3.2");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point at section.", "MEDIUM", "ISOLATED", "§3.2");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
@@ -314,7 +314,7 @@ class ReviewTrackerE2ETest {
     @Test
     void pointSelected_firesCustomEvent() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Clickable tracker point.", "P1", "ISOLATED", "§3.2");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Clickable tracker point.", "HIGH", "ISOLATED", "§3.2");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 

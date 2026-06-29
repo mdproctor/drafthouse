@@ -108,7 +108,7 @@ class DebateChannelBackendFactoryTest {
         // NEUTRAL_SUMMARY is a different entryType — should not trigger dispatch
         OutboundMessage message = new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-subagent", MessageType.STATUS,
-                DebateProtocol.META_SENTINEL + "entryType=NEUTRAL_SUMMARY|agent=REV\n\nSummary text",
+                DebateProtocol.META_SENTINEL + "entryType=NEUTRAL_SUMMARY|role=REV\n\nSummary text",
                 UUID.randomUUID(), null, io.casehub.platform.api.identity.ActorType.AGENT);
 
         debateBackend.post(channelRef, message);
@@ -154,7 +154,7 @@ class DebateChannelBackendFactoryTest {
 
     private OutboundMessage subTaskRequestMessage(UUID correlationId) {
         String content = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n";
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n";
         return new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-orchestrator", MessageType.STATUS,
                 content, correlationId, null, io.casehub.platform.api.identity.ActorType.AGENT);

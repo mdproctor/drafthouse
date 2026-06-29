@@ -3,13 +3,12 @@ package io.casehub.drafthouse.handler;
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
 import io.casehub.drafthouse.debate.DebateProtocol;
-import io.casehub.drafthouse.debate.SubTaskType;
 import jakarta.enterprise.context.ApplicationScoped;
 
 @ApplicationScoped
 class CustomHandler extends AbstractDebateSubAgentHandler {
 
-    @Override SubTaskType taskType() { return SubTaskType.CUSTOM; }
+    @Override String taskType() { return "CUSTOM"; }
 
     @Override
     public AgentTask prepareTask(ChannelAgentRequest request) {

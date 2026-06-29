@@ -2,6 +2,11 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.drafthouse.*;
 import io.casehub.drafthouse.debate.*;
 import io.casehub.qhorus.api.spi.ProjectionResult;
@@ -48,7 +53,7 @@ class ConsistencyCheckHandlerTest {
 
     private ChannelAgentRequest requestWithBody(String body) {
         String content = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=IMP|taskType=CONSISTENCY_CHECK|subTaskId=sub-1\n\n"
+                + "entryType=SUB_TASK_REQUEST|role=IMP|taskType=CONSISTENCY_CHECK|subTaskId=sub-1\n\n"
                 + (body != null ? body : "");
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
@@ -67,16 +72,16 @@ class ConsistencyCheckHandlerTest {
     @Test
     void only_agreed_points_included_open_excluded() {
         var agreedThread = List.of(
-                new ThreadEntry("pt-a", AgentType.REV, 1, EntryType.RAISE, "Agreed point content."),
-                new ThreadEntry(null, AgentType.IMP, 2, EntryType.AGREE, "Agreed.")
+                new ThreadEntry("pt-a", "REV", 1, "RAISE", "Agreed point content."),
+                new ThreadEntry(null, "IMP", 2, "AGREE", "Agreed.")
         );
         var openThread = List.of(
-                new ThreadEntry("pt-b", AgentType.IMP, 1, EntryType.RAISE, "Open point content.")
+                new ThreadEntry("pt-b", "IMP", 1, "RAISE", "Open point content.")
         );
-        var state = new ReviewState(
+        var state = new ConversationState(
                 Map.of(
-                    "pt-a", new ReviewPoint("pt-a", new PointClassification(Priority.P1, Scope.ISOLATED, null), agreedThread, ReviewStatus.AGREED),
-                    "pt-b", new ReviewPoint("pt-b", new PointClassification(Priority.P2, Scope.ISOLATED, null), openThread, ReviewStatus.OPEN)
+                    "pt-a", new ConversationPoint("pt-a", new PointClassification(Priority.HIGH, "ISOLATED", null), agreedThread, "AGREED"),
+                    "pt-b", new ConversationPoint("pt-b", new PointClassification(Priority.MEDIUM, "ISOLATED", null), openThread, "OPEN")
                 ),
                 List.of(), List.of(), Map.of()
         );
@@ -89,7 +94,7 @@ class ConsistencyCheckHandlerTest {
 
     @Test
     void no_agreed_points_uses_sentinel() {
-        var state = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        var state = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
         AgentTask task = handler.prepareTask(requestWithBody("Some resolution."));
         assertThat(task.assembledInput()).contains("(no agreed points yet)");

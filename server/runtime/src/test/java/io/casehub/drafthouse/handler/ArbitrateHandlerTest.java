@@ -2,6 +2,11 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.drafthouse.*;
 import io.casehub.drafthouse.debate.*;
 import io.casehub.qhorus.api.spi.ProjectionResult;
@@ -45,24 +50,24 @@ class ArbitrateHandlerTest {
         setField("registry", registry);
         setField("messageService", messageService);
         lenient().when(outboundMessage.content()).thenReturn(DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1\n\n");
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1\n\n");
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
         lenient().when(registry.find(channelId)).thenReturn(Optional.of(
                 new DebateSession(channelId, channelId.toString(), "ch", null)));
     }
 
-    private ReviewState stateWith(List<ThreadEntry> thread) {
-        var point = new ReviewPoint("pt-1",
-                new PointClassification(Priority.P1, Scope.ISOLATED, null), thread, ReviewStatus.DISPUTED);
-        return new ReviewState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
+    private ConversationState stateWith(List<ThreadEntry> thread) {
+        var point = new ConversationPoint("pt-1",
+                new PointClassification(Priority.HIGH, "ISOLATED", null), thread, "DISPUTED");
+        return new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
     }
 
     @Test
     void uses_last_dispute_qualify_counter_not_thread_last() {
         var thread = List.of(
-                new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "The raise."),
-                new ThreadEntry(null, AgentType.IMP, 2, EntryType.QUALIFY, "The qualify."),
-                new ThreadEntry(null, AgentType.REV, 3, EntryType.FLAG_HUMAN, "Flag!")
+                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The raise."),
+                new ThreadEntry(null, "IMP", 2, "QUALIFY", "The qualify."),
+                new ThreadEntry(null, "REV", 3, "FLAG_HUMAN", "Flag!")
         );
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(stateWith(thread), null));
         AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
@@ -73,10 +78,10 @@ class ArbitrateHandlerTest {
     @Test
     void uses_last_of_multiple_responses() {
         var thread = List.of(
-                new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "The raise."),
-                new ThreadEntry(null, AgentType.IMP, 2, EntryType.DISPUTE, "Dispute."),
-                new ThreadEntry(null, AgentType.REV, 3, EntryType.COUNTER, "Counter."),
-                new ThreadEntry(null, AgentType.IMP, 4, EntryType.QUALIFY, "Qualify.")
+                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The raise."),
+                new ThreadEntry(null, "IMP", 2, "DISPUTE", "Dispute."),
+                new ThreadEntry(null, "REV", 3, "COUNTER", "Counter."),
+                new ThreadEntry(null, "IMP", 4, "QUALIFY", "Qualify.")
         );
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(stateWith(thread), null));
         AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
@@ -87,7 +92,7 @@ class ArbitrateHandlerTest {
 
     @Test
     void no_response_yet_uses_sentinel() {
-        var thread = List.of(new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "The raise."));
+        var thread = List.of(new ThreadEntry("pt-1", "REV", 1, "RAISE", "The raise."));
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(stateWith(thread), null));
         AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
         assertThat(task.assembledInput()).contains("(no response yet)");

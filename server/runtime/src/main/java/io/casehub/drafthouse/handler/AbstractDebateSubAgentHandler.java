@@ -2,6 +2,10 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentHandler;
 import io.casehub.blocks.channel.ChannelAgentRequest;
+import io.casehub.blocks.channel.ChannelMessageMeta;
+import io.casehub.blocks.conversation.ConversationProtocol;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
 import io.casehub.drafthouse.DebateSessionRegistry;
 import io.casehub.drafthouse.DebateSession;
 import io.casehub.drafthouse.debate.*;
@@ -28,17 +32,13 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
     @Inject DebateSessionRegistry registry;
     @Inject MessageService messageService;
 
-    /** The SubTaskType this handler processes. */
-    abstract SubTaskType taskType();
+    /** The task type string this handler processes. */
+    abstract String taskType();
 
     @Override
     public final boolean handles(ChannelAgentRequest request) {
         Map<String, String> meta = DebateProtocol.parseMeta(request.message().content());
-        try {
-            return SubTaskType.valueOf(meta.getOrDefault("taskType", "")) == taskType();
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
+        return taskType().equals(meta.get(ConversationProtocol.TASK_TYPE));
     }
 
     @Override
@@ -46,17 +46,21 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
                                                String llmOutput, ChannelAgentRequest trigger) {
         Map<String, String> meta = DebateProtocol.parseMeta(trigger.message().content());
         String subTaskId = meta.getOrDefault("subTaskId", trigger.correlationId());
-        String agent = meta.getOrDefault("agent", "UNKNOWN");
+        String role = meta.get(ConversationProtocol.ROLE);
         String pointId = meta.get("pointId");
         Long inReplyTo = messageService.findByCorrelationId(subTaskId).map(m -> m.id).orElse(null);
         String round = meta.getOrDefault("round", "0");
-        String encoded = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_FINDING|subTaskId=" + subTaskId
-                + "|taskType=" + taskType().name()
-                + "|agent=" + agent
-                + "|round=" + round
-                + (pointId != null ? "|pointId=" + pointId : "")
-                + "\n\n" + llmOutput;
+
+        Map<String, String> responseMeta = Map.of(
+            ConversationProtocol.ENTRY_TYPE, "SUB_TASK_FINDING",
+            ConversationProtocol.SUB_TASK_ID, subTaskId,
+            ConversationProtocol.TASK_TYPE, taskType(),
+            ConversationProtocol.ROLE, role,
+            ConversationProtocol.ROUND, round,
+            ConversationProtocol.POINT_ID, pointId != null ? pointId : ""
+        );
+        String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, responseMeta, llmOutput);
+
         return MessageDispatch.builder()
                 .channelId(channelId).sender(senderId)
                 .type(MessageType.RESPONSE).content(encoded)
@@ -66,7 +70,7 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
 
     // ── shared helpers ────────────────────────────────────────────────────────
 
-    protected ReviewState currentState(UUID channelId) {
+    protected ConversationState currentState(UUID channelId) {
         return projectionService.project(channelId, debateProjection).state();
     }
 
@@ -82,17 +86,17 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
                 .path();
     }
 
-    protected ReviewPoint requirePoint(ReviewState state, String pointId) {
+    protected ConversationPoint requirePoint(ConversationState state, String pointId) {
         if (pointId == null)
             throw new IllegalArgumentException(taskType() + " requires a pointId");
-        ReviewPoint p = state.points().get(pointId);
+        ConversationPoint p = state.points().get(pointId);
         if (p == null)
             throw new IllegalArgumentException(taskType() + ": pointId " + pointId
                     + " not found in projected state");
         return p;
     }
 
-    protected String requirePointRaiseContent(ReviewState state, String pointId) {
+    protected String requirePointRaiseContent(ConversationState state, String pointId) {
         return requirePoint(state, pointId).thread().get(0).content();
     }
 

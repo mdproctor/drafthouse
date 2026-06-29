@@ -1,375 +1,209 @@
 package io.casehub.drafthouse.debate;
 
+import io.casehub.blocks.conversation.ConversationState;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ProjectionResult;
 import org.junit.jupiter.api.Test;
+
 import static io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL;
 import static org.assertj.core.api.Assertions.*;
 
+/**
+ * Tests DraftHouse-specific hook mappings in {@link DebateChannelProjection}.
+ * Bulk fold logic (infrastructure handlers, point initiation, immutability, etc.)
+ * is tested in blocks {@code ConversationProjectionTest}.
+ */
 class DebateChannelProjectionTest {
 
     private final DebateChannelProjection proj = new DebateChannelProjection();
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Build a MessageView with metadata encoded in content as META header.
-     * The projection reads metadata from content (not artefactRefs), because
-     * Qhorus ArtefactRefParser validates artefactRefs as CSV UUIDs.
-     */
     private static MessageView msg(MessageType type, String correlationId, String metaHeader, String bodyContent) {
         String encodedContent = META_SENTINEL + metaHeader + "\n\n" + bodyContent;
         return new MessageView(null, null, "test-sender", type,
                 encodedContent, correlationId, null, null, null, ActorType.AGENT, null, null, 0);
     }
 
-    private static String ratefacts(String entryType, String agent, int round) {
-        return "entryType=" + entryType + "|agent=" + agent + "|round=" + round;
+    private static String ratefacts(String entryType, String role, int round) {
+        return "entryType=" + entryType + "|role=" + role + "|round=" + round;
     }
 
-    private static String ratefacts(String entryType, String agent, int round, String priority, String scope) {
-        return "entryType=" + entryType + "|agent=" + agent + "|round=" + round
+    private static String ratefacts(String entryType, String role, int round, String priority, String scope) {
+        return "entryType=" + entryType + "|role=" + role + "|round=" + round
                 + "|priority=" + priority + "|scope=" + scope;
     }
 
-    // ── raise ─────────────────────────────────────────────────────────────────
-
-    @Test
-    void raise_createsOpenPoint_revAgent_roundPopulated() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1",
-                        ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"),
-                        "This is the raise content."));
-        assertThat(s.points()).containsKey("pt-1");
-        ReviewPoint p = s.points().get("pt-1");
-        assertThat(p.currentStatus()).isEqualTo(ReviewStatus.OPEN);
-        assertThat(p.thread()).hasSize(1);
-        assertThat(p.thread().get(0).type()).isEqualTo(EntryType.RAISE);
-        assertThat(p.thread().get(0).agent()).isEqualTo(AgentType.REV);
-        assertThat(p.thread().get(0).round()).isEqualTo(1);
-        assertThat(p.thread().get(0).content()).isEqualTo("This is the raise content.");
-    }
-
-    @Test
-    void raise_impAgent_mapsToIMP() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-2", ratefacts("RAISE", "IMP", 2, "P2", "SYSTEMIC"), "IMP point."));
-        assertThat(s.points().get("pt-2").thread().get(0).agent()).isEqualTo(AgentType.IMP);
-    }
-
-    // ── agree ─────────────────────────────────────────────────────────────────
-
-    @Test
-    void agree_transitionsToAgreed() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.DONE, "pt-1", ratefacts("AGREE", "IMP", 2), "Agreed."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.AGREED);
-        assertThat(s1.points().get("pt-1").thread().get(1).type()).isEqualTo(EntryType.AGREE);
-        assertThat(s1.points().get("pt-1").thread().get(1).agent()).isEqualTo(AgentType.IMP);
-    }
-
-    // ── dispute ───────────────────────────────────────────────────────────────
-
-    @Test
-    void dispute_transitionsToDisputed_notDeclined() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.DECLINE, "pt-1", ratefacts("DISPUTE", "IMP", 2), "I disagree."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.DISPUTED);
-        assertThat(s1.points().get("pt-1").thread().get(1).type()).isEqualTo(EntryType.DISPUTE);
-    }
-
-    // ── qualify ───────────────────────────────────────────────────────────────
-
-    @Test
-    void qualify_transitionsToActive_entryTypeQualify() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.RESPONSE, "pt-1", ratefacts("QUALIFY", "IMP", 2), "Partially."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.ACTIVE);
-        assertThat(s1.points().get("pt-1").thread().get(1).type()).isEqualTo(EntryType.QUALIFY);
-    }
-
-    // ── counter ───────────────────────────────────────────────────────────────
-
-    @Test
-    void counter_transitionsToActive_entryTypeCounter_distinctFromQualify() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.RESPONSE, "pt-1", ratefacts("COUNTER", "IMP", 2), "My counter."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.ACTIVE);
-        assertThat(s1.points().get("pt-1").thread().get(1).type()).isEqualTo(EntryType.COUNTER);
-    }
-
-    // ── flag-human ────────────────────────────────────────────────────────────
-
-    @Test
-    void flagHuman_transitionsToPendingHuman_flagEntryRoundPopulated() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.HANDOFF, "pt-1", ratefacts("FLAG_HUMAN", "REV", 3), "Human needed."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.PENDING_HUMAN);
-        assertThat(s1.humanFlags()).hasSize(1);
-        assertThat(s1.humanFlags().get(0).round()).isEqualTo(3);
-        assertThat(s1.humanFlags().get(0).content()).isEqualTo("Human needed.");
-    }
-
-    // ── memo ──────────────────────────────────────────────────────────────────
-
-    @Test
-    void memo_addsToMemosList_doesNotAddPoint() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.STATUS, null, "entryType=MEMO|agent=REV|round=2", "Working notes."));
-        assertThat(s.memos()).hasSize(1);
-        assertThat(s.memos().get(0).agentRole()).isEqualTo("REV");
-        assertThat(s.memos().get(0).round()).isEqualTo(2);
-        assertThat(s.memos().get(0).content()).isEqualTo("Working notes.");
-        assertThat(s.points()).isEmpty();
-    }
-
-    // ── sub-task lifecycle ────────────────────────────────────────────────────
-
-    @Test
-    void subTaskRequest_addsPendingFinding() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "sub-1",
-                        "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1", ""));
-        assertThat(s.subTaskFindings()).containsKey("sub-1");
-        assertThat(s.subTaskFindings().get("sub-1").status()).isEqualTo(SubTaskStatus.PENDING);
-        assertThat(s.subTaskFindings().get("sub-1").taskType()).isEqualTo(SubTaskType.ARBITRATE);
-        assertThat(s.subTaskFindings().get("sub-1").pointId()).isEqualTo("pt-1");
-    }
-
-    @Test
-    void subTaskFinding_completesExistingEntry() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "sub-1",
-                        "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1|pointId=pt-1", ""));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.RESPONSE, "sub-1",
-                        "entryType=SUB_TASK_FINDING|subTaskId=sub-1|taskType=ARBITRATE|agent=REV|pointId=pt-1",
-                        "The finding."));
-        assertThat(s1.subTaskFindings().get("sub-1").status()).isEqualTo(SubTaskStatus.COMPLETE);
-        assertThat(s1.subTaskFindings().get("sub-1").finding()).isEqualTo("The finding.");
-    }
-
-    @Test
-    void subTaskError_setsErrorStatus() {
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "sub-2",
-                        "entryType=SUB_TASK_REQUEST|agent=IMP|taskType=VERIFY|subTaskId=sub-2|pointId=pt-1", ""));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.STATUS, "sub-2",
-                        "entryType=SUB_TASK_ERROR|subTaskId=sub-2|taskType=VERIFY|agent=IMP",
-                        "Sub-agent analysis failed."));
-        assertThat(s1.subTaskFindings().get("sub-2").status()).isEqualTo(SubTaskStatus.ERROR);
-        assertThat(s1.subTaskFindings().get("sub-2").errorReason()).isEqualTo("Sub-agent analysis failed.");
-    }
-
-    @Test
-    void outOfOrder_findingBeforeRequest_createdAtComplete() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.RESPONSE, "sub-3",
-                        "entryType=SUB_TASK_FINDING|subTaskId=sub-3|taskType=CUSTOM|agent=REV",
-                        "Late finding."));
-        assertThat(s.subTaskFindings()).containsKey("sub-3");
-        assertThat(s.subTaskFindings().get("sub-3").status()).isEqualTo(SubTaskStatus.COMPLETE);
-    }
-
-    // ── edge cases ────────────────────────────────────────────────────────────
-
-    @Test
-    void unknownEntryType_stateUnchanged() {
-        ReviewState s0 = proj.identity();
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.QUERY, "pt-1", "entryType=unknown|agent=REV|round=1", "?"));
-        assertThat(s1.points()).isEmpty();
-    }
-
-    @Test
-    void missingAgent_messageDiscarded_stateUnchanged() {
-        // Missing agent= field is a protocol violation — fold must not crash (no try-catch in fold()).
-        // Message is discarded at ERROR severity; point remains OPEN.
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.DONE, "pt-1", "entryType=AGREE|round=2", "Agreed."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
-    }
-
-    @Test
-    void unknownAgent_messageDiscarded_stateUnchanged() {
-        // Unknown future role — fold must not crash; message discarded at WARNING severity.
-        ReviewState s0 = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        ReviewState s1 = proj.apply(s0,
-                msg(MessageType.DONE, "pt-1", "entryType=AGREE|agent=UNKNOWN_FUTURE_ROLE|round=2", "Agreed."));
-        assertThat(s1.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
-    }
-
-    @Test
-    void supervisorAgent_raise_foldsCorrectlyIntoState() {
-        // SUPERVISOR is a valid new AgentType — must fold as a RAISE with agent=SUPERVISOR.
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-sup",
-                        ratefacts("RAISE", "SUPERVISOR", 1, "P2", "SYSTEMIC"),
-                        "Meta-point from supervisor."));
-        assertThat(s.points()).containsKey("pt-sup");
-        assertThat(s.points().get("pt-sup").thread().get(0).agent()).isEqualTo(AgentType.SUPERVISOR);
-        assertThat(s.points().get("pt-sup").currentStatus()).isEqualTo(ReviewStatus.OPEN);
-    }
-
-    @Test
-    void nullActorType_doesNotThrow() {
-        // DebateChannelProjection uses content META header for agent — actorType is never read
-        ReviewState s = proj.apply(proj.identity(),
-                new MessageView(null, null, "test", MessageType.QUERY,
-                        META_SENTINEL + "entryType=RAISE|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nContent.",
-                        "pt-1", null, null, null, null, null, null, 0));
-        assertThat(s.points()).containsKey("pt-1");
-    }
-
-    @Test
-    void apply_doesNotMutateInputState() {
-        ReviewState after_raise = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Issue."));
-        proj.apply(after_raise,
-                msg(MessageType.DONE, "pt-1", ratefacts("AGREE", "IMP", 2), "Done."));
-        assertThat(after_raise.points().get("pt-1").currentStatus()).isEqualTo(ReviewStatus.OPEN);
-    }
-
-    @Test
-    void apply_oldMetaSentinel_treatedAsPlainContent_notParsed() {
-        // "META:" without the SOH prefix is no longer recognised as structured content
-        ReviewState s = proj.apply(proj.identity(),
-                new MessageView(null, null, "test", MessageType.QUERY,
-                        "META:entryType=raise|agent=REV|round=1|priority=P1|scope=ISOLATED\n\nBody.",
-                        "pt-old", null, null, null, ActorType.AGENT, null, null, 0));
-        assertThat(s.points()).isEmpty();
-    }
-
-    @Test
-    void apply_newSentinelWithUnknownEntryType_stateUnchanged() {
-        // Sentinel present but entryType value is unknown → state unchanged
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-y", "entryType=unknown|agent=REV|round=1", "?"));
-        assertThat(s.points()).isEmpty();
-    }
-
-    @Test
-    void identity_hasEmptyMemosAndSubTaskFindings() {
-        ReviewState s = new DebateChannelProjection().identity();
-        assertThat(s.memos()).isEmpty();
-        assertThat(s.subTaskFindings()).isEmpty();
-    }
+    // ── projectionName ───────────────────────────────────────────────────────
 
     @Test
     void projectionName_returnsDebateSummary() {
         assertThat(proj.projectionName()).isEqualTo("debate-summary");
     }
 
+    // ── sentinel ─────────────────────────────────────────────────────────────
+
+    @Test
+    void sentinel_returnsDhmetaPrefix() {
+        // Verified indirectly: messages with DHMETA: sentinel are parsed
+        ConversationState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1",
+                        ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"),
+                        "Content."));
+        assertThat(s.points()).containsKey("pt-1");
+    }
+
+    @Test
+    void nonDhmetaSentinel_treatedAsPlainContent() {
+        // "META:" without DHMETA: prefix is not recognised
+        ConversationState s = proj.apply(proj.identity(),
+                new MessageView(null, null, "test", MessageType.QUERY,
+                        "META:entryType=RAISE|role=REV|round=1|priority=HIGH|scope=ISOLATED\n\nBody.",
+                        "pt-old", null, null, null, ActorType.AGENT, null, null, 0));
+        assertThat(s.points()).isEmpty();
+    }
+
+    // ── isPointInitiator ─────────────────────────────────────────────────────
+
+    @Test
+    void raise_isPointInitiator_createsOpenPoint() {
+        ConversationState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1",
+                        ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"),
+                        "Issue."));
+        assertThat(s.points()).containsKey("pt-1");
+        assertThat(s.points().get("pt-1").status()).isEqualTo("OPEN");
+    }
+
+    @Test
+    void agree_isNotPointInitiator_appendsToExisting() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1",
+                        ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.DONE, "pt-1", ratefacts("AGREE", "IMP", 2), "Agreed."));
+        assertThat(s1.points().get("pt-1").thread()).hasSize(2);
+    }
+
+    // ── statusAfter ──────────────────────────────────────────────────────────
+
+    @Test
+    void agree_transitionsToAgreed() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.DONE, "pt-1", ratefacts("AGREE", "IMP", 2), "Agreed."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("AGREED");
+    }
+
+    @Test
+    void counter_transitionsToActive() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.RESPONSE, "pt-1", ratefacts("COUNTER", "IMP", 2), "Counter."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void qualify_transitionsToActive() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.RESPONSE, "pt-1", ratefacts("QUALIFY", "IMP", 2), "Partially."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("ACTIVE");
+    }
+
+    @Test
+    void dispute_transitionsToDisputed() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.DECLINE, "pt-1", ratefacts("DISPUTE", "IMP", 2), "Disagree."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("DISPUTED");
+    }
+
+    @Test
+    void declined_transitionsToDeclined() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.DECLINE, "pt-1", ratefacts("DECLINED", "IMP", 2), "Declined."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("DECLINED");
+    }
+
+    @Test
+    void unknownEntryType_statusUnchanged() {
+        // Unknown domain entry type → base class discards (no statusAfter match)
+        ConversationState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", "entryType=FUTURE_TYPE|role=REV|round=1", "?"));
+        // Unknown entry type is not RAISE (isPointInitiator=false), and there's no existing
+        // point to append to, so state is unchanged
+        assertThat(s.points()).isEmpty();
+    }
+
+    // ── render ────────────────────────────────────────────────────────────────
+
     @Test
     void render_emptyResult_returnsNonBlankSentinel() {
-        ProjectionResult<ReviewState> empty = new ProjectionResult<>(proj.identity(), null);
+        ProjectionResult<ConversationState> empty = new ProjectionResult<>(proj.identity(), null);
         assertThat(proj.render(empty)).isNotBlank();
+        assertThat(proj.render(empty)).isEqualTo("No debate activity yet.");
     }
 
-    // ── RESTART_CONTEXT string-check ──────────────────────────────────────────
+    @Test
+    void render_nonEmptyResult_delegatesToRenderer() {
+        ConversationState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1",
+                        ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(s, 1L);
+        String rendered = proj.render(result);
+        assertThat(rendered).contains("Conversation Summary");
+        assertThat(rendered).contains("Issue.");
+    }
 
     @Test
-    void restartContext_stateUnchanged_noPointsOrMemos() {
-        ReviewState s = proj.apply(proj.identity(),
-                msg(MessageType.STATUS, null,
-                        "entryType=RESTART_CONTEXT|originChannelId=abc-123|originRound=2",
-                        "## Debate State at Round 2\nSome content."));
+    void renderState_delegatesToRenderer() {
+        ConversationState s = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1",
+                        ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        String rendered = proj.renderState(s);
+        assertThat(rendered).contains("Conversation Summary");
+        assertThat(rendered).contains("Issue.");
+    }
+
+    // ── identity ─────────────────────────────────────────────────────────────
+
+    @Test
+    void identity_hasEmptyCollections() {
+        ConversationState s = proj.identity();
         assertThat(s.points()).isEmpty();
+        assertThat(s.humanFlags()).isEmpty();
         assertThat(s.memos()).isEmpty();
         assertThat(s.subTaskFindings()).isEmpty();
-        assertThat(s.humanFlags()).isEmpty();
-    }
-
-    @Test
-    void restartContext_doesNotProduceWarningPath_unlikeUnknownEntryType() {
-        // RESTART_CONTEXT is intercepted before valueOf() — should return state unchanged
-        // (not fall through to the WARNING log path used for truly unknown types)
-        ReviewState before = proj.apply(proj.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "A point."));
-        ReviewState after = proj.apply(before,
-                msg(MessageType.STATUS, null,
-                        "entryType=RESTART_CONTEXT|originChannelId=x|originRound=1", "summary"));
-        // State is unchanged — the RAISE point survives
-        assertThat(after.points()).containsKey("pt-1");
-        assertThat(after.memos()).isEmpty();
     }
 
     // ── RoundBoundedProjection ────────────────────────────────────────────────
 
     @Test
-    void roundBounded_excludesRaiseAboveMaxRound() {
+    void roundBounded_excludesAboveMaxRound() {
         var bounded = new DebateChannelProjection.RoundBoundedProjection(1, proj);
-        ReviewState s0 = bounded.apply(bounded.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "P1", "ISOLATED"), "Round 1."));
-        ReviewState s1 = bounded.apply(s0,
-                msg(MessageType.QUERY, "pt-2", ratefacts("RAISE", "IMP", 2, "P2", "ISOLATED"), "Round 2."));
+        ConversationState s0 = bounded.apply(bounded.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Round 1."));
+        ConversationState s1 = bounded.apply(s0,
+                msg(MessageType.QUERY, "pt-2", ratefacts("RAISE", "IMP", 2, "MEDIUM", "ISOLATED"), "Round 2."));
         assertThat(s1.points()).containsKey("pt-1");
         assertThat(s1.points()).doesNotContainKey("pt-2");
     }
 
     @Test
-    void roundBounded_includesMessageAtExactlyMaxRound() {
+    void roundBounded_includesAtExactlyMaxRound() {
         var bounded = new DebateChannelProjection.RoundBoundedProjection(2, proj);
-        ReviewState s = bounded.apply(bounded.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 2, "P1", "ISOLATED"), "Exactly round 2."));
+        ConversationState s = bounded.apply(bounded.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 2, "HIGH", "ISOLATED"), "Exactly round 2."));
         assertThat(s.points()).containsKey("pt-1");
-    }
-
-    @Test
-    void roundBounded_memoAboveMaxRound_excluded() {
-        var bounded = new DebateChannelProjection.RoundBoundedProjection(1, proj);
-        ReviewState s0 = bounded.apply(bounded.identity(),
-                msg(MessageType.STATUS, null, "entryType=MEMO|agent=REV|round=1", "Round 1 memo."));
-        ReviewState s1 = bounded.apply(s0,
-                msg(MessageType.STATUS, null, "entryType=MEMO|agent=IMP|round=2", "Round 2 memo."));
-        assertThat(s1.memos()).hasSize(1);
-        assertThat(s1.memos().get(0).content()).isEqualTo("Round 1 memo.");
-    }
-
-    @Test
-    void roundBounded_subTaskFindingWithRoundAboveMax_excluded() {
-        var bounded = new DebateChannelProjection.RoundBoundedProjection(1, proj);
-        ReviewState s = bounded.apply(bounded.identity(),
-                msg(MessageType.RESPONSE, "sub-1",
-                        "entryType=SUB_TASK_FINDING|subTaskId=sub-1|taskType=VERIFY|agent=REV|round=3",
-                        "Late finding."));
-        assertThat(s.subTaskFindings()).isEmpty();
-    }
-
-    @Test
-    void roundBounded_subTaskFindingAtMaxRound_included() {
-        var bounded = new DebateChannelProjection.RoundBoundedProjection(2, proj);
-        ReviewState s = bounded.apply(bounded.identity(),
-                msg(MessageType.RESPONSE, "sub-1",
-                        "entryType=SUB_TASK_FINDING|subTaskId=sub-1|taskType=VERIFY|agent=REV|round=2",
-                        "On-time finding."));
-        assertThat(s.subTaskFindings()).containsKey("sub-1");
-    }
-
-    @Test
-    void roundBounded_identityState_whenAllMessagesAboveMaxRound() {
-        var bounded = new DebateChannelProjection.RoundBoundedProjection(1, proj);
-        ReviewState s = bounded.apply(bounded.identity(),
-                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 5, "P1", "ISOLATED"), "Too late."));
-        assertThat(s.points()).isEmpty();
-        assertThat(s.memos()).isEmpty();
-        assertThat(s.subTaskFindings()).isEmpty();
     }
 
     @Test

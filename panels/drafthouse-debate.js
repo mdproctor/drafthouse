@@ -103,17 +103,17 @@ styles.replaceSync(`
     letter-spacing: 0.3px;
   }
 
-  .badge-priority-p1 {
+  .badge-priority-high {
     background: var(--error);
     color: white;
   }
 
-  .badge-priority-p2 {
+  .badge-priority-medium {
     background: var(--warn);
     color: white;
   }
 
-  .badge-priority-p3 {
+  .badge-priority-low {
     background: var(--muted);
     color: white;
   }

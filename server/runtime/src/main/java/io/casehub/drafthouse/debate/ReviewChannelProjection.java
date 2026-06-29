@@ -1,30 +1,31 @@
 package io.casehub.drafthouse.debate;
 
+import io.casehub.blocks.conversation.*;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.*;
 
 /**
- * Folds review Q&A channel messages into ReviewState.
+ * Folds review Q&A channel messages into ConversationState.
  * Dispatch is on message.type() — review channels never carry artefactRefs.
- * Agent classification uses message.actorType(): HUMAN→REV, AGENT→IMP.
+ * Agent classification uses message.actorType(): HUMAN→"REV", AGENT→"IMP".
  *
  * Does NOT implement RenderableProjection — ReviewerChannelBackend calls
  * ReviewConversationRenderer.render() directly; projection.render() is never called.
  */
 @ApplicationScoped
-public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
+public class ReviewChannelProjection implements ChannelProjection<ConversationState> {
 
     private static final System.Logger LOG = System.getLogger(ReviewChannelProjection.class.getName());
 
     @Override
-    public ReviewState identity() {
-        return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+    public ConversationState identity() {
+        return new ConversationState(Map.of(), List.of(), List.of(), Map.of());
     }
 
     @Override
-    public ReviewState apply(ReviewState state, MessageView message) {
+    public ConversationState apply(ConversationState state, MessageView message) {
         return switch (message.type()) {
             case QUERY    -> handleRaise(state, message);
             case RESPONSE -> handleQualify(state, message);
@@ -37,35 +38,35 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
 
     // ── fold handlers ─────────────────────────────────────────────────────────
 
-    private ReviewState handleRaise(ReviewState state, MessageView message) {
+    private ConversationState handleRaise(ConversationState state, MessageView message) {
         String entryId = message.correlationId();
         if (entryId == null) return state;
         String artefacts = message.artefactRefs() != null ? message.artefactRefs() : "";
         Map<String, String> meta = parseArtefacts(artefacts);
-        Priority priority = parsePriority(meta.getOrDefault("priority", "P3"));
-        Scope scope = parseScope(meta.getOrDefault("scope", "ISOLATED"));
+        Priority priority = parsePriority(meta.getOrDefault("priority", "LOW"));
+        String scope = parseScope(meta.getOrDefault("scope", "ISOLATED"));
         String location = meta.get("location");
         var classification = new PointClassification(priority, scope,
                 location != null && !location.isBlank() ? location : null);
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(entryId, agentType(message), 0, EntryType.RAISE, message.content()));
-        var point = new ReviewPoint(entryId, classification, thread, ReviewStatus.OPEN);
+        thread.add(new ThreadEntry(entryId, role(message), 0, "RAISE", message.content()));
+        var point = new ConversationPoint(entryId, classification, thread, "OPEN");
         var points = new LinkedHashMap<>(state.points());
         points.put(entryId, point);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
                 new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
-    private ReviewState handleQualify(ReviewState state, MessageView message) {
-        return appendToPoint(state, message, EntryType.QUALIFY, ReviewStatus.ACTIVE);
+    private ConversationState handleQualify(ConversationState state, MessageView message) {
+        return appendToPoint(state, message, "QUALIFY", "ACTIVE");
     }
 
-    private ReviewState handleAgree(ReviewState state, MessageView message) {
-        return appendToPoint(state, message, EntryType.AGREE, ReviewStatus.AGREED);
+    private ConversationState handleAgree(ConversationState state, MessageView message) {
+        return appendToPoint(state, message, "AGREE", "AGREED");
     }
 
-    private ReviewState appendToPoint(ReviewState state, MessageView message,
-                                       EntryType entryType, ReviewStatus newStatus) {
+    private ConversationState appendToPoint(ConversationState state, MessageView message,
+                                       String entryType, String newStatus) {
         String targetId = message.correlationId();
         if (targetId == null) return state;
         if (!state.points().containsKey(targetId)) {
@@ -73,17 +74,17 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
                     "Response references unknown point ID: {0} — discarded", targetId);
             return state;
         }
-        ReviewPoint existing = state.points().get(targetId);
+        ConversationPoint existing = state.points().get(targetId);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(message), 0, entryType, message.content()));
-        var updated = new ReviewPoint(existing.id(), existing.classification(), thread, newStatus);
+        thread.add(new ThreadEntry(null, role(message), 0, entryType, message.content()));
+        var updated = new ConversationPoint(existing.id(), existing.classification(), thread, newStatus);
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
                 new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
-    private ReviewState handleDecline(ReviewState state, MessageView message) {
+    private ConversationState handleDecline(ConversationState state, MessageView message) {
         String targetId = message.correlationId();
         if (targetId == null) return state;
         if (!state.points().containsKey(targetId)) {
@@ -91,43 +92,43 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
                     "Decline references unknown point ID: {0} — discarded", targetId);
             return state;
         }
-        ReviewPoint existing = state.points().get(targetId);
+        ConversationPoint existing = state.points().get(targetId);
         var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, agentType(message), 0, EntryType.DECLINED,
+        thread.add(new ThreadEntry(null, role(message), 0, "DECLINED",
                 Objects.requireNonNullElse(message.content(), "")));
-        var updated = new ReviewPoint(existing.id(), existing.classification(), thread, ReviewStatus.DECLINED);
+        var updated = new ConversationPoint(existing.id(), existing.classification(), thread, "DECLINED");
         var points = new LinkedHashMap<>(state.points());
         points.put(targetId, updated);
-        return new ReviewState(points, new ArrayList<>(state.humanFlags()),
+        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
                 new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
-    private ReviewState handleFlagHuman(ReviewState state, MessageView message) {
+    private ConversationState handleFlagHuman(ConversationState state, MessageView message) {
         String targetId = message.correlationId();
         String content = Objects.requireNonNullElse(message.content(), "");
         var points = new LinkedHashMap<>(state.points());
         if (targetId != null && points.containsKey(targetId)) {
-            ReviewPoint p = points.get(targetId);
+            ConversationPoint p = points.get(targetId);
             var thread = new ArrayList<>(p.thread());
-            thread.add(new ThreadEntry(null, agentType(message), 0, EntryType.FLAG_HUMAN, content));
-            points.put(targetId, new ReviewPoint(p.id(), p.classification(), thread, ReviewStatus.PENDING_HUMAN));
+            thread.add(new ThreadEntry(null, role(message), 0, "FLAG_HUMAN", content));
+            points.put(targetId, new ConversationPoint(p.id(), p.classification(), thread, ConversationProtocol.STATUS_ESCALATED));
         }
         var flags = new ArrayList<>(state.humanFlags());
-        flags.add(new FlagEntry(null, 0, agentType(message), content));
-        return new ReviewState(points, flags,
+        flags.add(new FlagEntry(null, 0, role(message), content));
+        return new ConversationState(points, flags,
                 new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private AgentType agentType(MessageView message) {
+    private String role(MessageView message) {
         if (message.actorType() == null) {
             throw new IllegalArgumentException(
                     "MessageView.actorType() must not be null in ReviewChannelProjection");
         }
         return switch (message.actorType()) {
-            case HUMAN -> AgentType.REV;
-            case AGENT -> AgentType.IMP;
+            case HUMAN -> "REV";
+            case AGENT -> "IMP";
             default    -> throw new IllegalArgumentException(
                     "Unsupported actorType in review projection: " + message.actorType());
         };
@@ -143,10 +144,11 @@ public class ReviewChannelProjection implements ChannelProjection<ReviewState> {
     }
 
     private Priority parsePriority(String s) {
-        try { return Priority.valueOf(s.toUpperCase()); } catch (Exception e) { return Priority.P3; }
+        try { return Priority.valueOf(s.toUpperCase()); } catch (Exception e) { return Priority.LOW; }
     }
 
-    private Scope parseScope(String s) {
-        try { return Scope.valueOf(s.toUpperCase()); } catch (Exception e) { return Scope.ISOLATED; }
+    private String parseScope(String s) {
+        // Accept any string — return as-is (uppercase normalized)
+        return s != null ? s.toUpperCase() : "ISOLATED";
     }
 }

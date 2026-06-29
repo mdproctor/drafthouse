@@ -2,8 +2,7 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.SubTaskType;
+import io.casehub.blocks.conversation.ConversationState;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Map;
@@ -12,7 +11,7 @@ import java.util.Map;
 class VerifyHandler extends AbstractDebateSubAgentHandler {
 
     @Override
-    SubTaskType taskType() { return SubTaskType.VERIFY; }
+    String taskType() { return "VERIFY"; }
 
     @Override
     public AgentTask prepareTask(ChannelAgentRequest request) {
@@ -20,7 +19,7 @@ class VerifyHandler extends AbstractDebateSubAgentHandler {
         String pointId = meta.get("pointId");
         var session = requireSession(request.channelId());
         String specPath = requireSpecPath(session);
-        ReviewState state = currentState(request.channelId());
+        ConversationState state = currentState(request.channelId());
         String claim = requirePointRaiseContent(state, pointId);
         String spec = readSpec(specPath);
         return new AgentTask(

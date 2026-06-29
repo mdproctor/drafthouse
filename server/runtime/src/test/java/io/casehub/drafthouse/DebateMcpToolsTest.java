@@ -11,6 +11,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import io.casehub.blocks.channel.ContextSnapshot;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.SubTaskFinding;
+import io.casehub.blocks.conversation.SubTaskStatus;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;
@@ -31,10 +34,6 @@ import io.casehub.qhorus.runtime.message.ProjectionService;
 import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
 import io.casehub.drafthouse.debate.DebateProtocol;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.SubTaskFinding;
-import io.casehub.drafthouse.debate.SubTaskStatus;
-import io.casehub.drafthouse.debate.SubTaskType;
 import io.casehub.drafthouse.SelectionScope;
 import io.casehub.drafthouse.DocumentSide;
 import org.junit.jupiter.api.BeforeEach;
@@ -188,7 +187,7 @@ class DebateMcpToolsTest {
         assertThat(d.artefactRefs()).isNull();
         assertThat(d.content()).startsWith(DebateProtocol.META_SENTINEL);
         assertThat(d.content()).contains("entryType=RAISE");
-        assertThat(d.content()).contains("agent=REV");
+        assertThat(d.content()).contains("role=REV");
         assertThat(d.content()).contains("round=1");
         assertThat(d.content()).contains("priority=P1");
         assertThat(d.content()).contains("scope=ISOLATED");
@@ -223,7 +222,7 @@ class DebateMcpToolsTest {
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().sender())
                 .isEqualTo(DebateSession.instanceId(AgentType.SUPERVISOR, channelId.toString()));
-        assertThat(cap.getValue().content()).contains("agent=SUPERVISOR");
+        assertThat(cap.getValue().content()).contains("role=SUPERVISOR");
     }
 
     @Test
@@ -418,8 +417,8 @@ class DebateMcpToolsTest {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
-        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        ConversationState emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary\n...");
 
@@ -549,7 +548,7 @@ class DebateMcpToolsTest {
     void getDebateSummaryAtRound_emptyBoundedState_returnsNoneMessage() {
         UUID channelId = stubChannel.id;
         when(registry.find(channelId)).thenReturn(Optional.of(sessionFor(channelId)));
-        ReviewState empty = emptyState();
+        ConversationState empty = emptyState();
         when(projectionService.project(eq(channelId), any()))
                 .thenReturn(new ProjectionResult<>(empty, 99L));
 
@@ -728,11 +727,11 @@ class DebateMcpToolsTest {
         UUID originalId = stubChannel.id;
         when(registry.find(originalId)).thenReturn(Optional.of(sessionFor(originalId)));
 
-        ReviewState boundedState = stateWithFindings(
+        ConversationState boundedState = stateWithFindings(
                 finding("f1", SubTaskStatus.COMPLETE),
                 finding("f2", SubTaskStatus.COMPLETE),
                 finding("f3", SubTaskStatus.PENDING));
-        ReviewState fullState = stateWithFindings(
+        ConversationState fullState = stateWithFindings(
                 finding("f1", SubTaskStatus.COMPLETE),
                 finding("f2", SubTaskStatus.COMPLETE),
                 finding("f3", SubTaskStatus.PENDING),
@@ -856,8 +855,8 @@ class DebateMcpToolsTest {
         DebateSession session = sessionFor(channelId);
         session.updateSelection(new SelectionScope(DocumentSide.A, 5, 12, "The selected passage."));
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
-        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        ConversationState emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary");
 
@@ -874,8 +873,8 @@ class DebateMcpToolsTest {
         UUID channelId = stubChannel.id;
         DebateSession session = sessionFor(channelId);
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
-        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        ConversationState emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary");
 
@@ -890,8 +889,8 @@ class DebateMcpToolsTest {
         DebateSession session = sessionFor(channelId);
         session.updateSelection(new SelectionScope(DocumentSide.B, 0, 0, "Review text only."));
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
-        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        ConversationState emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary");
 
@@ -1051,8 +1050,8 @@ class DebateMcpToolsTest {
         session.registerIfAbsent(AgentType.IMP,
                 () -> DebateSession.instanceId(AgentType.IMP, channelId.toString()));
         when(registry.find(channelId)).thenReturn(Optional.of(session));
-        ReviewState emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
-        ProjectionResult<ReviewState> result = new ProjectionResult<>(emptyState, null);
+        ConversationState emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
+        ProjectionResult<ConversationState> result = new ProjectionResult<>(emptyState, null);
         when(projectionService.project(eq(channelId), eq(debateProjection))).thenReturn(result);
         when(debateProjection.render(result)).thenReturn("# Summary\n...");
 
@@ -1129,8 +1128,8 @@ class DebateMcpToolsTest {
         return session;
     }
 
-    private static ReviewState emptyState() {
-        return new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+    private static ConversationState emptyState() {
+        return new ConversationState(Map.of(), List.of(), List.of(), Map.of());
     }
 
     private static Channel newChannel() {
@@ -1140,14 +1139,14 @@ class DebateMcpToolsTest {
         return ch;
     }
 
-    private static ReviewState stateWithFindings(SubTaskFinding... findings) {
+    private static ConversationState stateWithFindings(SubTaskFinding... findings) {
         Map<String, SubTaskFinding> map = new LinkedHashMap<>();
         for (final SubTaskFinding f : findings) map.put(f.subTaskId(), f);
-        return new ReviewState(Map.of(), List.of(), List.of(), map);
+        return new ConversationState(Map.of(), List.of(), List.of(), map);
     }
 
     private static SubTaskFinding finding(final String id, final SubTaskStatus status) {
-        return new SubTaskFinding(id, SubTaskType.VERIFY, "REV", null,
+        return new SubTaskFinding(id, "VERIFY", "REV", null,
                 status == SubTaskStatus.COMPLETE ? "the finding text" : null,
                 status == SubTaskStatus.ERROR ? "error occurred" : null,
                 status);

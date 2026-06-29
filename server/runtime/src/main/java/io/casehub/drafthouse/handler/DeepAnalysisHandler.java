@@ -2,9 +2,8 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
-import io.casehub.drafthouse.debate.ReviewPoint;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.SubTaskType;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Map;
@@ -12,7 +11,7 @@ import java.util.Map;
 @ApplicationScoped
 class DeepAnalysisHandler extends AbstractDebateSubAgentHandler {
 
-    @Override SubTaskType taskType() { return SubTaskType.DEEP_ANALYSIS; }
+    @Override String taskType() { return "DEEP_ANALYSIS"; }
 
     @Override
     public AgentTask prepareTask(ChannelAgentRequest request) {
@@ -24,8 +23,8 @@ class DeepAnalysisHandler extends AbstractDebateSubAgentHandler {
         String focusHint = "(no section indicated)";
         String pointId = meta.get("pointId");
         if (pointId != null) {
-            ReviewState state = currentState(request.channelId());
-            ReviewPoint p = state.points().get(pointId);
+            ConversationState state = currentState(request.channelId());
+            ConversationPoint p = state.points().get(pointId);
             if (p != null && p.classification().location() != null) {
                 focusHint = p.classification().location();
             }

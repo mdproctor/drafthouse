@@ -103,7 +103,7 @@ class DebatePanelE2ETest {
     @Test
     void roundDivider_appearsOnFirstEntry() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Test point.", "P2", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Test point.", "MEDIUM", "ISOLATED", null);
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
         assertThat(page.locator("drafthouse-debate .round-divider")).containsText("Round 1");
@@ -114,12 +114,12 @@ class DebatePanelE2ETest {
     @Test
     void raiseEntry_rendersWithCorrectStructure() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "API contract is underspecified.", "P1", "ISOLATED", "§3.2");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "API contract is underspecified.", "HIGH", "ISOLATED", "§3.2");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
         assertThat(page.locator("drafthouse-debate .entry-raise")).hasCount(1);
-        assertThat(page.locator("drafthouse-debate .badge-priority-p1")).hasCount(1);
+        assertThat(page.locator("drafthouse-debate .badge-priority-high")).hasCount(1);
         assertThat(page.locator("drafthouse-debate .badge-scope")).containsText("ISOLATED");
         assertThat(page.locator("drafthouse-debate .badge-location")).containsText("§3.2");
         assertThat(page.locator("drafthouse-debate .entry-agent")).containsText("Reviewer");
@@ -130,7 +130,7 @@ class DebatePanelE2ETest {
     @Test
     void agreeEntry_hasCorrectClass() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for agree.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for agree.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "agree", "Agreed.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -141,7 +141,7 @@ class DebatePanelE2ETest {
     @Test
     void counterEntry_hasCorrectClass() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for counter.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for counter.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "counter", "Counter-proposal.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -152,7 +152,7 @@ class DebatePanelE2ETest {
     @Test
     void disputeEntry_hasCorrectClass() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for dispute.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for dispute.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "dispute", "Disputed.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -163,7 +163,7 @@ class DebatePanelE2ETest {
     @Test
     void qualifyEntry_hasCorrectClass() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for qualify.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for qualify.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "qualify", "Qualified.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -174,7 +174,7 @@ class DebatePanelE2ETest {
     @Test
     void declinedEntry_hasReducedOpacity() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for declined.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for declined.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 1, pointId, "declined", "Declined to address.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -187,7 +187,7 @@ class DebatePanelE2ETest {
     @Test
     void flagHumanEntry_rendersWarningBanner() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Ambiguous requirement.", "P1", "SYSTEMIC", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Ambiguous requirement.", "HIGH", "SYSTEMIC", null);
         dispatchFlag(tools, sessionId, "REV", 1, pointId, "Cannot resolve without human input.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -221,7 +221,7 @@ class DebatePanelE2ETest {
     @Test
     void restartContext_rendersCenteredBranchMarker() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Initial point.", "P2", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Initial point.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 2, findLatestCorrelationId(messageService, sessionId), "agree", "Agreed.");
 
         // restartFromRound creates a new channel + session, then dispatches a RESTART_CONTEXT
@@ -269,7 +269,7 @@ class DebatePanelE2ETest {
     @Test
     void multipleRounds_showsSeparateDividers() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Round one point.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Round one point.", "MEDIUM", "ISOLATED", null);
         dispatchResponse(tools, sessionId, "IMP", 2, pointId, "counter", "Counterpoint in round two.");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
@@ -286,7 +286,7 @@ class DebatePanelE2ETest {
         sessionId = startDebateSession(tools);
         // Raise 6 points to overflow the debate container
         for (int i = 1; i <= 6; i++) {
-            dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point number " + i + " with enough content to take space.", "P2", "ISOLATED", null);
+            dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point number " + i + " with enough content to take space.", "MEDIUM", "ISOLATED", null);
         }
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 6);
@@ -305,7 +305,7 @@ class DebatePanelE2ETest {
     @Test
     void pointSelected_firesCustomEvent() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Clickable point.", "P1", "ISOLATED", "§3.2");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Clickable point.", "HIGH", "ISOLATED", "§3.2");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
@@ -327,7 +327,7 @@ class DebatePanelE2ETest {
     @Test
     void subTaskRequest_rendersIndented() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for sub-task.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for sub-task.", "MEDIUM", "ISOLATED", null);
 
         // requestSubagent has its own try-catch — returns "error: ..." on ledger exception
         // but the message is still committed and visible via SSE
@@ -342,7 +342,7 @@ class DebatePanelE2ETest {
     @Test
     void subTaskFinding_rendersWithPointBadge() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for finding.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for finding.", "MEDIUM", "ISOLATED", null);
 
         // VERIFY taskType → MockDebateAgentProvider completes async → SUB_TASK_FINDING
         dispatchSubagentRequest(tools, sessionId, "REV", "VERIFY", pointId, 1, null);
@@ -369,7 +369,7 @@ class DebatePanelE2ETest {
     @Test
     void subTaskError_rendersWithErrorStyling() {
         sessionId = startDebateSession(tools);
-        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for error.", "P2", "ISOLATED", null);
+        String pointId = dispatchRaise(tools, messageService, sessionId, "REV", 1, "Point for error.", "MEDIUM", "ISOLATED", null);
 
         // NONEXISTENT taskType → no handler matches → SUB_TASK_ERROR dispatched
         dispatchSubagentRequest(tools, sessionId, "REV", "NONEXISTENT", pointId, 1, null);

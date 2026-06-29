@@ -79,7 +79,7 @@ class CrossPanelE2ETest {
     void debateEntry_scrollsDiffToSectionRef() {
         sessionId = startDebateSession(tools);
         // §3 → diff-a: Features (3rd H1/H2), diff-b: Scroll Sync (3rd H1/H2)
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Section three concern.", "P2", "ISOLATED", "§3");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Section three concern.", "MEDIUM", "ISOLATED", "§3");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
@@ -100,7 +100,7 @@ class CrossPanelE2ETest {
     @Test
     void trackerPoint_scrollsDiffToSectionRef() {
         sessionId = startDebateSession(tools);
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Section three concern.", "P2", "ISOLATED", "§3");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Section three concern.", "MEDIUM", "ISOLATED", "§3");
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
@@ -121,7 +121,7 @@ class CrossPanelE2ETest {
     void pointWithoutLocation_noScroll() {
         sessionId = startDebateSession(tools);
         // Raise without location
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "General concern without location.", "P2", "ISOLATED", null);
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "General concern without location.", "MEDIUM", "ISOLATED", null);
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
@@ -141,7 +141,7 @@ class CrossPanelE2ETest {
     void textReference_scrollsToMatchingHeading() {
         sessionId = startDebateSession(tools);
         // "Scroll Sync" heading exists in both diff-a.md and diff-b.md
-        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Scroll sync concern.", "P2", "ISOLATED", "Scroll Sync");
+        dispatchRaise(tools, messageService, sessionId, "REV", 1, "Scroll sync concern.", "MEDIUM", "ISOLATED", "Scroll Sync");
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 

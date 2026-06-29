@@ -4,6 +4,8 @@ import io.casehub.blocks.channel.AgentTask;
 import io.casehub.blocks.channel.ChannelAgentHandler;
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
+import io.casehub.blocks.channel.ChannelMessageMeta;
+import io.casehub.blocks.conversation.ConversationProtocol;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageDispatch;
@@ -62,11 +64,12 @@ public class ChannelAgentDispatcher extends io.casehub.blocks.channel.ChannelAge
     @Override
     protected void onError(ChannelAgentRequest request, String fixedReason) {
         Map<String, String> meta = DebateProtocol.parseMeta(request.message().content());
-        String encoded = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_ERROR|subTaskId=" + request.correlationId()
-                + "|taskType=" + meta.getOrDefault("taskType", "UNKNOWN")
-                + "|agent=" + meta.getOrDefault("agent", "UNKNOWN")
-                + "\n\n" + fixedReason;
+        Map<String, String> errorMeta = new java.util.LinkedHashMap<>();
+        errorMeta.put(ConversationProtocol.ENTRY_TYPE, "SUB_TASK_ERROR");
+        errorMeta.put(ConversationProtocol.SUB_TASK_ID, request.correlationId());
+        errorMeta.put(ConversationProtocol.TASK_TYPE, meta.getOrDefault(ConversationProtocol.TASK_TYPE, "UNKNOWN"));
+        errorMeta.put(ConversationProtocol.ROLE, meta.getOrDefault(ConversationProtocol.ROLE, "UNKNOWN"));
+        String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, errorMeta, fixedReason);
         Long inReplyTo = messageService.findByCorrelationId(request.correlationId())
                 .map(m -> m.id)
                 .orElse(null);

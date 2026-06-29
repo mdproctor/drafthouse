@@ -3,7 +3,9 @@ package io.casehub.drafthouse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -12,7 +14,11 @@ import java.util.stream.Collectors;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+import io.casehub.blocks.channel.ChannelMessageMeta;
 import io.casehub.blocks.channel.ContextSnapshot;
+import io.casehub.blocks.conversation.ConversationProtocol;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.SubTaskStatus;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;
@@ -30,9 +36,6 @@ import io.casehub.qhorus.runtime.message.ProjectionService;
 import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
 import io.casehub.drafthouse.debate.DebateProtocol;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.SubTaskStatus;
-import io.casehub.drafthouse.debate.SummaryRenderer;
 import io.quarkiverse.mcp.server.Tool;
 import io.quarkiverse.mcp.server.ToolArg;
 
@@ -147,15 +150,16 @@ public class DebateMcpTools {
         if (role == null) return roleError(agentRole);
 
         String pointId = UUID.randomUUID().toString();
-        StringBuilder meta = new StringBuilder(DebateProtocol.META_SENTINEL)
-                .append("entryType=RAISE|agent=").append(agentRole)
-                .append("|round=").append(round)
-                .append("|priority=").append(priority)
-                .append("|scope=").append(scope);
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put(ConversationProtocol.ENTRY_TYPE, "RAISE");
+        meta.put(ConversationProtocol.ROLE, agentRole);
+        meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+        meta.put(ConversationProtocol.PRIORITY, priority);
+        meta.put(ConversationProtocol.SCOPE, scope);
         if (location != null && !location.isBlank()) {
-            meta.append("|location=").append(location);
+            meta.put(ConversationProtocol.LOCATION, location);
         }
-        String encodedContent = meta + "\n\n" + content;
+        String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, content);
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
@@ -200,8 +204,11 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=" + entryType.toUpperCase()
-                + "|agent=" + agentRole + "|round=" + round + "\n\n" + content;
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put(ConversationProtocol.ENTRY_TYPE, entryType.toUpperCase());
+        meta.put(ConversationProtocol.ROLE, agentRole);
+        meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+        String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, content);
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
@@ -235,8 +242,11 @@ public class DebateMcpTools {
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
-        String encodedContent = DebateProtocol.META_SENTINEL + "entryType=FLAG_HUMAN|agent=" + agentRole
-                + "|round=" + round + "\n\n" + reason;
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put(ConversationProtocol.ENTRY_TYPE, "FLAG_HUMAN");
+        meta.put(ConversationProtocol.ROLE, agentRole);
+        meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+        String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, reason);
 
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(session.channelId())
@@ -341,9 +351,12 @@ public class DebateMcpTools {
             if (session == null) return sessionError(debateSessionId);
             AgentType role = parseRole(agentRole);
             if (role == null) return roleError(agentRole);
-            String encoded = DebateProtocol.META_SENTINEL
-                    + "entryType=MEMO|agent=" + agentRole + "|round=" + round
-                    + "\n\n" + Objects.requireNonNullElse(content, "");
+            Map<String, String> meta = new LinkedHashMap<>();
+            meta.put(ConversationProtocol.ENTRY_TYPE, "MEMO");
+            meta.put(ConversationProtocol.ROLE, agentRole);
+            meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+            String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta,
+                    Objects.requireNonNullElse(content, ""));
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(session.channelId())
                     .sender(sender(session, role))
@@ -377,14 +390,17 @@ public class DebateMcpTools {
             AgentType role = parseRole(agentRole);
             if (role == null) return roleError(agentRole);
             String subTaskId = UUID.randomUUID().toString();
-            StringBuilder header = new StringBuilder(DebateProtocol.META_SENTINEL)
-                    .append("entryType=SUB_TASK_REQUEST")
-                    .append("|agent=").append(agentRole)
-                    .append("|taskType=").append(Objects.requireNonNullElse(taskType, "CUSTOM"))
-                    .append("|subTaskId=").append(subTaskId)
-                    .append("|round=").append(round);
-            if (pointId != null && !pointId.isBlank()) header.append("|pointId=").append(pointId);
-            String encoded = header + "\n\n" + Objects.requireNonNullElse(customInput, "");
+            Map<String, String> meta = new LinkedHashMap<>();
+            meta.put(ConversationProtocol.ENTRY_TYPE, "SUB_TASK_REQUEST");
+            meta.put(ConversationProtocol.ROLE, agentRole);
+            meta.put(ConversationProtocol.TASK_TYPE, Objects.requireNonNullElse(taskType, "CUSTOM"));
+            meta.put(ConversationProtocol.SUB_TASK_ID, subTaskId);
+            meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+            if (pointId != null && !pointId.isBlank()) {
+                meta.put(ConversationProtocol.POINT_ID, pointId);
+            }
+            String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta,
+                    Objects.requireNonNullElse(customInput, ""));
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(session.channelId())
                     .sender(sender(session, role))
@@ -467,11 +483,10 @@ public class DebateMcpTools {
 
             // Extract sender registration before builder — makes the registration site unambiguous
             String markerSender = sender(newSession, AgentType.REV); // registers REV for the new session
-            String markerContent = DebateProtocol.META_SENTINEL
-                    + "entryType=RESTART_CONTEXT"
-                    + "|originChannelId=" + original.channelId()
-                    + "|originRound=" + round
-                    + "\n\n" + summary;
+            var meta = Map.of("entryType", "RESTART_CONTEXT",
+                              "originChannelId", original.channelId().toString(),
+                              "originRound", String.valueOf(round));
+            String markerContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, summary);
             messageService.dispatch(MessageDispatch.builder()
                     .channelId(newChannel.id)
                     .sender(markerSender)
@@ -708,11 +723,11 @@ public class DebateMcpTools {
     }
 
     /** Renders a bounded state, returning a custom message when the state has no debate content. */
-    private String renderBounded(ReviewState state, int round) {
+    private String renderBounded(ConversationState state, int round) {
         if (state.points().isEmpty() && state.memos().isEmpty() && state.subTaskFindings().isEmpty()) {
             return "No debate activity up to round " + round + ".";
         }
-        return new SummaryRenderer().render(state);
+        return debateProjection.renderState(state);
     }
 
     private DebateSession resolveSession(String debateSessionId) {

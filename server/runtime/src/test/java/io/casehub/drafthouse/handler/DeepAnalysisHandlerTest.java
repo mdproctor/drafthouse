@@ -2,6 +2,11 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.drafthouse.*;
 import io.casehub.drafthouse.debate.*;
 import io.casehub.qhorus.api.spi.ProjectionResult;
@@ -57,7 +62,7 @@ class DeepAnalysisHandlerTest {
 
     private ChannelAgentRequest requestFor(String pointId) {
         StringBuilder meta = new StringBuilder(DebateProtocol.META_SENTINEL)
-                .append("entryType=SUB_TASK_REQUEST|agent=REV|taskType=DEEP_ANALYSIS|subTaskId=sub-1");
+                .append("entryType=SUB_TASK_REQUEST|role=REV|taskType=DEEP_ANALYSIS|subTaskId=sub-1");
         if (pointId != null) meta.append("|pointId=").append(pointId);
         String content = meta + "\n\n";
         lenient().when(outboundMessage.content()).thenReturn(content);
@@ -85,10 +90,10 @@ class DeepAnalysisHandlerTest {
     @Test
     void with_pointId_having_location_uses_location_as_focus_hint() {
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec()));
-        var thread = List.of(new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "Concern text."));
-        var point = new ReviewPoint("pt-1",
-                new PointClassification(Priority.P1, Scope.ISOLATED, "§3.2 Authentication"), thread, ReviewStatus.OPEN);
-        var state = new ReviewState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
+        var thread = List.of(new ThreadEntry("pt-1", "REV", 1, "RAISE", "Concern text."));
+        var point = new ConversationPoint("pt-1",
+                new PointClassification(Priority.HIGH, "ISOLATED", "§3.2 Authentication"), thread, "OPEN");
+        var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(eq(channelId), any())).thenReturn(new ProjectionResult<>(state, null));
 
         AgentTask task = handler.prepareTask(requestFor("pt-1"));
@@ -100,7 +105,7 @@ class DeepAnalysisHandlerTest {
     @Test
     void with_pointId_but_point_not_found_falls_back_to_no_section_indicated() {
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec()));
-        var emptyState = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        var emptyState = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
         when(projectionService.project(eq(channelId), any())).thenReturn(new ProjectionResult<>(emptyState, null));
 
         AgentTask task = handler.prepareTask(requestFor("no-such-point"));

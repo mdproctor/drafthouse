@@ -50,7 +50,7 @@ class ChannelAgentDispatcherTest {
     void setUp() {
         lenient().when(outboundMessage.content()).thenReturn(
                 io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n");
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n");
         lenient().when(messageService.findByCorrelationId(any())).thenReturn(java.util.Optional.empty());
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
                 List.of(matchingHandler), null);

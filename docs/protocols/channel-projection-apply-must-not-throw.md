@@ -17,24 +17,20 @@ created: 2026-06-10
 
 ```java
 // Wrong — re-throwing crashes the fold
-private AgentType agentType(Map<String, String> meta) {
-    String agent = meta.get("agent");
-    if (agent == null) throw new IllegalArgumentException("missing META.agent");
-    return AgentType.valueOf(agent); // throws if unknown — fold crash
+String role = meta.get(ConversationProtocol.ROLE);
+if (role == null) throw new IllegalArgumentException("missing role");
+
+// Right — discard with log, return state unchanged
+String role = meta.get(ConversationProtocol.ROLE);
+if (role == null) {
+    LOG.log(Level.WARNING, "Message missing role — discarded");
+    return state;
 }
 
-// Right — discard with log, return null for callers to check
-private AgentType agentType(Map<String, String> meta) {
-    String agent = meta.get("agent");
-    if (agent == null) {
-        LOG.log(Level.ERROR, "Debate message missing META.agent — discarded");
-        return null;
-    }
-    try { return AgentType.valueOf(agent); }
-    catch (IllegalArgumentException e) {
-        LOG.log(Level.WARNING, "Unknown agent ''{0}'' — discarded", agent);
-        return null;
-    }
+// For enum parsing (e.g. Priority), always handle unknown values:
+private Priority parsePriority(String s) {
+    if (s == null) return Priority.LOW;
+    try { return Priority.valueOf(s.toUpperCase()); }
+    catch (IllegalArgumentException e) { return Priority.LOW; }
 }
-// Caller: AgentType at = agentType(meta); if (at == null) return state;
 ```

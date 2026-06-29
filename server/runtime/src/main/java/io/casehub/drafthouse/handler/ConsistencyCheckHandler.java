@@ -2,6 +2,7 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.AgentTask;
 import io.casehub.blocks.channel.ChannelAgentRequest;
+import io.casehub.blocks.conversation.ConversationState;
 import io.casehub.drafthouse.debate.*;
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -11,7 +12,7 @@ import java.util.stream.Collectors;
 @ApplicationScoped
 class ConsistencyCheckHandler extends AbstractDebateSubAgentHandler {
 
-    @Override SubTaskType taskType() { return SubTaskType.CONSISTENCY_CHECK; }
+    @Override String taskType() { return "CONSISTENCY_CHECK"; }
 
     @Override
     public AgentTask prepareTask(ChannelAgentRequest request) {
@@ -19,10 +20,10 @@ class ConsistencyCheckHandler extends AbstractDebateSubAgentHandler {
         if (body == null || body.isBlank())
             throw new IllegalArgumentException(
                     "CONSISTENCY_CHECK requires proposed resolution text in the message body");
-        ReviewState state = currentState(request.channelId());
+        ConversationState state = currentState(request.channelId());
         var counter = new AtomicInteger(1);
         String agreedList = state.points().values().stream()
-                .filter(p -> p.currentStatus() == ReviewStatus.AGREED)
+                .filter(p -> "AGREED".equals(p.status()))
                 .map(p -> counter.getAndIncrement() + ". [" + p.id() + "] " + p.thread().get(0).content())
                 .collect(Collectors.joining("\n"));
         if (agreedList.isBlank()) agreedList = "(no agreed points yet)";

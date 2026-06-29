@@ -3,6 +3,8 @@ package io.casehub.drafthouse.debate;
 import java.time.Instant;
 import java.util.Map;
 
+import io.casehub.blocks.conversation.ConversationProtocol;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.qhorus.runtime.message.Message;
 
 public record DebateStreamEntry(
@@ -13,7 +15,7 @@ public record DebateStreamEntry(
         String pointId,
         String subTaskId,
         Priority priority,
-        Scope scope,
+        String scope,
         String location,
         String sender,
         Instant timestamp) {
@@ -30,7 +32,9 @@ public record DebateStreamEntry(
             return null;
         }
 
-        String agentStr = meta.get("agent");
+        // Wire key changed from "agent" to "role" — try new key first, fall back for transition
+        String agentStr = meta.get(ConversationProtocol.ROLE);
+        if (agentStr == null) agentStr = meta.get("agent");
         AgentType agentRole = null;
         if (agentStr != null) {
             try {
@@ -53,7 +57,7 @@ public record DebateStreamEntry(
         String subTaskId = isSubTask ? msg.correlationId : null;
 
         Priority priority = parsePriority(meta.get("priority"));
-        Scope scope = parseScope(meta.get("scope"));
+        String scope = meta.get("scope");
         String location = meta.get("location");
 
         return new DebateStreamEntry(
@@ -67,11 +71,12 @@ public record DebateStreamEntry(
 
     private static Priority parsePriority(String s) {
         if (s == null) return null;
-        try { return Priority.valueOf(s.toUpperCase()); } catch (IllegalArgumentException e) { return null; }
-    }
-
-    private static Scope parseScope(String s) {
-        if (s == null) return null;
-        try { return Scope.valueOf(s.toUpperCase()); } catch (IllegalArgumentException e) { return null; }
+        // Handle both legacy ("P1"/"P2"/"P3") and current ("HIGH"/"MEDIUM"/"LOW") values
+        return switch (s.toUpperCase()) {
+            case "P1", "HIGH" -> Priority.HIGH;
+            case "P2", "MEDIUM" -> Priority.MEDIUM;
+            case "P3", "LOW" -> Priority.LOW;
+            default -> null;
+        };
     }
 }

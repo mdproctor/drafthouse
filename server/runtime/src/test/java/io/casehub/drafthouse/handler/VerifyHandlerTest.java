@@ -2,6 +2,11 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.drafthouse.*;
 import io.casehub.drafthouse.debate.*;
 import io.casehub.qhorus.api.message.MessageDispatch;
@@ -58,7 +63,7 @@ class VerifyHandlerTest {
 
     private ChannelAgentRequest requestFor(String pointId) {
         String content = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=VERIFY|subTaskId=sub-1"
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=VERIFY|subTaskId=sub-1"
                 + (pointId != null ? "|pointId=" + pointId : "")
                 + "\n\n";
         lenient().when(outboundMessage.content()).thenReturn(content);
@@ -67,11 +72,11 @@ class VerifyHandlerTest {
     }
 
     private void setupState(String pointId, String raiseContent) {
-        var thread = List.of(new ThreadEntry(pointId, AgentType.REV, 1, EntryType.RAISE, raiseContent));
-        var point = new ReviewPoint(pointId,
-                new PointClassification(Priority.P1, Scope.ISOLATED, null),
-                thread, ReviewStatus.OPEN);
-        var state = new ReviewState(Map.of(pointId, point), List.of(), List.of(), Map.of());
+        var thread = List.of(new ThreadEntry(pointId, "REV", 1, "RAISE", raiseContent));
+        var point = new ConversationPoint(pointId,
+                new PointClassification(Priority.HIGH, "ISOLATED", null),
+                thread, "OPEN");
+        var state = new ConversationState(Map.of(pointId, point), List.of(), List.of(), Map.of());
         lenient().when(projectionService.project(eq(channelId), any()))
                 .thenReturn(new ProjectionResult<>(state, null));
     }
@@ -100,7 +105,7 @@ class VerifyHandlerTest {
     @Test
     void throws_on_null_pointId() {
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec("/some/spec.md")));
-        var state = new ReviewState(Map.of(), List.of(), List.of(), Map.of());
+        var state = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
         assertThatThrownBy(() -> handler.prepareTask(requestFor(null)))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -111,7 +116,7 @@ class VerifyHandlerTest {
     void buildResponse_propagatesRoundFromTriggerMeta() throws Exception {
         // The SUB_TASK_REQUEST trigger includes round=3 — the finding must carry it
         String triggerContent = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=VERIFY|subTaskId=sub-1|round=3|pointId=pt-1"
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=VERIFY|subTaskId=sub-1|round=3|pointId=pt-1"
                 + "\n\n";
         when(outboundMessage.content()).thenReturn(triggerContent);
         var request = new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
@@ -132,12 +137,12 @@ class VerifyHandlerTest {
         java.nio.file.Files.writeString(specFile, "# The Spec");
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec(specFile.toString())));
         var thread = List.of(
-                new ThreadEntry("pt-1", AgentType.REV, 1, EntryType.RAISE, "The claim."),
-                new ThreadEntry(null, AgentType.IMP, 2, EntryType.DISPUTE, "Other agent content.")
+                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The claim."),
+                new ThreadEntry(null, "IMP", 2, "DISPUTE", "Other agent content.")
         );
-        var point = new ReviewPoint("pt-1",
-                new PointClassification(Priority.P1, Scope.ISOLATED, null), thread, ReviewStatus.DISPUTED);
-        var state = new ReviewState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
+        var point = new ConversationPoint("pt-1",
+                new PointClassification(Priority.HIGH, "ISOLATED", null), thread, "DISPUTED");
+        var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
         AgentTask task = handler.prepareTask(requestFor("pt-1"));
         assertThat(task.assembledInput()).contains("The claim.");

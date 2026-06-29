@@ -46,7 +46,7 @@ class CustomHandlerTest {
 
     private ChannelAgentRequest requestWithBody(String body) {
         String content = DebateProtocol.META_SENTINEL
-                + "entryType=SUB_TASK_REQUEST|agent=REV|taskType=CUSTOM|subTaskId=sub-1\n\n"
+                + "entryType=SUB_TASK_REQUEST|role=REV|taskType=CUSTOM|subTaskId=sub-1\n\n"
                 + (body != null ? body : "");
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);

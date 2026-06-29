@@ -20,7 +20,7 @@ created: 2026-06-10
 String out = result.isEmpty() ? "No activity." : renderer.render(result.state());
 
 // Right — check which fields constitute "empty" for this state type
-ReviewState s = result.state();
+ConversationState s = result.state();
 String out = (s.points().isEmpty() && s.memos().isEmpty() && s.subTaskFindings().isEmpty())
     ? "No debate activity up to round " + round + "."
     : renderer.render(s);

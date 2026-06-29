@@ -2,11 +2,9 @@ package io.casehub.drafthouse.handler;
 
 import io.casehub.blocks.channel.ChannelAgentRequest;
 import io.casehub.blocks.channel.AgentTask;
-import io.casehub.drafthouse.debate.EntryType;
-import io.casehub.drafthouse.debate.ReviewPoint;
-import io.casehub.drafthouse.debate.ReviewState;
-import io.casehub.drafthouse.debate.SubTaskType;
-import io.casehub.drafthouse.debate.ThreadEntry;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.ConversationPoint;
+import io.casehub.blocks.conversation.ThreadEntry;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Map;
@@ -15,19 +13,19 @@ import java.util.Map;
 class ArbitrateHandler extends AbstractDebateSubAgentHandler {
 
     @Override
-    SubTaskType taskType() { return SubTaskType.ARBITRATE; }
+    String taskType() { return "ARBITRATE"; }
 
     @Override
     public AgentTask prepareTask(ChannelAgentRequest request) {
         Map<String, String> meta = metaFrom(request);
         String pointId = meta.get("pointId");
-        ReviewState state = currentState(request.channelId());
-        ReviewPoint point = requirePoint(state, pointId);   // validates pointId; returns point
+        ConversationState state = currentState(request.channelId());
+        ConversationPoint point = requirePoint(state, pointId);   // validates pointId; returns point
         String raiseContent = point.thread().get(0).content();
         String lastResponse = point.thread().stream()
-                .filter(e -> e.type() == EntryType.DISPUTE
-                          || e.type() == EntryType.QUALIFY
-                          || e.type() == EntryType.COUNTER)
+                .filter(e -> "DISPUTE".equals(e.entryType())
+                          || "QUALIFY".equals(e.entryType())
+                          || "COUNTER".equals(e.entryType()))
                 .reduce((a, b) -> b)
                 .map(ThreadEntry::content)
                 .orElse("(no response yet)");

@@ -4,8 +4,8 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
+import io.casehub.blocks.conversation.ConversationState;
 import io.casehub.drafthouse.debate.ReviewConversationRenderer;
-import io.casehub.drafthouse.debate.ReviewState;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelBackend;
 import io.casehub.qhorus.api.gateway.ChannelRef;
@@ -29,13 +29,13 @@ public class ReviewerChannelBackend implements ChannelBackend {
     private final DocumentReviewer llm;
     private final int maxDocChars;
     private final ProjectionService projectionService;
-    private final ChannelProjection<ReviewState> projection;
+    private final ChannelProjection<ConversationState> projection;
     private final ReviewConversationRenderer conversationRenderer = new ReviewConversationRenderer();
 
     ReviewerChannelBackend(ReviewSessionRegistry registry, UUID channelId,
                            MessageService messageService, DocumentReviewer llm,
                            int maxDocChars, ProjectionService projectionService,
-                           ChannelProjection<ReviewState> projection) {
+                           ChannelProjection<ConversationState> projection) {
         this.registry = registry;
         this.channelId = channelId;
         this.messageService = messageService;
