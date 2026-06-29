@@ -11,8 +11,8 @@ import java.util.*;
  * Dispatch is on message.type() — review channels never carry artefactRefs.
  * Agent classification uses message.actorType(): HUMAN→"REV", AGENT→"IMP".
  *
- * Does NOT implement RenderableProjection — ReviewerChannelBackend calls
- * ReviewConversationRenderer.render() directly; projection.render() is never called.
+ * <p>Delegates fold operations to {@link ConversationFold} — this class only
+ * handles typed-message dispatch and input extraction.
  */
 @ApplicationScoped
 public class ReviewChannelProjection implements ChannelProjection<ConversationState> {
@@ -28,19 +28,20 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
     public ConversationState apply(ConversationState state, MessageView message) {
         return switch (message.type()) {
             case QUERY    -> handleRaise(state, message);
-            case RESPONSE -> handleQualify(state, message);
-            case DONE     -> handleAgree(state, message);
-            case DECLINE  -> handleDecline(state, message);
+            case RESPONSE -> handleResponse(state, message, "QUALIFY", "ACTIVE");
+            case DONE     -> handleResponse(state, message, "AGREE", "AGREED");
+            case DECLINE  -> handleResponse(state, message, "DECLINED", "DECLINED");
             case HANDOFF  -> handleFlagHuman(state, message);
             default       -> state;
         };
     }
 
-    // ── fold handlers ─────────────────────────────────────────────────────────
+    // ── dispatch ─────────────────────────────────────────────────────────────
 
     private ConversationState handleRaise(ConversationState state, MessageView message) {
         String entryId = message.correlationId();
         if (entryId == null) return state;
+
         String artefacts = message.artefactRefs() != null ? message.artefactRefs() : "";
         Map<String, String> meta = parseArtefacts(artefacts);
         Priority priority = parsePriority(meta.getOrDefault("priority", "LOW"));
@@ -48,25 +49,13 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
         String location = meta.get("location");
         var classification = new PointClassification(priority, scope,
                 location != null && !location.isBlank() ? location : null);
-        var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(entryId, role(message), 0, "RAISE", message.content()));
-        var point = new ConversationPoint(entryId, classification, thread, "OPEN");
-        var points = new LinkedHashMap<>(state.points());
-        points.put(entryId, point);
-        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
-                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
+
+        return ConversationFold.createPoint(state, entryId, classification,
+                role(message), 0, "RAISE", message.content());
     }
 
-    private ConversationState handleQualify(ConversationState state, MessageView message) {
-        return appendToPoint(state, message, "QUALIFY", "ACTIVE");
-    }
-
-    private ConversationState handleAgree(ConversationState state, MessageView message) {
-        return appendToPoint(state, message, "AGREE", "AGREED");
-    }
-
-    private ConversationState appendToPoint(ConversationState state, MessageView message,
-                                       String entryType, String newStatus) {
+    private ConversationState handleResponse(ConversationState state, MessageView message,
+                                              String entryType, String newStatus) {
         String targetId = message.correlationId();
         if (targetId == null) return state;
         if (!state.points().containsKey(targetId)) {
@@ -74,49 +63,16 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
                     "Response references unknown point ID: {0} — discarded", targetId);
             return state;
         }
-        ConversationPoint existing = state.points().get(targetId);
-        var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, role(message), 0, entryType, message.content()));
-        var updated = new ConversationPoint(existing.id(), existing.classification(), thread, newStatus);
-        var points = new LinkedHashMap<>(state.points());
-        points.put(targetId, updated);
-        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
-                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
-    }
 
-    private ConversationState handleDecline(ConversationState state, MessageView message) {
-        String targetId = message.correlationId();
-        if (targetId == null) return state;
-        if (!state.points().containsKey(targetId)) {
-            LOG.log(System.Logger.Level.WARNING,
-                    "Decline references unknown point ID: {0} — discarded", targetId);
-            return state;
-        }
-        ConversationPoint existing = state.points().get(targetId);
-        var thread = new ArrayList<>(existing.thread());
-        thread.add(new ThreadEntry(null, role(message), 0, "DECLINED",
-                Objects.requireNonNullElse(message.content(), "")));
-        var updated = new ConversationPoint(existing.id(), existing.classification(), thread, "DECLINED");
-        var points = new LinkedHashMap<>(state.points());
-        points.put(targetId, updated);
-        return new ConversationState(points, new ArrayList<>(state.humanFlags()),
-                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
+        String content = Objects.requireNonNullElse(message.content(), "");
+        return ConversationFold.respondToPoint(state, targetId, role(message), 0,
+                entryType, content, newStatus);
     }
 
     private ConversationState handleFlagHuman(ConversationState state, MessageView message) {
-        String targetId = message.correlationId();
         String content = Objects.requireNonNullElse(message.content(), "");
-        var points = new LinkedHashMap<>(state.points());
-        if (targetId != null && points.containsKey(targetId)) {
-            ConversationPoint p = points.get(targetId);
-            var thread = new ArrayList<>(p.thread());
-            thread.add(new ThreadEntry(null, role(message), 0, "FLAG_HUMAN", content));
-            points.put(targetId, new ConversationPoint(p.id(), p.classification(), thread, ConversationProtocol.STATUS_ESCALATED));
-        }
-        var flags = new ArrayList<>(state.humanFlags());
-        flags.add(new FlagEntry(null, 0, role(message), content));
-        return new ConversationState(points, flags,
-                new ArrayList<>(state.memos()), new LinkedHashMap<>(state.subTaskFindings()));
+        return ConversationFold.flagHuman(state, message.correlationId(),
+                role(message), 0, content);
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
@@ -148,7 +104,6 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
     }
 
     private String parseScope(String s) {
-        // Accept any string — return as-is (uppercase normalized)
         return s != null ? s.toUpperCase() : "ISOLATED";
     }
 }
