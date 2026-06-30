@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DraftHouse</title>
+    <!-- Pinned CDN libraries — panels reference these as globals -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
+    <script>
+        // Register DRL language for highlight.js
+        hljs.registerLanguage('drl', function(hljs) {
+            return {
+                keywords: 'rule when then end package import function global declare salience agenda-group ruleflow-group lock-on-active no-loop accumulate collect from exists forall not and or modify update insert retract delete eval query',
+                contains: [hljs.C_LINE_COMMENT_MODE, hljs.C_BLOCK_COMMENT_MODE, hljs.QUOTE_STRING_MODE, hljs.NUMBER_MODE]
+            };
+        });
+        // Configure marked renderer to use hljs for code blocks
+        marked.use({
+            renderer: {
+                code({ text, lang }) {
+                    const language = lang && hljs.getLanguage(lang) ? lang : null;
+                    const highlighted = language ? hljs.highlight(text, { language }).value : hljs.highlightAuto(text).value;
+                    return `<pre><code class="hljs language-${language || 'auto'}">${highlighted}</code></pre>`;
+                }
+            }
+        });
+    </script>
+    <style>
+        :root {
+            --bg: #faf6f1; --chrome: #eee8e0; --border: #d5cec6;
+            --ink: #3b3228; --sepia: #5c4a3a; --muted: #8a7e74;
+            --accent: #8b5e3c; --accent-light: #c9a882;
+            --diff-del: #f8d7d7; --diff-ins: #d7f8d7;
+            --diff-del-text: #a33; --diff-ins-text: #3a3;
+            --topbar-bg: #eee8e0; --topbar-fg: #3b3228;
+            --statusbar-bg: #e8e2da; --statusbar-fg: #8a7e74;
+        }
+        body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: var(--ink); }
+        #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        [data-component-type="rows"] { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        [data-component-type="rows"] > [data-slot] { flex: 0 0 auto; min-height: 0; }
+        [data-component-type="rows"] > [data-slot]:has(> [data-component-type="split"]) { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        [data-component-type="split"] { flex: 1; min-height: 0; overflow: hidden; }
+        [data-component-type="split"] > [data-slot] { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+        [data-component-type="host-panel"] { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+        button { cursor: pointer; border: 1px solid var(--border); background: var(--chrome); color: var(--ink); padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+        button:hover { background: var(--accent-light); }
+        button.active { background: var(--accent); color: #fff; }
+        button:disabled { opacity: 0.4; cursor: default; }
+        .hidden { display: none !important; }
+        kbd { display: inline-block; padding: 1px 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--chrome); font-family: monospace; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    <script type="module" src="app.js"></script>
+</body>
+</html>

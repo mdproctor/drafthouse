@@ -1,10 +1,7 @@
 // panels/drafthouse-review-tracker.js
 // <drafthouse-review-tracker> — Status-derived checklist Web Component
-// Subscribes to DebateEventBus, derives ReviewStatus per pointId from DebateStreamEntry sequence.
+// Subscribes to pages-event, derives ReviewStatus per pointId from DebateStreamEntry sequence.
 // Progress bar, sorted display (open → active → resolved), show/hide resolved filter.
-
-import { registry } from './panel-registry.js';
-import { debateEventBus } from './debate-event-bus.js';
 
 // Entry type → ReviewStatus mapping (aligned with Java ReviewStatus enum)
 const ENTRY_TO_STATUS = {
@@ -260,22 +257,19 @@ class DraftHouseReviewTracker extends HTMLElement {
       this.#unsubscribe();
     }
 
-    this.#unsubscribe = debateEventBus.subscribe({
-      onEntries: (entries) => this.#handleEntries(entries),
-      onReconnect: () => this.#handleReconnect()
-    });
-  }
+    const listener = (e) => {
+      const { topic, payload } = e.detail;
+      if (topic === 'debate-entries') {
+        this.#entries.push(...payload);
+        this.#render();
+      } else if (topic === 'sse-reconnect') {
+        this.#entries = [];
+        this.#render();
+      }
+    };
 
-  #handleEntries(entries) {
-    this.#entries.push(...entries);
-    this.#render();
-  }
-
-  #handleReconnect() {
-    // On reconnect, catch-up will re-deliver all entries
-    // Clear and wait for fresh data
-    this.#entries = [];
-    this.#render();
+    document.addEventListener('pages-event', listener);
+    this.#unsubscribe = () => document.removeEventListener('pages-event', listener);
   }
 
   #renderPlaceholder() {
@@ -508,13 +502,5 @@ class DraftHouseReviewTracker extends HTMLElement {
   }
 }
 
-// Register with PanelRegistry
-registry.register({
-  type: 'drafthouse-review-tracker',
-  component: DraftHouseReviewTracker,
-  label: 'Review Tracker',
-  icon: '✓',
-  propsSchema: {
-    sessionId: { type: 'string', required: true }
-  }
-});
+// Register custom element
+customElements.define('drafthouse-review-tracker', DraftHouseReviewTracker);

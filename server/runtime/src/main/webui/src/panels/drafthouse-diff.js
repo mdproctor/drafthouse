@@ -3,7 +3,6 @@
 // Extracted from index.html: LCS line diff, word-level highlights, canvas minimap,
 // heading-based scroll sync, file watch SSE, drag-and-drop, diff navigation.
 
-import { registry } from './panel-registry.js';
 
 // ── Adopted stylesheet for panel-internal structure ─────────────────
 const sheet = new CSSStyleSheet();
@@ -1077,15 +1076,4 @@ class DraftHouseDiff extends HTMLElement {
 }
 
 // ── Registration ────────────────────────────────────────────────────
-registry.register({
-  type: 'drafthouse-diff',
-  component: DraftHouseDiff,
-  label: 'Diff',
-  icon: '⇄',
-  propsSchema: {
-    pathA:  { type: 'string' },
-    pathB:  { type: 'string' },
-    labelA: { type: 'string', default: 'File A' },
-    labelB: { type: 'string', default: 'File B' },
-  },
-});
+customElements.define('drafthouse-diff', DraftHouseDiff);

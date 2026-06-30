@@ -1,9 +1,6 @@
 // panels/drafthouse-debate.js
 // <drafthouse-debate> — Debate panel Web Component
-// Subscribes to DebateEventBus, renders conversation feed grouped by round.
-
-import { registry } from './panel-registry.js';
-import { debateEventBus } from './debate-event-bus.js';
+// Subscribes to pages-event, renders conversation feed grouped by round.
 
 // Debate panel styles
 const styles = new CSSStyleSheet();
@@ -267,25 +264,22 @@ class DraftHouseDebate extends HTMLElement {
       this.#unsubscribe();
     }
 
-    this.#unsubscribe = debateEventBus.subscribe({
-      onEntries: (entries) => this.#handleEntries(entries),
-      onReconnect: () => this.#handleReconnect()
-    });
-  }
+    const listener = (e) => {
+      const { topic, payload } = e.detail;
+      if (topic === 'debate-entries') {
+        this.#entries.push(...payload);
+        this.#render();
+        if (this.#shouldAutoScroll) {
+          this.#scrollToBottom();
+        }
+      } else if (topic === 'sse-reconnect') {
+        this.#entries = [];
+        this.#render();
+      }
+    };
 
-  #handleEntries(entries) {
-    this.#entries.push(...entries);
-    this.#render();
-    if (this.#shouldAutoScroll) {
-      this.#scrollToBottom();
-    }
-  }
-
-  #handleReconnect() {
-    // On reconnect, catch-up will re-deliver all entries
-    // Clear and wait for fresh data
-    this.#entries = [];
-    this.#render();
+    document.addEventListener('pages-event', listener);
+    this.#unsubscribe = () => document.removeEventListener('pages-event', listener);
   }
 
   #renderPlaceholder() {
@@ -481,13 +475,5 @@ class DraftHouseDebate extends HTMLElement {
   }
 }
 
-// Register with PanelRegistry
-registry.register({
-  type: 'drafthouse-debate',
-  component: DraftHouseDebate,
-  label: 'Debate',
-  icon: '💬',
-  propsSchema: {
-    sessionId: { type: 'string', required: true }
-  }
-});
+// Register custom element
+customElements.define('drafthouse-debate', DraftHouseDebate);

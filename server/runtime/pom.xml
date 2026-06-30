@@ -53,6 +53,13 @@
       <version>${quarkus-langchain4j.version}</version>
     </dependency>
 
+    <!-- Quinoa — npm build integration at compile time -->
+    <dependency>
+      <groupId>io.quarkiverse.quinoa</groupId>
+      <artifactId>quarkus-quinoa</artifactId>
+      <version>2.8.3</version>
+    </dependency>
+
     <dependency>
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-rest-jackson</artifactId>
@@ -104,12 +111,20 @@
       <version>3.27.7</version>
       <scope>test</scope>
     </dependency>
-    <!-- Qhorus in-memory stores for unit tests (no DB required) -->
+    <!-- Qhorus in-memory stores for unit tests (no DB required).
+         Exclude persistence-memory: its InMemory*Store beans duplicate the ones in
+         casehub-qhorus-testing, causing CDI AmbiguousResolutionException at test startup. -->
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-qhorus-testing</artifactId>
       <version>${casehub.qhorus.version}</version>
       <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>io.casehub</groupId>
+          <artifactId>casehub-qhorus-persistence-memory</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <!-- Awaitility — async delivery via ChannelGateway virtual threads -->
     <dependency>

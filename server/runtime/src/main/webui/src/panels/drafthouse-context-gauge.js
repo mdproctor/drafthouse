@@ -1,6 +1,3 @@
-import { registry } from './panel-registry.js';
-import { debateEventBus } from './debate-event-bus.js';
-
 const styles = new CSSStyleSheet();
 styles.replaceSync(`
   :host {
@@ -67,11 +64,16 @@ class DraftHouseContextGauge extends HTMLElement {
 
   connectedCallback() {
     this.#render();
-    this.#unsubscribe = debateEventBus.subscribe({
-      onEntries: () => {},
-      onReconnect: () => this.#reset(),
-      onMeta: (data) => this.#handleMeta(data)
-    });
+    const listener = (e) => {
+      const { topic, payload } = e.detail;
+      if (topic === 'context-usage') {
+        this.#handleMeta(payload);
+      } else if (topic === 'sse-reconnect') {
+        this.#reset();
+      }
+    };
+    document.addEventListener('pages-event', listener);
+    this.#unsubscribe = () => document.removeEventListener('pages-event', listener);
   }
 
   disconnectedCallback() {
@@ -151,10 +153,4 @@ class DraftHouseContextGauge extends HTMLElement {
   }
 }
 
-registry.register({
-  type: 'drafthouse-context-gauge',
-  component: DraftHouseContextGauge,
-  label: 'Context Gauge',
-  icon: '📊',
-  propsSchema: {}
-});
+customElements.define('drafthouse-context-gauge', DraftHouseContextGauge);

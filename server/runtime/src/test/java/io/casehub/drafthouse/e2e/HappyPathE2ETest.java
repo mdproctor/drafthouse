@@ -65,9 +65,4 @@ class HappyPathE2ETest {
         assertEquals("DraftHouse", page.title(), "page title should be DraftHouse");
     }
 
-    @Test
-    void panelsDirectoryServesJavaScript() {
-        var response = page.request().get(index + "panels/panel-registry.js");
-        assertEquals(200, response.status());
-    }
 }

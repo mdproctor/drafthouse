@@ -90,13 +90,12 @@ Produces `server/runtime/target/drafthouse-server-runner.jar`.
 ## Running the App
 
 ```bash
-java -Dui.dir=/Users/mdproctor/claude/casehub/drafthouse \
-  -jar server/runtime/target/drafthouse-server-runner.jar
+java -jar server/runtime/target/drafthouse-server-runner.jar
 ```
 
 Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in a browser.
 
-- `ui.dir` — tells UiResource where to find `index.html`, `styles.css`, and `panels/*.js`
+- Quinoa serves the bundled webui (built from `server/runtime/src/main/webui/`)
 - Query params `?a=` and `?b=` — initial file paths to load
 - Query param `?debate=` — debate session ID to auto-connect
 
@@ -120,16 +119,15 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 
 | Path | Contents |
 |---|---|
-| `index.html` | Workspace shell (~285 lines) — layout slots, topbar, panel orchestration, session discovery |
-| `styles.css` | Shell layout styles + `:root` Archive Room design tokens |
-| `panels/` | Web Component panels (ES modules, Shadow DOM, adoptedStyleSheets) |
-| `panels/panel-registry.js` | PanelRegistry — component type catalogue + factory (first draft of `@casehub/ui` registry) |
-| `panels/debate-event-bus.js` | DebateEventBus — shared SSE connection for debate events |
-| `panels/drafthouse-diff.js` | `<drafthouse-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
-| `panels/drafthouse-debate.js` | `<drafthouse-debate>` — SSE debate event conversation feed |
-| `panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist |
-| `panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (SSE-driven, onMeta subscriber) |
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
+| `server/runtime/src/main/webui/` | TypeScript webui built with Quinoa — panels, workbench, SSE bridge |
+| `server/runtime/src/main/webui/src/index.ts` | Workbench entry point — casehub-pages layout, topbar, Electron IPC, session discovery |
+| `server/runtime/src/main/webui/src/sse-bridge.ts` | SSE connection manager — debate events → pages-event bridge |
+| `server/runtime/src/main/webui/src/panels/` | Web Component panels (Shadow DOM, adoptedStyleSheets) |
+| `server/runtime/src/main/webui/src/panels/drafthouse-diff.js` | `<drafthouse-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
+| `server/runtime/src/main/webui/src/panels/drafthouse-debate.js` | `<drafthouse-debate>` — debate event conversation feed (pages-event subscriber) |
+| `server/runtime/src/main/webui/src/panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist (pages-event subscriber) |
+| `server/runtime/src/main/webui/src/panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (pages-event onMeta subscriber) |
 | `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
 | `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Watch, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ |
@@ -152,7 +150,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/ping          ← health check
   ├── GET /api/file?path=    ← read any local file
   ├── GET /api/watch?path=   ← SSE file-change stream
-  ├── GET /                  ← serve index.html (from -Dui.dir)
+  ├── GET /                  ← Quinoa serves bundled webui (TypeScript → app.js)
   ├── MCP tools (review)     ← start_review, update_selection, query_review, end_review, list_reviewers, get_reviewer_instructions
   ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate, report_context
   ├── MCP tools (documents)  ← add_document, remove_document, list_documents, set_comparison, export_debate_summary
@@ -163,10 +161,9 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── POST /api/debate/{id}/comparison  ← browser-initiated comparison change
   └── GET /api/debate/sessions     ← active debate session list
 
-Browser UI (Web Component panels + workspace shell)
-  ├── index.html                   ← workspace shell (layout slots, topbar, session discovery)
-  ├── panels/panel-registry.js     ← PanelRegistry (component catalogue + factory)
-  ├── panels/debate-event-bus.js   ← DebateEventBus (shared SSE connection)
+Browser UI (casehub-pages workbench + Web Component panels)
+  ├── index.ts                     ← workbench shell (casehub-pages layout, topbar, session discovery, Electron IPC)
+  ├── sse-bridge.ts                ← SSE connection → pages-event bridge
   ├── <drafthouse-diff>            ← diff panel (Shadow DOM Web Component)
   │   ├── fetch /api/file          ← load file content
   │   ├── EventSource /api/watch   ← live reload on file change
@@ -175,32 +172,32 @@ Browser UI (Web Component panels + workspace shell)
   │   ├── Canvas minimap           ← red=A-side, green=B-side changes
   │   └── Scroll sync via anchors  ← heading-based anchor matching
   ├── <drafthouse-debate>          ← debate feed (Shadow DOM Web Component)
-  │   └── DebateEventBus           ← SSE debate events, grouped by round
+  │   └── pages-event              ← SSE debate events, grouped by round
   ├── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
-  │   └── DebateEventBus           ← derives status per pointId from event stream
+  │   └── pages-event              ← derives status per pointId from event stream
   └── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
-      └── DebateEventBus (onMeta)  ← context-usage metadata events
+      └── pages-event (onMeta)     ← context-usage metadata events
 ```
 
 ## Architectural Direction
 
-DraftHouse uses **Web Component panels targeting the `@casehub/ui` `Component` model** — the same component contract that Melviz (casehub-ui) and all future CaseHub frontends will adopt. Each panel is a custom element with Shadow DOM encapsulation and `adoptedStyleSheets`, registered via `PanelRegistry`, and composable into any layout. The workspace shell is explicitly temporary — it will be replaced by `@casehub/ui` layout primitives (`split()`, `grid()`) when they ship.
+DraftHouse uses **casehub-pages workbench** with Web Component panels. The workbench is built with `@casehubio/pages-ui` layout primitives (`rows()`, `split()`, `html()`) and rendered via `@casehubio/pages-runtime`. Panels are custom elements with Shadow DOM encapsulation, registered via `registerPanel()`, and orchestrated through the `pages-event` system.
 
 **Practical implications:**
-- Every panel conforms to the `@casehub/ui` `Component` interface: `{ type, id, props, slots, items, style, access }`
-- Panels accept `configure(props)` — the method the `@casehub/ui` renderer will call
+- Panels are Web Components with `configure(props)` — the method pages-runtime calls to initialize
 - Shadow DOM encapsulation ensures panels can't leak styles or state; CSS custom properties on `:root` provide theming
-- The `DebateEventBus` is shared infrastructure — not shell-owned. Panels subscribe orthogonally; the shell controls connect/disconnect.
-- When `@casehub/ui` extracts, migration is a dependency swap — panels don't change, the shell is replaced
-- Claudony and all other CaseHub apps will adopt the same Web Component panel model
+- `pages-event` is the communication backbone — SSE events are bridged from `sse-bridge.ts`, panels subscribe to topics
+- The workbench layout is declarative TypeScript (not DOM manipulation) — composition via `rows()`, `split()`, `hostPanel()`
+- TypeScript source is in `server/runtime/src/main/webui/src/`, bundled by Quinoa → `app.js`
+- Quinoa serves the bundled app at `/` — no separate static file server needed
 
 **Claudony repo:** `~/claude/claudony/` (standalone tier peer — see Peer Repos table)
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3 (quarkus-langchain4j 1.9.1, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT)
+- Version: 3.34.3 (quarkus-langchain4j 1.9.1, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, quarkus-quinoa 2.8.3)
 - Java package: `io.casehub.drafthouse`
-- `ui.dir` JVM property controls where `UiResource` reads static assets from
+- Quinoa serves bundled TypeScript webui from `server/runtime/src/main/webui/` — bundles on every build
 - Port: 9001 (default), configurable via `quarkus.http.port`
 - Uber-jar build: `quarkus.package.type=uber-jar`
 

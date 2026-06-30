@@ -51,7 +51,7 @@ DraftHouse is an MCP-driven document review tool. An LLM client opens a document
 | casehub-qhorus 0.2-SNAPSHOT | Pre-release; `ChannelProjection` SPI (qhorus#230 ✅ shipped) |
 | quarkus-langchain4j 1.9.1 | Built against Quarkus 3.33.1; validated on 3.34.3; 0.x line incompatible |
 | CaseHub parent BOM | `casehubio/parent` — no dependency version overrides outside BOM |
-| Browser-only UI | No Electron, no npm build step |
+| Browser-only UI | No Electron; npm build via Quinoa at compile time — no Node.js at runtime |
 | Filesystem access | Documents read from local filesystem; no upload or remote fetch |
 | Claude Agent SDK | Coordinates not on Maven Central (platform#55); provider is a stub |
 
