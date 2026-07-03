@@ -63,7 +63,7 @@ public class ReviewerChannelBackend implements ChannelBackend {
 
         Long inReplyTo = messageService
                 .findByCorrelationId(message.correlationId().toString())
-                .map(m -> m.id)
+                .map(m -> m.id())
                 .orElse(null);
         if (inReplyTo == null) {
             LOG.warning("Could not resolve inReplyTo for correlationId " + message.correlationId()

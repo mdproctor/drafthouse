@@ -3,6 +3,8 @@
 // Extracted from index.html: LCS line diff, word-level highlights, canvas minimap,
 // heading-based scroll sync, file watch SSE, drag-and-drop, diff navigation.
 
+import { marked } from "marked";
+
 
 // ── Adopted stylesheet for panel-internal structure ─────────────────
 const sheet = new CSSStyleSheet();

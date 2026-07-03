@@ -2,7 +2,7 @@ package io.casehub.drafthouse.e2e;
 
 import com.microsoft.playwright.Page;
 import io.casehub.drafthouse.DebateMcpTools;
-import io.casehub.qhorus.runtime.message.Message;
+import io.casehub.qhorus.api.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 
 import java.net.URL;

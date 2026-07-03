@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
-import io.casehub.qhorus.runtime.message.Message;
+import io.casehub.qhorus.api.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
@@ -162,7 +162,7 @@ public class DebateEventResource {
 
         if (!messages.isEmpty()) {
             long maxId = messages.stream()
-                    .mapToLong(m -> m.id)
+                    .mapToLong(m -> m.id())
                     .max()
                     .orElse(lastSentId.get());
             lastSentId.set(maxId);

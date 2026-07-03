@@ -22,8 +22,8 @@ import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
-import io.casehub.qhorus.runtime.channel.Channel;
-import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
+import io.casehub.qhorus.api.channel.Channel;
+import io.casehub.qhorus.api.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
@@ -102,18 +102,18 @@ public class DraftHouseMcpTools {
                     .description("DraftHouse review session")
                     .semantic(ChannelSemantic.APPEND).build());
 
-            String sessionId = channel.id.toString();
-            String resolvedChannelName = channel.name;
+            String sessionId = channel.id().toString();
+            String resolvedChannelName = channel.name();
             instanceId = "drafthouse-reviewer-" + sessionId;
             instanceService.register(instanceId, reviewer.name() + " " + sessionId,
                     List.of("document-review"));
 
             ReviewSession session = new ReviewSession(
-                    channel.id, sessionId, resolvedChannelName, instanceId,
+                    channel.id(), sessionId, resolvedChannelName, instanceId,
                     docAContent, docBContent, null, reviewer);
 
             registry.put(session);
-            channelGateway.initChannel(channel.id, new ChannelRef(channel.id, resolvedChannelName));
+            channelGateway.initChannel(channel.id(), new ChannelRef(channel.id(), resolvedChannelName));
 
             return "{\"sessionId\":\"" + sessionId + "\",\"channel\":\"" + resolvedChannelName
                     + "\",\"reviewer\":{\"agentId\":" + jsonString(reviewer.agentId())
@@ -126,8 +126,8 @@ public class DraftHouseMcpTools {
                 if (instanceId != null) {
                     try { instanceService.deregister(instanceId); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
                 }
-                try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
-                try { channelService.delete(channel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
+                try { registry.remove(channel.id()); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
+                try { channelService.delete(channel.id(), true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
             return "error: " + e.getMessage();
         }

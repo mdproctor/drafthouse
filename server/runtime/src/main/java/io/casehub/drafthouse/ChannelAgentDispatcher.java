@@ -71,7 +71,7 @@ public class ChannelAgentDispatcher extends io.casehub.blocks.channel.ChannelAge
         errorMeta.put(ConversationProtocol.ROLE, meta.getOrDefault(ConversationProtocol.ROLE, "UNKNOWN"));
         String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, errorMeta, fixedReason);
         Long inReplyTo = messageService.findByCorrelationId(request.correlationId())
-                .map(m -> m.id)
+                .map(m -> m.id())
                 .orElse(null);
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(request.channelId())

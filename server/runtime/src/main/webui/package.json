@@ -11,7 +11,8 @@
     "@casehubio/pages-runtime": "file:../../../../../../pages/packages/pages-runtime",
     "@casehubio/pages-ui": "file:../../../../../../pages/packages/pages-ui",
     "@casehubio/pages-component": "file:../../../../../../pages/packages/pages-component",
-    "@casehubio/pages-viz": "file:../../../../../../pages/packages/pages-viz"
+    "@casehubio/pages-viz": "file:../../../../../../pages/packages/pages-viz",
+    "marked": "^15.0.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

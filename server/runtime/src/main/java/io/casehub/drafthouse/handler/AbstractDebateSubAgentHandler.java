@@ -48,7 +48,7 @@ abstract class AbstractDebateSubAgentHandler implements ChannelAgentHandler {
         String subTaskId = meta.getOrDefault("subTaskId", trigger.correlationId());
         String role = meta.get(ConversationProtocol.ROLE);
         String pointId = meta.get("pointId");
-        Long inReplyTo = messageService.findByCorrelationId(subTaskId).map(m -> m.id).orElse(null);
+        Long inReplyTo = messageService.findByCorrelationId(subTaskId).map(m -> m.id()).orElse(null);
         String round = meta.getOrDefault("round", "0");
 
         Map<String, String> responseMeta = Map.of(

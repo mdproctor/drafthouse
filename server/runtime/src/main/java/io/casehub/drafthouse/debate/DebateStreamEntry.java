@@ -5,7 +5,7 @@ import java.util.Map;
 
 import io.casehub.blocks.conversation.ConversationProtocol;
 import io.casehub.blocks.conversation.Priority;
-import io.casehub.qhorus.runtime.message.Message;
+import io.casehub.qhorus.api.message.Message;
 
 public record DebateStreamEntry(
         EntryType entryType,
@@ -21,7 +21,7 @@ public record DebateStreamEntry(
         Instant timestamp) {
 
     public static DebateStreamEntry from(Message msg) {
-        Map<String, String> meta = DebateProtocol.parseMeta(msg.content);
+        Map<String, String> meta = DebateProtocol.parseMeta(msg.content());
         String entryTypeStr = meta.get("entryType");
         if (entryTypeStr == null) return null;
 
@@ -47,14 +47,14 @@ public record DebateStreamEntry(
         }
 
         int round = DebateProtocol.parseRound(meta);
-        String body = DebateProtocol.bodyContent(msg.content);
+        String body = DebateProtocol.bodyContent(msg.content());
 
         boolean isSubTask = entryType == EntryType.SUB_TASK_REQUEST
                 || entryType == EntryType.SUB_TASK_FINDING
                 || entryType == EntryType.SUB_TASK_ERROR;
 
-        String pointId = isSubTask ? meta.get("pointId") : msg.correlationId;
-        String subTaskId = isSubTask ? msg.correlationId : null;
+        String pointId = isSubTask ? meta.get("pointId") : msg.correlationId();
+        String subTaskId = isSubTask ? msg.correlationId() : null;
 
         Priority priority = parsePriority(meta.get("priority"));
         String scope = meta.get("scope");
@@ -65,8 +65,8 @@ public record DebateStreamEntry(
                 pointId, subTaskId,
                 priority, scope,
                 location != null && !location.isBlank() ? location : null,
-                msg.sender,
-                msg.createdAt != null ? msg.createdAt : Instant.now());
+                msg.sender(),
+                msg.createdAt() != null ? msg.createdAt() : Instant.now());
     }
 
     private static Priority parsePriority(String s) {

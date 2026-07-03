@@ -26,8 +26,8 @@ import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
-import io.casehub.qhorus.runtime.channel.Channel;
-import io.casehub.qhorus.runtime.channel.ChannelCreateRequest;
+import io.casehub.qhorus.api.channel.Channel;
+import io.casehub.qhorus.api.channel.ChannelCreateRequest;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
@@ -91,10 +91,10 @@ public class DebateMcpTools {
                     .description("DraftHouse debate session")
                     .semantic(ChannelSemantic.APPEND).build());
 
-            String debateSessionId = channel.id.toString();
-            String resolvedName = channel.name;
+            String debateSessionId = channel.id().toString();
+            String resolvedName = channel.name();
 
-            session = new DebateSession(channel.id, debateSessionId, resolvedName, reviewer.agentId());
+            session = new DebateSession(channel.id(), debateSessionId, resolvedName, reviewer.agentId());
             session.addDocument(specPath, "spec");
             registry.put(session);
 
@@ -102,7 +102,7 @@ public class DebateMcpTools {
             sender(session, AgentType.REV);
             sender(session, AgentType.IMP);
 
-            channelGateway.initChannel(channel.id, new ChannelRef(channel.id, resolvedName));
+            channelGateway.initChannel(channel.id(), new ChannelRef(channel.id(), resolvedName));
 
             try {
                 long specSize = Files.size(Path.of(specPath));
@@ -124,9 +124,9 @@ public class DebateMcpTools {
                     session.participants().values().forEach(id -> {
                         try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
                     });
-                    try { registry.remove(channel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
+                    try { registry.remove(channel.id()); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 }
-                try { channelService.delete(channel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
+                try { channelService.delete(channel.id(), true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
             return "error: " + e.getMessage();
         }
@@ -201,7 +201,7 @@ public class DebateMcpTools {
             return "error: invalid entryType '" + entryType + "' — must be agree, dispute, qualify, counter, or declined";
         }
 
-        Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
+        Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id()).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
         Map<String, String> meta = new LinkedHashMap<>();
@@ -239,7 +239,7 @@ public class DebateMcpTools {
         AgentType role = parseRole(agentRole);
         if (role == null) return roleError(agentRole);
 
-        Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id).orElse(null);
+        Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id()).orElse(null);
         if (inReplyTo == null) return "error: point not found: " + pointId;
 
         Map<String, String> meta = new LinkedHashMap<>();
@@ -475,11 +475,11 @@ public class DebateMcpTools {
             newChannel = channelService.create(ChannelCreateRequest.builder(channelName)
                     .description("DraftHouse debate session (restarted from round " + round + ")")
                     .semantic(ChannelSemantic.APPEND).build());
-            String newSessionId = newChannel.id.toString();
+            String newSessionId = newChannel.id().toString();
 
-            newSession = DebateSession.branchFrom(original, newChannel.id, newSessionId, newChannel.name);
+            newSession = DebateSession.branchFrom(original, newChannel.id(), newSessionId, newChannel.name());
             registry.put(newSession);
-            channelGateway.initChannel(newChannel.id, new ChannelRef(newChannel.id, newChannel.name));
+            channelGateway.initChannel(newChannel.id(), new ChannelRef(newChannel.id(), newChannel.name()));
 
             // Extract sender registration before builder — makes the registration site unambiguous
             String markerSender = sender(newSession, AgentType.REV); // registers REV for the new session
@@ -488,7 +488,7 @@ public class DebateMcpTools {
                               "originRound", String.valueOf(round));
             String markerContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, summary);
             messageService.dispatch(MessageDispatch.builder()
-                    .channelId(newChannel.id)
+                    .channelId(newChannel.id())
                     .sender(markerSender)
                     .type(MessageType.STATUS)
                     .content(markerContent)
@@ -532,9 +532,9 @@ public class DebateMcpTools {
                     newSession.participants().values().forEach(id -> {
                         try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
                     });
-                    try { registry.remove(newChannel.id); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
+                    try { registry.remove(newChannel.id()); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
                 }
-                try { channelService.delete(newChannel.id, true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
+                try { channelService.delete(newChannel.id(), true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
             }
             return "error: " + e.getMessage();
         }
