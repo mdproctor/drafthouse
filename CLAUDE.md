@@ -127,6 +127,7 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/runtime/src/main/webui/src/panels/drafthouse-debate.js` | `<drafthouse-debate>` — debate event conversation feed (pages-event subscriber) |
 | `server/runtime/src/main/webui/src/panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist (pages-event subscriber) |
 | `server/runtime/src/main/webui/src/panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (pages-event onMeta subscriber) |
+| `server/runtime/src/main/webui/src/panels/drafthouse-doc-picker.js` | `<drafthouse-doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
 | `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
 | `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ |
@@ -172,8 +173,10 @@ Browser UI (casehub-pages workbench + Web Component panels)
   │   └── pages-event              ← debate events via WebSocket, grouped by round
   ├── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
   │   └── pages-event              ← derives status per pointId from event stream
-  └── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
-      └── pages-event (onMeta)     ← context-usage metadata events
+  ├── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
+  │   └── pages-event (onMeta)     ← context-usage metadata events
+  └── <drafthouse-doc-picker>      ← document badge dropdown (Shadow DOM custom element, topbar)
+      └── pages-event              ← documents-changed, comparison-changed; POST /api/debate/{id}/comparison
 ```
 
 ## Architectural Direction

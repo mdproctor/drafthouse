@@ -8,6 +8,7 @@ import "./panels/drafthouse-diff.js";
 import "./panels/drafthouse-debate.js";
 import "./panels/drafthouse-review-tracker.js";
 import "./panels/drafthouse-context-gauge.js";
+import "./panels/drafthouse-doc-picker.js";
 
 // ── Electron IPC Bridge ──────────────────────────────────────────────────
 
@@ -62,7 +63,7 @@ const workbench = rows(
       <span style="display:inline-block;width:10px;height:10px;background:var(--diff-del);border:1px solid var(--diff-del-text);border-radius:2px;" class="legend-del"></span> A
       <span style="display:inline-block;width:10px;height:10px;background:var(--diff-ins);border:1px solid var(--diff-ins-text);border-radius:2px;" class="legend-ins"></span> B
     </span>
-    <span id="doc-badge" style="display:none; cursor:pointer;">📄 <span id="doc-count">0</span></span>
+    <drafthouse-doc-picker></drafthouse-doc-picker>
     <span style="flex:1" id="topbar-spacer"></span>
     <button id="btn-debate" class="active" title="Toggle debate panel">💬 Debate</button>
     <button id="btn-review" class="active" title="Toggle review panel">📋 Review</button>
@@ -119,6 +120,9 @@ function connectDebateSession(sessionId: string): void {
   if (debateEl) debateEl.configure({ debateSessionId: sessionId });
   if (reviewEl) reviewEl.configure({ debateSessionId: sessionId });
 
+  const docPicker = document.querySelector('drafthouse-doc-picker') as any;
+  if (docPicker) docPicker.setAttribute('session-id', sessionId);
+
   // Fetch initial documents — comparison comes via catch-up events
   fetch(`/api/debate/${sessionId}/documents`)
     .then(r => r.json())
@@ -168,19 +172,6 @@ document.addEventListener("pages-event", ((e: CustomEvent) => {
       if (payload.pathA) { diff.loadFile("a", payload.pathA); }
       if (payload.pathB) { diff.loadFile("b", payload.pathB); }
       watchFiles(payload.pathA, payload.pathB);
-    }
-  }
-  if (topic === "documents-changed") {
-    const docBadge = document.getElementById("doc-badge");
-    const docCount = document.getElementById("doc-count");
-    if (docBadge && docCount && payload.documents) {
-      const count = payload.documents.length;
-      if (count > 0) {
-        docCount.textContent = count.toString();
-        docBadge.style.display = "";
-      } else {
-        docBadge.style.display = "none";
-      }
     }
   }
 }) as EventListener);
