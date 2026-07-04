@@ -30,12 +30,14 @@ class DebateChannelBackendFactoryTest {
     private DebateSessionRegistry debateRegistry;
     @SuppressWarnings("unchecked")
     private Event<ChannelAgentRequest> channelAgentEvent = mock(Event.class);
+    @SuppressWarnings("unchecked")
+    private WebSocketEventBus eventBus = mock(WebSocketEventBus.class);
 
     @BeforeEach
     void setUp() {
         gateway = mock(ChannelGateway.class);
         debateRegistry = mock(DebateSessionRegistry.class);
-        debateBackend = new DebateChannelBackend(channelAgentEvent, debateRegistry);
+        debateBackend = new DebateChannelBackend(channelAgentEvent, debateRegistry, eventBus);
 
         debateFactory = new DebateChannelBackendFactory();
         debateFactory.gateway = gateway;
@@ -150,6 +152,18 @@ class DebateChannelBackendFactoryTest {
         debateBackend.post(channelRef, message);
 
         verifyNoInteractions(channelAgentEvent);
+    }
+
+    @Test
+    void post_pushesAllMessageTypesToEventBus() {
+        UUID channelId = UUID.randomUUID();
+        ChannelRef ref = new ChannelRef(channelId, "debate-channel");
+        OutboundMessage msg = new OutboundMessage(
+                UUID.randomUUID(), "rev-agent", MessageType.QUERY,
+                DebateProtocol.META_SENTINEL + "entryType=RAISE|role=REV|round=1|priority=HIGH\n\nTest content",
+                null, null, io.casehub.platform.api.identity.ActorType.AGENT);
+        debateBackend.post(ref, msg);
+        verify(eventBus).pushDebateEntries(eq(channelId), anyList());
     }
 
     private OutboundMessage subTaskRequestMessage(UUID correlationId) {

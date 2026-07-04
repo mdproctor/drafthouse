@@ -85,12 +85,32 @@ const workbench = rows(
 
 await loadSite(document.getElementById("app")!, workbench);
 
-// ── Session discovery ─────────────────────────────────────────────────
+// ── WebSocket connection ─────────────────────────────────────────────
 
-import { connectSSE, getSessionId } from "./sse-bridge.js";
+import { createWebSocketSource } from "@casehubio/pages-data/dist/dataset/external/sources/websocket-source.js";
+
+const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+const wsSource = createWebSocketSource(`${wsProto}//${location.host}/api/ws`, {
+  eventTarget: document.documentElement as HTMLElement,
+});
+
+// Dummy subscription to establish the connection — listener is a no-op.
+// Server silently ignores unrecognized dataset patterns.
+const noOp = () => {};
+wsSource.subscribe("_events" as any, { uuid: "_events" as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
+
+let currentSessionId: string | null = null;
+let watchedFiles: string[] = [];
 
 function connectDebateSession(sessionId: string): void {
-  connectSSE(sessionId);
+  if (currentSessionId) {
+    wsSource.unsubscribe(("debate:" + currentSessionId) as any);
+    watchedFiles.forEach(f => wsSource.unsubscribe(("file:" + f) as any));
+    watchedFiles = [];
+  }
+  currentSessionId = sessionId;
+  wsSource.subscribe(("debate:" + sessionId) as any,
+    { uuid: ("debate:" + sessionId) as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
 
   const debateEl = document.querySelector("drafthouse-debate") as any;
   const reviewEl = document.querySelector("drafthouse-review-tracker") as any;
@@ -99,27 +119,55 @@ function connectDebateSession(sessionId: string): void {
   if (debateEl) debateEl.configure({ debateSessionId: sessionId });
   if (reviewEl) reviewEl.configure({ debateSessionId: sessionId });
 
-  // Fetch initial documents and comparison
+  // Fetch initial documents — comparison comes via catch-up events
   fetch(`/api/debate/${sessionId}/documents`)
     .then(r => r.json())
     .then((data: any) => {
       if (data.currentComparison) {
         if (data.currentComparison.pathA && diffEl) diffEl.loadFile("a", data.currentComparison.pathA);
         if (data.currentComparison.pathB && diffEl) diffEl.loadFile("b", data.currentComparison.pathB);
+        watchFiles(data.currentComparison.pathA, data.currentComparison.pathB);
       }
     })
     .catch(() => {});
-
 }
 
-// comparison-changed listener at module level (not inside connectDebateSession — avoids duplicate registration)
+function watchFiles(...paths: (string | null)[]): void {
+  paths.filter(Boolean).forEach(p => {
+    if (!watchedFiles.includes(p!)) {
+      watchedFiles.push(p!);
+      wsSource.subscribe(("file:" + p) as any,
+        { uuid: ("file:" + p) as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
+    }
+  });
+}
+
+export function getSessionId(): string | null {
+  return currentSessionId;
+}
+
+// Session lifecycle — auto-connect or show picker
 document.addEventListener("pages-event", ((e: CustomEvent) => {
   const { topic, payload } = e.detail;
+  if (topic === "sessions" && !currentSessionId) {
+    if (payload.length === 1) {
+      connectDebateSession(payload[0].debateSessionId);
+    } else if (payload.length > 1) {
+      showSessionPicker(payload);
+    }
+  }
+  if (topic === "session-created" && !currentSessionId) {
+    connectDebateSession(payload.debateSessionId);
+  }
   if (topic === "comparison-changed") {
     const diff = document.querySelector("drafthouse-diff") as any;
     if (diff) {
-      if (payload.pathA) diff.loadFile("a", payload.pathA);
-      if (payload.pathB) diff.loadFile("b", payload.pathB);
+      // Unwatch old files
+      watchedFiles.forEach(f => wsSource.unsubscribe(("file:" + f) as any));
+      watchedFiles = [];
+      if (payload.pathA) { diff.loadFile("a", payload.pathA); }
+      if (payload.pathB) { diff.loadFile("b", payload.pathB); }
+      watchFiles(payload.pathA, payload.pathB);
     }
   }
   if (topic === "documents-changed") {
@@ -137,29 +185,10 @@ document.addEventListener("pages-event", ((e: CustomEvent) => {
   }
 }) as EventListener);
 
-function startSessionDiscovery(): void {
-  const interval = setInterval(async () => {
-    try {
-      const res = await fetch("/api/debate/sessions");
-      const sessions = await res.json();
-      if (sessions.length === 1) {
-        clearInterval(interval);
-        connectDebateSession(sessions[0].debateSessionId);
-      } else if (sessions.length > 1) {
-        clearInterval(interval);
-        showSessionPicker(sessions);
-      }
-    } catch {
-      // Server not ready yet
-    }
-  }, 5000);
-}
-
 if (debateParam) {
   connectDebateSession(debateParam);
-} else {
-  startSessionDiscovery();
 }
+// No else — sessions event from WebSocket handles auto-discovery
 
 // ── Topbar wiring ─────────────────────────────────────────────────────
 
@@ -230,7 +259,7 @@ document.addEventListener("point-selected", ((e: CustomEvent) => {
 document.addEventListener("selection-changed", ((e: CustomEvent) => {
   const { side, startLine, endLine, selectedText } = e.detail;
   if (!selectedText) return;
-  const sessionId = getSessionId();
+  const sessionId = currentSessionId;
   if (!sessionId) return;
   fetch(`/api/debate/${sessionId}/selection`, {
     method: "POST",

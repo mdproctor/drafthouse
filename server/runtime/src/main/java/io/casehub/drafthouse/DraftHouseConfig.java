@@ -47,4 +47,11 @@ public interface DraftHouseConfig {
         @WithDefault("80")
         double thresholdPercent();
     }
+
+    Debate debate();
+
+    interface Debate {
+        @WithDefault("500")
+        int catchUpLimit();
+    }
 }

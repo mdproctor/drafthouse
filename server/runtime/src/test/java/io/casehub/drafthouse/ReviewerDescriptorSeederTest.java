@@ -17,7 +17,7 @@ class ReviewerDescriptorSeederTest {
         var reviewers = registry.find(
                 AgentQuery.bySlot("document-reviewer", ReviewerDescriptorSeeder.TENANCY_ID));
         assertThat(reviewers).hasSize(4);
-        assertThat(reviewers).extracting("agentId").containsExactlyInAnyOrder(
+        assertThat(reviewers).extracting("descriptor.agentId").containsExactlyInAnyOrder(
                 "drafthouse-structural-reviewer",
                 "drafthouse-content-reviewer",
                 "drafthouse-readability-reviewer",

@@ -148,8 +148,8 @@ public final class DebateE2EFixtures {
         // Walk backwards to find the latest message with a correlationId
         for (int i = messages.size() - 1; i >= 0; i--) {
             Message m = messages.get(i);
-            if (m.correlationId != null && !m.correlationId.isBlank()) {
-                return m.correlationId;
+            if (m.correlationId() != null && !m.correlationId().isBlank()) {
+                return m.correlationId();
             }
         }
         throw new AssertionError("No message with correlationId found in channel " + sid);

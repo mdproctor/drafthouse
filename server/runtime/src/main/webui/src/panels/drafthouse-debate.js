@@ -272,7 +272,7 @@ class DraftHouseDebate extends HTMLElement {
         if (this.#shouldAutoScroll) {
           this.#scrollToBottom();
         }
-      } else if (topic === 'sse-reconnect') {
+      } else if (topic === 'reconnected') {
         this.#entries = [];
         this.#render();
       }

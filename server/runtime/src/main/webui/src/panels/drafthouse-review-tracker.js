@@ -262,7 +262,7 @@ class DraftHouseReviewTracker extends HTMLElement {
       if (topic === 'debate-entries') {
         this.#entries.push(...payload);
         this.#render();
-      } else if (topic === 'sse-reconnect') {
+      } else if (topic === 'reconnected') {
         this.#entries = [];
         this.#render();
       }

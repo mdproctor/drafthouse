@@ -81,7 +81,7 @@ class ReviewSessionLifecycleTest {
         }
         if (orphanedChannel != null) {
             try {
-                channelService.delete(orphanedChannel.id, true);
+                channelService.delete(orphanedChannel.id(), true);
             } catch (Exception ignored) {}
         }
     }
@@ -110,9 +110,9 @@ class ReviewSessionLifecycleTest {
 
         final var done = messageService.findDoneByCorrelationId(channelId, correlationId);
         assertThat(done).isPresent();
-        assertThat(done.get().messageType).isEqualTo(MessageType.DONE);
-        assertThat(done.get().content).isEqualTo("Good revision.");
-        assertThat(done.get().sender).isEqualTo("drafthouse-reviewer-" + sessionId);
+        assertThat(done.get().messageType()).isEqualTo(MessageType.DONE);
+        assertThat(done.get().content()).isEqualTo("Good revision.");
+        assertThat(done.get().sender()).isEqualTo("drafthouse-reviewer-" + sessionId);
     }
 
     // ── Test 2 — Orphaned channel drops query ─────────────────────────────────
@@ -123,11 +123,11 @@ class ReviewSessionLifecycleTest {
                 "drafthouse/orphan-" + UUID.randomUUID())
                 .description("Orphan session")
                 .semantic(ChannelSemantic.APPEND).build());
-        gateway.initChannel(orphanedChannel.id, new ChannelRef(orphanedChannel.id, orphanedChannel.name));
+        gateway.initChannel(orphanedChannel.id(), new ChannelRef(orphanedChannel.id(), orphanedChannel.name()));
 
         final String correlationId = UUID.randomUUID().toString();
         messageService.dispatch(MessageDispatch.builder()
-                .channelId(orphanedChannel.id)
+                .channelId(orphanedChannel.id())
                 .sender("human:tester")
                 .type(MessageType.QUERY)
                 .content("Hello?")
@@ -140,7 +140,7 @@ class ReviewSessionLifecycleTest {
         // a transient empty-then-filled state (GE-20260515-ed10ee).
         await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(3))
                 .until(() -> messageService.findResponseByCorrelationId(
-                        orphanedChannel.id, correlationId).isEmpty());
+                        orphanedChannel.id(), correlationId).isEmpty());
     }
 
     // ── Test 3 — Reviewer declines ────────────────────────────────────────────
@@ -167,15 +167,15 @@ class ReviewSessionLifecycleTest {
 
         await().atMost(TIMEOUT).until(() ->
                 messageService.findAllByCorrelationId(correlationId).stream()
-                        .anyMatch(m -> m.messageType == MessageType.DECLINE));
+                        .anyMatch(m -> m.messageType() == MessageType.DECLINE));
 
         final var decline = messageService.findAllByCorrelationId(correlationId).stream()
-                .filter(m -> m.messageType == MessageType.DECLINE)
+                .filter(m -> m.messageType() == MessageType.DECLINE)
                 .findFirst();
         assertThat(decline).isPresent();
-        assertThat(decline.get().content).isEqualTo("Out of scope.");
+        assertThat(decline.get().content()).isEqualTo("Out of scope.");
         assertThat(commitmentStore.findByCorrelationId(correlationId))
-                .hasValueSatisfying(c -> assertThat(c.state).isEqualTo(CommitmentState.DECLINED));
+                .hasValueSatisfying(c -> assertThat(c.state()).isEqualTo(CommitmentState.DECLINED));
     }
 
     // ── Test 4 — Reviewer throws (exception sanitization) ────────────────────
@@ -202,16 +202,16 @@ class ReviewSessionLifecycleTest {
 
         await().atMost(TIMEOUT).until(() ->
                 messageService.findAllByCorrelationId(correlationId).stream()
-                        .anyMatch(m -> m.messageType == MessageType.DECLINE));
+                        .anyMatch(m -> m.messageType() == MessageType.DECLINE));
 
         final var decline = messageService.findAllByCorrelationId(correlationId).stream()
-                .filter(m -> m.messageType == MessageType.DECLINE)
+                .filter(m -> m.messageType() == MessageType.DECLINE)
                 .findFirst();
         assertThat(decline).isPresent();
-        assertThat(decline.get().content).isEqualTo("Reviewer encountered an error.");
-        assertThat(decline.get().content).doesNotContain("sk-ant-api03-SECRET-KEY");
+        assertThat(decline.get().content()).isEqualTo("Reviewer encountered an error.");
+        assertThat(decline.get().content()).doesNotContain("sk-ant-api03-SECRET-KEY");
         assertThat(commitmentStore.findByCorrelationId(correlationId))
-                .hasValueSatisfying(c -> assertThat(c.state).isEqualTo(CommitmentState.DECLINED));
+                .hasValueSatisfying(c -> assertThat(c.state()).isEqualTo(CommitmentState.DECLINED));
     }
 
     // ── Test 5 — Multi-turn history ───────────────────────────────────────────

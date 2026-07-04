@@ -68,7 +68,7 @@ class DraftHouseContextGauge extends HTMLElement {
       const { topic, payload } = e.detail;
       if (topic === 'context-usage') {
         this.#handleMeta(payload);
-      } else if (topic === 'sse-reconnect') {
+      } else if (topic === 'reconnected') {
         this.#reset();
       }
     };
@@ -108,8 +108,6 @@ class DraftHouseContextGauge extends HTMLElement {
   }
 
   #handleMeta(data) {
-    if (data.type !== 'context-usage') return;
-
     if (data.windowSizeChars != null) {
       this.#windowSizeChars = data.windowSizeChars;
     }

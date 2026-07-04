@@ -69,6 +69,56 @@ public record DebateStreamEntry(
                 msg.createdAt() != null ? msg.createdAt() : Instant.now());
     }
 
+    public static DebateStreamEntry from(io.casehub.qhorus.api.gateway.OutboundMessage msg) {
+        if (msg.content() == null) return null;
+        Map<String, String> meta = DebateProtocol.parseMeta(msg.content());
+        String entryTypeStr = meta.get("entryType");
+        if (entryTypeStr == null) return null;
+
+        EntryType entryType;
+        try {
+            entryType = EntryType.valueOf(entryTypeStr);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+
+        String agentStr = meta.get(ConversationProtocol.ROLE);
+        if (agentStr == null) agentStr = meta.get("agent");
+        AgentType agentRole = null;
+        if (agentStr != null) {
+            try {
+                agentRole = AgentType.valueOf(agentStr);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        } else if (entryType != EntryType.RESTART_CONTEXT) {
+            return null;
+        }
+
+        int round = DebateProtocol.parseRound(meta);
+        String body = DebateProtocol.bodyContent(msg.content());
+
+        boolean isSubTask = entryType == EntryType.SUB_TASK_REQUEST
+                || entryType == EntryType.SUB_TASK_FINDING
+                || entryType == EntryType.SUB_TASK_ERROR;
+
+        String correlationId = msg.correlationId() != null ? msg.correlationId().toString() : null;
+        String pointId = isSubTask ? meta.get("pointId") : correlationId;
+        String subTaskId = isSubTask ? correlationId : null;
+
+        Priority priority = parsePriority(meta.get("priority"));
+        String scope = meta.get("scope");
+        String location = meta.get("location");
+
+        return new DebateStreamEntry(
+                entryType, agentRole, round, body,
+                pointId, subTaskId,
+                priority, scope,
+                location != null && !location.isBlank() ? location : null,
+                msg.sender(),
+                Instant.now());
+    }
+
     private static Priority parsePriority(String s) {
         if (s == null) return null;
         // Handle both legacy ("P1"/"P2"/"P3") and current ("HIGH"/"MEDIUM"/"LOW") values

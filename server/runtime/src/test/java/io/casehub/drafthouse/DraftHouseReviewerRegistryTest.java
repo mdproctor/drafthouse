@@ -48,7 +48,7 @@ class DraftHouseReviewerRegistryTest {
 
         var results = registry.find(AgentQuery.bySlot("document-reviewer", "drafthouse"));
         assertThat(results).hasSize(1);
-        assertThat(results.get(0).agentId()).isEqualTo("a1");
+        assertThat(results.get(0).descriptor().agentId()).isEqualTo("a1");
     }
 
     @Test

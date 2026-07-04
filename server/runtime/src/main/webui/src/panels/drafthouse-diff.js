@@ -241,7 +241,8 @@ class DraftHouseDiff extends HTMLElement {
   _shadow = null;
   _panels = { a: { path: null, content: null, label: 'File A' },
               b: { path: null, content: null, label: 'File B' } };
-  _watchers = {};        // path -> EventSource
+  #pathA = null;
+  #pathB = null;
   _syncEnabled = true;
   _viewMode = 'split';
   _syncing = false;
@@ -320,6 +321,9 @@ class DraftHouseDiff extends HTMLElement {
     this._$('choose-a').addEventListener('click', () => this.selectFile('a'));
     this._$('choose-b').addEventListener('click', () => this.selectFile('b'));
 
+    // File change listener
+    document.addEventListener('pages-event', this.#fileChangeHandler);
+
     // Wire label inputs
     for (const p of ['a', 'b']) {
       this._$(`label-${p}`).addEventListener('input', () => {
@@ -394,16 +398,20 @@ class DraftHouseDiff extends HTMLElement {
 
   disconnectedCallback() {
     this._connected = false;
-    // Close all file watchers
-    for (const path of Object.keys(this._watchers)) {
-      this._watchers[path].close();
-      delete this._watchers[path];
-    }
+    document.removeEventListener('pages-event', this.#fileChangeHandler);
     if (this._resizeObserver) {
       this._resizeObserver.disconnect();
       this._resizeObserver = null;
     }
   }
+
+  #fileChangeHandler = (e) => {
+    const { topic, payload } = e.detail;
+    if (topic !== 'file-changed') return;
+    const path = payload.path;
+    if (this.#pathA && path === this.#pathA) this.loadFile('a', path);
+    if (this.#pathB && path === this.#pathB) this.loadFile('b', path);
+  };
 
   // ── Public methods (called by shell) ──────────────────────────────
 
@@ -562,11 +570,11 @@ class DraftHouseDiff extends HTMLElement {
   }
 
   async loadFile(panel, path) {
-    const prev = this._panels[panel].path;
     this._panels[panel].path = path;
     this._panels[panel].label = path.split('/').pop();
     this._syncPanelMeta(panel);
-    if (prev && prev !== path) this._unwatchFile(prev);
+    if (panel === 'a') this.#pathA = path;
+    if (panel === 'b') this.#pathB = path;
     try {
       const content = await this._fetchFile(path);
       this._renderMarkdown(panel, content);
@@ -576,7 +584,6 @@ class DraftHouseDiff extends HTMLElement {
       this._$(`render-${panel}`).innerHTML =
         `<p style="color:var(--error, #8a2a2a);padding:24px">Could not read file: ${err.message}</p>`;
     }
-    this._watchFile(path);
     this._updateSwapButton();
   }
 
@@ -592,30 +599,6 @@ class DraftHouseDiff extends HTMLElement {
     return res.text();
   }
 
-  _watchFile(filePath) {
-    if (this._watchers[filePath]) return;
-    const es = new EventSource(this._apiUrl(`/api/watch?path=${encodeURIComponent(filePath)}`));
-    es.onmessage = async () => {
-      for (const p of this._panelsWatching(filePath)) {
-        try {
-          const content = await this._fetchFile(filePath);
-          this._renderMarkdown(p, content);
-        } catch (_) { /* ignore fetch errors on watch reload */ }
-      }
-    };
-    this._watchers[filePath] = es;
-  }
-
-  _unwatchFile(filePath) {
-    if (this._panelsWatching(filePath).length === 0 && this._watchers[filePath]) {
-      this._watchers[filePath].close();
-      delete this._watchers[filePath];
-    }
-  }
-
-  _panelsWatching(path) {
-    return ['a', 'b'].filter(p => this._panels[p].path === path);
-  }
 
   // ── Private: panel UI sync ────────────────────────────────────────
 

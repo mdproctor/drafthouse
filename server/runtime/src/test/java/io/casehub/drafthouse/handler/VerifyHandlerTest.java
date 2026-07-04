@@ -120,8 +120,9 @@ class VerifyHandlerTest {
                 + "\n\n";
         when(outboundMessage.content()).thenReturn(triggerContent);
         var request = new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
-        io.casehub.qhorus.runtime.message.Message stubMsg = new io.casehub.qhorus.runtime.message.Message();
-        stubMsg.id = 42L;
+        io.casehub.qhorus.api.message.Message stubMsg = io.casehub.qhorus.api.message.Message.builder()
+                .id(42L)
+                .build();
         when(messageService.findByCorrelationId("sub-1")).thenReturn(Optional.of(stubMsg));
 
         MessageDispatch dispatch = handler.buildResponse(channelId, "sender-id", "The finding.", request);

@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.eidos.api.AgentMatch;
 import io.casehub.eidos.api.AgentPromptContext;
 import io.casehub.eidos.api.AgentQuery;
 import io.casehub.eidos.api.AgentRegistry;
@@ -125,7 +126,7 @@ class ReviewerResolverTest {
     void listAvailable_returnsAllReviewerAgents() {
         when(agentRegistry.find(AgentQuery.bySlot(ReviewerDescriptorSeeder.SLOT,
                 ReviewerDescriptorSeeder.TENANCY_ID)))
-                .thenReturn(List.of(structuralDescriptor));
+                .thenReturn(List.of(new AgentMatch(structuralDescriptor, null)));
 
         List<AgentDescriptor> result = resolver.listAvailable();
 

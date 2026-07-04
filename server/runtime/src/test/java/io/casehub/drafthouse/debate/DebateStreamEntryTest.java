@@ -17,17 +17,17 @@ class DebateStreamEntryTest {
 
     private static Message makeMessage(String content, String correlationId,
                                        Long inReplyTo, MessageType type) {
-        Message m = new Message();
-        m.id = 42L;
-        m.channelId = UUID.randomUUID();
-        m.sender = "drafthouse-rev-abc123";
-        m.messageType = type;
-        m.actorType = ActorType.AGENT;
-        m.content = content;
-        m.correlationId = correlationId;
-        m.inReplyTo = inReplyTo;
-        m.createdAt = Instant.parse("2026-06-11T10:00:00Z");
-        return m;
+        return Message.builder()
+                .id(42L)
+                .channelId(UUID.randomUUID())
+                .sender("drafthouse-rev-abc123")
+                .messageType(type)
+                .actorType(ActorType.AGENT)
+                .content(content)
+                .correlationId(correlationId)
+                .inReplyTo(inReplyTo)
+                .createdAt(Instant.parse("2026-06-11T10:00:00Z"))
+                .build();
     }
 
     // ── role wire key ────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@
     "@casehubio/pages-ui": "file:../../../../../../pages/packages/pages-ui",
     "@casehubio/pages-component": "file:../../../../../../pages/packages/pages-component",
     "@casehubio/pages-viz": "file:../../../../../../pages/packages/pages-viz",
+    "@casehubio/pages-data": "file:../../../../../../pages/packages/pages-data",
     "marked": "^15.0.0"
   },
   "devDependencies": {

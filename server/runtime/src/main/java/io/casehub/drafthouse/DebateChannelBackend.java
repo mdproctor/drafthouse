@@ -36,15 +36,18 @@ public class DebateChannelBackend implements ChannelBackend {
 
     @Inject Event<ChannelAgentRequest> channelAgentEvent;
     @Inject DebateSessionRegistry registry;
+    @Inject WebSocketEventBus eventBus;
 
     /** CDI no-arg constructor. */
     public DebateChannelBackend() {}
 
     /** Test constructor — pass mocks directly. */
     DebateChannelBackend(Event<ChannelAgentRequest> channelAgentEvent,
-                         DebateSessionRegistry registry) {
+                         DebateSessionRegistry registry,
+                         WebSocketEventBus eventBus) {
         this.channelAgentEvent = channelAgentEvent;
         this.registry = registry;
+        this.eventBus = eventBus;
     }
 
     @Override public String backendId() { return BACKEND_ID; }
@@ -54,6 +57,14 @@ public class DebateChannelBackend implements ChannelBackend {
 
     @Override
     public void post(ChannelRef channel, OutboundMessage message) {
+        // Push all message types to WebSocket watchers
+        io.casehub.drafthouse.debate.DebateStreamEntry entry =
+                io.casehub.drafthouse.debate.DebateStreamEntry.from(message);
+        if (entry != null) {
+            eventBus.pushDebateEntries(channel.id(), java.util.List.of(entry));
+        }
+
+        // Still fire CDI event for SUB_TASK_REQUEST (agent dispatch — orthogonal)
         Map<String, String> meta = DebateProtocol.parseMeta(message.content());
         if (!"SUB_TASK_REQUEST".equals(meta.get("entryType"))) return;
 

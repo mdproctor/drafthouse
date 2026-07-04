@@ -68,8 +68,7 @@ class ReviewerChannelBackendTest {
 
         when(registry.find(CHANNEL_ID)).thenReturn(Optional.of(session));
 
-        Message queryMsg = new Message();
-        queryMsg.id = 42L;
+        Message queryMsg = Message.builder().id(42L).build();
         when(messageService.findByCorrelationId(CORRELATION_ID.toString()))
                 .thenReturn(Optional.of(queryMsg));
     }

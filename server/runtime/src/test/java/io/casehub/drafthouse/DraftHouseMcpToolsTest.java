@@ -22,11 +22,11 @@ import io.casehub.eidos.api.AgentDisposition;
 import io.casehub.eidos.api.Resource;
 import io.casehub.qhorus.api.channel.ChannelSemantic;
 import io.casehub.qhorus.api.gateway.ChannelRef;
+import io.casehub.qhorus.api.instance.InstanceInfo;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.channel.Channel;
 import io.casehub.qhorus.api.channel.ChannelCreateRequest;
-import io.casehub.qhorus.api.instance.Instance;
 import io.casehub.qhorus.runtime.channel.ChannelService;
 import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
@@ -46,7 +46,7 @@ class DraftHouseMcpToolsTest {
     private DraftHouseMcpTools tools;
 
     private Channel stubChannel;
-    private Instance stubInstance;
+    private InstanceInfo stubInstance;
 
     @BeforeEach
     void setUp() {
@@ -75,14 +75,20 @@ class DraftHouseMcpToolsTest {
         tools.config = config;
         tools.resolver = resolver;
 
-        stubChannel = new Channel();
-        stubChannel.id = UUID.randomUUID();
-        stubChannel.name = "drafthouse/" + UUID.randomUUID();
+        UUID channelUuid = UUID.randomUUID();
+        stubChannel = Channel.builder("drafthouse/" + channelUuid)
+                .id(channelUuid)
+                .description("test description")
+                .semantic(ChannelSemantic.APPEND)
+                .build();
         when(channelService.create(any(ChannelCreateRequest.class)))
                 .thenReturn(stubChannel);
 
-        stubInstance = new Instance();
-        stubInstance.id = UUID.randomUUID();
+        String instanceId = "drafthouse-reviewer-" + stubChannel.id();
+        io.casehub.qhorus.api.instance.Instance stubInstance =
+                io.casehub.qhorus.api.instance.Instance.builder(instanceId)
+                        .status("active")
+                        .build();
         when(instanceService.register(anyString(), anyString(), any())).thenReturn(stubInstance);
     }
 
@@ -95,14 +101,14 @@ class DraftHouseMcpToolsTest {
 
         String result = tools.startReview(docA.toString(), docB.toString(), null);
 
-        assertThat(result).contains(stubChannel.id.toString());
+        assertThat(result).contains(stubChannel.id().toString());
 
         ArgumentCaptor<ReviewSession> sessionCaptor = ArgumentCaptor.forClass(ReviewSession.class);
         verify(registry).put(sessionCaptor.capture());
         ReviewSession session = sessionCaptor.getValue();
-        assertThat(session.channelId()).isEqualTo(stubChannel.id);
-        assertThat(session.sessionId()).isEqualTo(stubChannel.id.toString());
-        assertThat(session.channelName()).isEqualTo(stubChannel.name);
+        assertThat(session.channelId()).isEqualTo(stubChannel.id());
+        assertThat(session.sessionId()).isEqualTo(stubChannel.id().toString());
+        assertThat(session.channelName()).isEqualTo(stubChannel.name());
         assertThat(session.docAContent()).isEqualTo("Content A");
         assertThat(session.docBContent()).isEqualTo("Content B");
         assertThat(session.reviewer().agentId()).isEqualTo("drafthouse-structural-reviewer");
@@ -119,7 +125,7 @@ class DraftHouseMcpToolsTest {
         var order = inOrder(registry, channelGateway);
         tools.startReview(docA.toString(), docB.toString(), null);
         order.verify(registry).put(any());
-        order.verify(channelGateway).initChannel(eq(stubChannel.id), any(ChannelRef.class));
+        order.verify(channelGateway).initChannel(eq(stubChannel.id()), any(ChannelRef.class));
     }
 
     @Test
@@ -146,8 +152,8 @@ class DraftHouseMcpToolsTest {
     void startReview_channelServiceThrows_cleanupAttempted() throws IOException {
         Path docA = Files.writeString(tempDir.resolve("a.md"), "A");
         Path docB = Files.writeString(tempDir.resolve("b.md"), "B");
-        when(channelService.create(any(ChannelCreateRequest.class)))
-                .thenThrow(new RuntimeException("DB error"));
+        doThrow(new RuntimeException("DB error"))
+                .when(channelService).create(any(ChannelCreateRequest.class));
 
         String result = tools.startReview(docA.toString(), docB.toString(), null);
 
@@ -327,7 +333,7 @@ class DraftHouseMcpToolsTest {
         String result = tools.startReview(docA.toString(), docB.toString(), null);
 
         assertThat(result).startsWith("error:");
-        String expectedInstanceId = "drafthouse-reviewer-" + stubChannel.id;
+        String expectedInstanceId = "drafthouse-reviewer-" + stubChannel.id();
         verify(instanceService).deregister(expectedInstanceId);
     }
 

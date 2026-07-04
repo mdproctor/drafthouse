@@ -1,6 +1,7 @@
 package io.casehub.drafthouse;
 
 import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.eidos.api.AgentMatch;
 import io.casehub.eidos.api.AgentQuery;
 import io.casehub.eidos.api.AgentRegistry;
 import io.quarkus.arc.DefaultBean;
@@ -31,12 +32,13 @@ public class DraftHouseReviewerRegistry implements AgentRegistry {
     }
 
     @Override
-    public List<AgentDescriptor> find(AgentQuery query) {
+    public List<AgentMatch> find(AgentQuery query) {
         return store.values().stream()
                 .filter(d -> d.tenancyId().equals(query.tenancyId()))
                 .filter(d -> query.slot() == null || Objects.equals(d.slot(), query.slot()))
                 .filter(d -> query.capabilityName() == null
                         || d.capabilities().stream().anyMatch(c -> Objects.equals(c.name(), query.capabilityName())))
+                .map(d -> new AgentMatch(d, null))
                 .toList();
     }
 }

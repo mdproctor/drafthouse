@@ -7,6 +7,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.eidos.api.AgentMatch;
 import io.casehub.eidos.api.AgentPromptContext;
 import io.casehub.eidos.api.AgentQuery;
 import io.casehub.eidos.api.AgentRegistry;
@@ -46,7 +47,8 @@ public class ReviewerResolver {
     public List<AgentDescriptor> listAvailable() {
         return agentRegistry.find(
                 AgentQuery.bySlot(ReviewerDescriptorSeeder.SLOT,
-                        ReviewerDescriptorSeeder.TENANCY_ID));
+                        ReviewerDescriptorSeeder.TENANCY_ID))
+                .stream().map(AgentMatch::descriptor).toList();
     }
 
     public Optional<AgentDescriptor> findDescriptor(String agentId) {

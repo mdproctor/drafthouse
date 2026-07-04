@@ -65,6 +65,7 @@ public class DebateMcpTools {
     @Inject DraftHouseConfig config;
     @Inject DebateEventResource debateEventResource;
     @Inject ReviewerResolver resolver;
+    @Inject WebSocketEventBus eventBus;
 
     @Tool(name = "start_debate",
           description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, specPath, and reviewer.")
@@ -97,6 +98,9 @@ public class DebateMcpTools {
             session = new DebateSession(channel.id(), debateSessionId, resolvedName, reviewer.agentId());
             session.addDocument(specPath, "spec");
             registry.put(session);
+
+            eventBus.broadcast("session-created", new DebateEventResource.SessionInfo(
+                    session.debateSessionId(), session.channelName(), specPath, session.agentId()));
 
             // Register REV and IMP eagerly; all other roles lazy-register on first use via sender()
             sender(session, AgentType.REV);
@@ -318,6 +322,8 @@ public class DebateMcpTools {
         }
 
         registry.remove(channelId);
+
+        eventBus.broadcast("session-ended", java.util.Map.of("debateSessionId", debateSessionId));
 
         session.participants().values().forEach(instanceId -> {
             try { instanceService.deregister(instanceId); }
