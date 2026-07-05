@@ -130,7 +130,7 @@ styles.replaceSync(`
     gap: 6px;
   }
 
-  .point-item:hover {
+  .point-item:hover:not(.selected) {
     border-color: var(--accent);
     box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
@@ -212,6 +212,12 @@ styles.replaceSync(`
   .point-item.qualify-active {
     border-left: 3px solid var(--accent);
   }
+
+  .point-item.selected {
+    outline: 2px solid var(--accent, #4a6a8a);
+    outline-offset: -2px;
+    background: rgba(74, 106, 138, 0.08);
+  }
 `);
 
 class DraftHouseReviewTracker extends HTMLElement {
@@ -220,6 +226,7 @@ class DraftHouseReviewTracker extends HTMLElement {
   #unsubscribe = null;
   #entries = [];
   #hideResolved = false;
+  #selectedPointId = null;
 
   constructor() {
     super();
@@ -450,6 +457,7 @@ class DraftHouseReviewTracker extends HTMLElement {
     const el = document.createElement('div');
     const statusClass = point.status.toLowerCase();
     el.className = `point-item status-${statusClass}`;
+    if (this.#selectedPointId === point.pointId) el.classList.add('selected');
 
     // Add qualify-active class if QUALIFY was the last action
     if (point.isQualifyActive) {
@@ -486,9 +494,17 @@ class DraftHouseReviewTracker extends HTMLElement {
     trail.textContent = point.trail;
     el.appendChild(trail);
 
-    // Click handler
+    // Click handler — toggle selection
     el.addEventListener('click', () => {
-      this.dispatchEvent(new CustomEvent('point-selected', {
+      const wasSelected = this.#selectedPointId === point.pointId;
+      this.#selectedPointId = wasSelected ? null : point.pointId;
+
+      // Update selected styling on all items
+      this.#shadow.querySelectorAll('.point-item').forEach(item => item.classList.remove('selected'));
+      if (!wasSelected) el.classList.add('selected');
+
+      const eventName = wasSelected ? 'point-deselected' : 'point-selected';
+      this.dispatchEvent(new CustomEvent(eventName, {
         bubbles: true,
         detail: {
           pointId: point.pointId,

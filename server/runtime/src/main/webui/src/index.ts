@@ -244,7 +244,14 @@ document.addEventListener("diff-updated", () => updateDiffUI());
 
 document.addEventListener("point-selected", ((e: CustomEvent) => {
   const { location } = e.detail;
-  if (location && diffEl) diffEl.scrollToLocation(location);
+  if (diffEl) {
+    if (location) diffEl.scrollToLocation(location);
+    diffEl.highlightSection(location);
+  }
+}) as EventListener);
+
+document.addEventListener("point-deselected", (() => {
+  if (diffEl) diffEl.clearHighlight();
 }) as EventListener);
 
 document.addEventListener("selection-changed", ((e: CustomEvent) => {

@@ -132,6 +132,17 @@ sheet.replaceSync(/* css */`
     max-width: 820px;
     margin: 0 auto;
     line-height: 1.75;
+    position: relative;
+  }
+
+  /* ── Section highlight bar ── */
+  .section-highlight-bar {
+    position: absolute;
+    left: 8px;
+    width: 3px;
+    background: var(--accent, #4a6a8a);
+    border-radius: 2px;
+    pointer-events: none;
   }
   .md-wrap h1, .md-wrap h2 {
     border-bottom: 1px solid var(--border, #c8baa0);
@@ -183,6 +194,16 @@ sheet.replaceSync(/* css */`
   .md-wrap table { border-collapse: collapse; width: 100%; margin: 1em 0; }
   .md-wrap th, .md-wrap td { border: 1px solid var(--border, #c8baa0); padding: 6px 13px; }
   .md-wrap th  { background: var(--chrome, #ede7d9); }
+
+  /* ── Scroll target highlight ── */
+  @keyframes scroll-flash {
+    0%   { background: rgba(217, 164, 6, 0.35); }
+    100% { background: transparent; }
+  }
+  .scroll-target {
+    animation: scroll-flash 1.5s ease-out;
+    border-radius: 2px;
+  }
 
   /* ── Inline diff markers ── */
   .diff-del {
@@ -497,42 +518,110 @@ class DraftHouseDiff extends HTMLElement {
     };
   }
 
+  _findHeading(headings, location) {
+    if (!location) return null;
+    const ref = location.startsWith('§') ? location.slice(1).trim() : location.trim();
+    if (!ref) return null;
+    // Match leading digits with optional sub-section, allowing trailing text (e.g. "3 Features", "3.1 Word Changes")
+    const numMatch = ref.match(/^(\d+)(?:\.(\d+))?(?:\s|$)/);
+    if (numMatch) {
+      const major = parseInt(numMatch[1], 10);
+      const minor = numMatch[2] ? parseInt(numMatch[2], 10) : null;
+      const topLevel = headings.filter(h => h.tagName === 'H2' || h.tagName === 'H1');
+      if (major >= 1 && major <= topLevel.length) {
+        if (minor === null) {
+          return topLevel[major - 1];
+        } else {
+          const start = headings.indexOf(topLevel[major - 1]);
+          const nextTop = topLevel[major] ? headings.indexOf(topLevel[major]) : headings.length;
+          const subHeadings = headings.slice(start + 1, nextTop);
+          if (minor >= 1 && minor <= subHeadings.length) return subHeadings[minor - 1];
+        }
+      }
+    }
+    const lower = ref.toLowerCase();
+    const found = headings.find(h => h.textContent.toLowerCase().includes(lower));
+    if (found) return found;
+    // Normalize: strip quotes, LLM prefixes/suffixes, then retry
+    const normalized = this._normalizeLocation(lower);
+    if (normalized !== lower) {
+      const norm = headings.find(h => h.textContent.toLowerCase().includes(normalized));
+      if (norm) return norm;
+    }
+    // Separator-split alternatives: / - — and or
+    const sepMatch = ref.match(/\s+(?:\/|-|—|and|or)\s+/i);
+    if (sepMatch) {
+      for (const part of ref.split(/\s+(?:\/|-|—|and|or)\s+/i)) {
+        const cleaned = part.trim().toLowerCase();
+        if (!cleaned) continue;
+        const match = headings.find(h => h.textContent.toLowerCase().includes(cleaned));
+        if (match) return match;
+      }
+    }
+    // Word-overlap fallback: score headings by how many location words they contain
+    const words = normalized.split(/\s+/).filter(w => w.length > 2);
+    if (words.length >= 2) {
+      let best = null, bestScore = 0;
+      for (const h of headings) {
+        const ht = h.textContent.toLowerCase();
+        const score = words.filter(w => ht.includes(w)).length;
+        if (score > bestScore) { bestScore = score; best = h; }
+      }
+      if (best && bestScore >= Math.ceil(words.length / 2)) return best;
+    }
+    return null;
+  }
+
+  _normalizeLocation(text) {
+    let s = text.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '');
+    s = s.replace(/^(?:section|heading|under|in the|in|the)\s*[:.]?\s*/i, '');
+    s = s.replace(/\s+(?:section|heading|area|part)$/i, '');
+    return s.trim();
+  }
+
   scrollToLocation(location) {
     if (!location) return;
-    const ref = location.startsWith('§') ? location.slice(1).trim() : location.trim();
-    if (!ref) return;
-    const numMatch = ref.match(/^(\d+)(?:\.(\d+))?$/);
     for (const side of ['a', 'b']) {
       const headings = [...this._shadow.querySelectorAll(
         `#render-${side} h1, #render-${side} h2, #render-${side} h3, #render-${side} h4`
       )];
-      let target = null;
-      if (numMatch) {
-        const major = parseInt(numMatch[1], 10);
-        const minor = numMatch[2] ? parseInt(numMatch[2], 10) : null;
-        const topLevel = headings.filter(h => h.tagName === 'H2' || h.tagName === 'H1');
-        if (major >= 1 && major <= topLevel.length) {
-          if (minor === null) {
-            target = topLevel[major - 1];
-          } else {
-            const start = headings.indexOf(topLevel[major - 1]);
-            const nextTop = topLevel[major] ? headings.indexOf(topLevel[major]) : headings.length;
-            const subHeadings = headings.slice(start + 1, nextTop);
-            if (minor >= 1 && minor <= subHeadings.length) {
-              target = subHeadings[minor - 1];
-            }
-          }
-        }
-      } else {
-        const lower = ref.toLowerCase();
-        target = headings.find(h => h.textContent.toLowerCase().includes(lower));
-      }
+      const target = this._findHeading(headings, location);
       if (target) {
         const body = this._$(`body-${side}`);
         const delta = target.getBoundingClientRect().top - body.getBoundingClientRect().top - 24;
         body.scrollBy({ top: delta, behavior: 'instant' });
+        target.classList.remove('scroll-target');
+        void target.offsetWidth;
+        target.classList.add('scroll-target');
+        target.addEventListener('animationend', () => target.classList.remove('scroll-target'), { once: true });
       }
     }
+  }
+
+  highlightSection(location) {
+    this.clearHighlight();
+    if (!location) return;
+    for (const side of ['a', 'b']) {
+      const wrap = this._shadow.querySelector(`#render-${side}`);
+      if (!wrap) continue;
+      const headings = [...wrap.querySelectorAll('h1, h2, h3, h4')];
+      const target = this._findHeading(headings, location);
+      if (!target) continue;
+      const targetLevel = parseInt(target.tagName[1], 10);
+      const idx = headings.indexOf(target);
+      const nextHeading = headings.find((h, i) => i > idx && parseInt(h.tagName[1], 10) <= targetLevel);
+      const top = target.offsetTop;
+      const bottom = nextHeading ? nextHeading.offsetTop : wrap.scrollHeight;
+      const bar = document.createElement('div');
+      bar.className = 'section-highlight-bar';
+      bar.style.top = `${top}px`;
+      bar.style.height = `${bottom - top}px`;
+      wrap.appendChild(bar);
+    }
+  }
+
+  clearHighlight() {
+    this._shadow.querySelectorAll('.section-highlight-bar').forEach(el => el.remove());
   }
 
   async selectFile(panel) {
