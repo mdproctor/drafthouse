@@ -135,6 +135,24 @@ class DebateChannelProjectionTest {
     }
 
     @Test
+    void verified_transitionsToVerified() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.DONE, "pt-1", ratefacts("VERIFIED", "IMP", 2), "Verified."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("VERIFIED");
+    }
+
+    @Test
+    void deferred_transitionsToDeferred() {
+        ConversationState s0 = proj.apply(proj.identity(),
+                msg(MessageType.QUERY, "pt-1", ratefacts("RAISE", "REV", 1, "HIGH", "ISOLATED"), "Issue."));
+        ConversationState s1 = proj.apply(s0,
+                msg(MessageType.RESPONSE, "pt-1", ratefacts("DEFERRED", "IMP", 2), "Deferred."));
+        assertThat(s1.points().get("pt-1").status()).isEqualTo("DEFERRED");
+    }
+
+    @Test
     void unknownEntryType_statusUnchanged() {
         // Unknown domain entry type → base class discards (no statusAfter match)
         ConversationState s = proj.apply(proj.identity(),

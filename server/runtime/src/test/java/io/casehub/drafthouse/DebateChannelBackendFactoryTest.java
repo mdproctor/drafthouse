@@ -111,7 +111,7 @@ class DebateChannelBackendFactoryTest {
         OutboundMessage message = new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-subagent", MessageType.STATUS,
                 DebateProtocol.META_SENTINEL + "entryType=NEUTRAL_SUMMARY|role=REV\n\nSummary text",
-                UUID.randomUUID(), null, io.casehub.platform.api.identity.ActorType.AGENT);
+                UUID.randomUUID().toString(), null, io.casehub.platform.api.identity.ActorType.AGENT);
 
         debateBackend.post(channelRef, message);
 
@@ -171,6 +171,6 @@ class DebateChannelBackendFactoryTest {
                 + "entryType=SUB_TASK_REQUEST|role=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n";
         return new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-orchestrator", MessageType.STATUS,
-                content, correlationId, null, io.casehub.platform.api.identity.ActorType.AGENT);
+                content, correlationId != null ? correlationId.toString() : null, null, io.casehub.platform.api.identity.ActorType.AGENT);
     }
 }

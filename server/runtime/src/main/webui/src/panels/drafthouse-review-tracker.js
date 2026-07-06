@@ -12,6 +12,8 @@ const ENTRY_TO_STATUS = {
   QUALIFY: 'ACTIVE',
   FLAG_HUMAN: 'PENDING_HUMAN',
   DECLINED: 'DECLINED',
+  VERIFIED: 'VERIFIED',
+  DEFERRED: 'DEFERRED',
 };
 
 // Status sort order (OPEN first → PENDING_HUMAN → ACTIVE → DISPUTED → AGREED → DECLINED)
@@ -22,6 +24,8 @@ const STATUS_ORDER = {
   DISPUTED: 3,
   AGREED: 4,
   DECLINED: 5,
+  VERIFIED: 6,
+  DEFERRED: 7,
 };
 
 // Status icons
@@ -32,6 +36,8 @@ const STATUS_ICON = {
   PENDING_HUMAN: '⚑',
   DECLINED: '✓',
   DISPUTED: '✕',
+  VERIFIED: '✓✓',
+  DEFERRED: '⏸',
 };
 
 // Review tracker styles
@@ -289,7 +295,7 @@ class DraftHouseReviewTracker extends HTMLElement {
 
   #render() {
     const points = this.#derivePoints();
-    const resolved = points.filter(p => p.status === 'AGREED' || p.status === 'DECLINED');
+    const resolved = points.filter(p => p.status === 'AGREED' || p.status === 'DECLINED' || p.status === 'VERIFIED' || p.status === 'DEFERRED');
     const total = points.length;
     const resolvedCount = resolved.length;
 
@@ -339,7 +345,7 @@ class DraftHouseReviewTracker extends HTMLElement {
     pointsList.className = 'points-list';
 
     const visiblePoints = this.#hideResolved
-      ? points.filter(p => p.status !== 'AGREED' && p.status !== 'DECLINED')
+      ? points.filter(p => p.status !== 'AGREED' && p.status !== 'DECLINED' && p.status !== 'VERIFIED' && p.status !== 'DEFERRED')
       : points;
 
     if (visiblePoints.length === 0) {

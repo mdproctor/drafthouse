@@ -35,7 +35,7 @@ import io.casehub.qhorus.runtime.message.ProjectionService;
 class ReviewerChannelBackendTest {
 
     private static final UUID CHANNEL_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-    private static final UUID CORRELATION_ID = UUID.fromString("00000000-0000-0000-0000-000000000002");
+    private static final String CORRELATION_ID = "00000000-0000-0000-0000-000000000002";
 
     private ReviewSessionRegistry registry;
     private MessageService messageService;
@@ -272,7 +272,7 @@ class ReviewerChannelBackendTest {
                 CORRELATION_ID, null, ActorType.HUMAN);
     }
 
-    private OutboundMessage outboundMessage(MessageType type, String content, UUID correlationId) {
+    private OutboundMessage outboundMessage(MessageType type, String content, String correlationId) {
         return new OutboundMessage(
                 UUID.randomUUID(), "user", type, content,
                 correlationId, null, ActorType.HUMAN);

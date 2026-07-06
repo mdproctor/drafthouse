@@ -695,6 +695,97 @@ public class DebateMcpTools {
         }
     }
 
+    @Tool(name = "load_workspace",
+          description = "Load a completed design-review workspace into DraftHouse as an interactive debate session. "
+                        + "The workspace directory must contain a responses/ folder with reviewer-N.md and implementor-N.md files.")
+    public String loadWorkspace(
+            @ToolArg(description = "Absolute path to the design-review workspace directory") String workspacePath) {
+
+        Path wsPath = Path.of(workspacePath);
+        if (!Files.isDirectory(wsPath)) {
+            return "error: workspace directory not found: " + workspacePath;
+        }
+        if (!Files.isDirectory(wsPath.resolve("responses"))) {
+            return "error: workspace has no responses/ directory: " + workspacePath;
+        }
+
+        String workspaceDirName = wsPath.getFileName().toString();
+        String channelName      = "drafthouse/debate/replay-" + workspaceDirName;
+
+        // Idempotency — check for existing channel with same name
+        var existingChannel = channelService.findByName(channelName);
+        if (existingChannel.isPresent()) {
+            var existingSession = registry.find(existingChannel.get().id());
+            if (existingSession.isPresent()) {
+                return "{\"debateSessionId\":\"" + existingSession.get().debateSessionId()
+                       + "\",\"channel\":\"" + existingSession.get().channelName()
+                       + "\",\"status\":\"already_loaded\"}";
+            }
+        }
+
+        Channel channel       = null;
+        DebateSession session = null;
+        try {
+            var parseResult = io.casehub.drafthouse.debate.WorkspaceParser.parse(wsPath);
+
+            channel = existingChannel.isPresent()
+                    ? existingChannel.get()
+                    : channelService.create(ChannelCreateRequest.builder(channelName)
+                                                                .description("DraftHouse replay session")
+                                                                .semantic(ChannelSemantic.APPEND).build());
+
+            String debateSessionId = channel.id().toString();
+            session = new DebateSession(channel.id(), debateSessionId, channel.name(), null);
+
+            if (parseResult.specPath() != null) {
+                session.addDocument(parseResult.specPath(), "spec");
+            }
+
+            registry.put(session);
+
+            // Register REV and IMP before channelGateway.initChannel — matches startDebate pattern
+            sender(session, AgentType.REV);
+            sender(session, AgentType.IMP);
+
+            channelGateway.initChannel(channel.id(), new ChannelRef(channel.id(), channel.name()));
+
+            var adapter = new io.casehub.drafthouse.debate.WorkspaceReplayAdapter(
+                    messageService, instanceService, channelGateway, eventBus);
+            var result = adapter.replay(session, parseResult);
+
+            eventBus.broadcast("session-created", new DebateEventResource.SessionInfo(
+                    session.debateSessionId(), session.channelName(),
+                    parseResult.specPath(), null));
+
+            return "{\"debateSessionId\":\"" + debateSessionId
+                   + "\",\"channel\":\"" + channel.name()
+                   + "\",\"entryCount\":" + result.entryCount()
+                   + ",\"issues\":" + parseResult.trackerStatuses().size()
+                   + ",\"rounds\":" + parseResult.rounds().size()
+                   + ",\"status\":\"loaded\"}";
+
+        } catch (Exception e) {
+            LOG.warning("load_workspace failed: " + e.getMessage());
+            if (channel != null) {
+                if (session != null) {
+                    session.participants().values().forEach(id -> {
+                        try {instanceService.deregister(id);} catch (Exception ce) {
+                            LOG.warning("cleanup: " + ce.getMessage());
+                        }
+                    });
+                    try {registry.remove(channel.id());} catch (Exception ce) {
+                        LOG.warning("cleanup: " + ce.getMessage());
+                    }
+                }
+                try {channelService.delete(channel.id(), true);} catch (Exception ce) {
+                    LOG.warning("cleanup: " + ce.getMessage());
+                }
+            }
+            return "error: " + e.getMessage();
+        }
+    }
+
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private void trackAndPush(DebateSession session, long contentChars) {

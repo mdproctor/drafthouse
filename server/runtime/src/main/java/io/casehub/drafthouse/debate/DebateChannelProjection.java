@@ -23,27 +23,31 @@ public class DebateChannelProjection extends ConversationProjection
 
     private static final ConversationRendererConfig DEBATE_CONFIG =
             ConversationRendererConfig.builder()
-                    .statusEmoji(Map.of(
-                            "OPEN", "🔴",       // red circle
-                            "ACTIVE", "🟡",     // yellow circle
-                            "AGREED", "✅",            // check mark
-                            "ESCALATED", "🔵",  // blue circle
-                            "DECLINED", "🚫",   // prohibited
-                            "DISPUTED", "⚡"))         // lightning
-                    .resolvedStatuses(Set.of("AGREED", "DECLINED"))
+                    .statusEmoji(Map.ofEntries(
+                            Map.entry("OPEN", "🔴"),       // red circle
+                            Map.entry("ACTIVE", "🟡"),     // yellow circle
+                            Map.entry("AGREED", "✅"),            // check mark
+                            Map.entry("ESCALATED", "🔵"),  // blue circle
+                            Map.entry("DECLINED", "🚫"),   // prohibited
+                            Map.entry("DISPUTED", "⚡"),         // lightning
+                            Map.entry("VERIFIED", "✅"),
+                            Map.entry("DEFERRED", "⏸")))
+                    .resolvedStatuses(Set.of("AGREED", "DECLINED", "VERIFIED", "DEFERRED"))
                     .escalatedStatuses(Set.of("ESCALATED"))
                     .priorityLabel(Map.of(
                             Priority.HIGH, "P1",
                             Priority.MEDIUM, "P2",
                             Priority.LOW, "P3"))
-                    .entryTypeLabel(Map.of(
-                            "RAISE", "raised",
-                            "AGREE", "agreed",
-                            "COUNTER", "countered",
-                            "DISPUTE", "disputed",
-                            "QUALIFY", "qualified",
-                            "FLAG_HUMAN", "flag",
-                            "DECLINED", "declined"))
+                    .entryTypeLabel(Map.ofEntries(
+                            Map.entry("RAISE", "raised"),
+                            Map.entry("AGREE", "agreed"),
+                            Map.entry("COUNTER", "countered"),
+                            Map.entry("DISPUTE", "disputed"),
+                            Map.entry("QUALIFY", "qualified"),
+                            Map.entry("FLAG_HUMAN", "flag"),
+                            Map.entry("DECLINED", "declined"),
+                            Map.entry("VERIFIED", "verified"),
+                            Map.entry("DEFERRED", "deferred")))
                     .roleLabel(Map.of("REV", "REV", "IMP", "IMP"))
                     .build();
 
@@ -80,6 +84,8 @@ public class DebateChannelProjection extends ConversationProjection
             case "COUNTER", "QUALIFY" -> "ACTIVE";
             case "DISPUTE" -> "DISPUTED";
             case "DECLINED" -> "DECLINED";
+            case "VERIFIED" -> "VERIFIED";
+            case "DEFERRED" -> "DEFERRED";
             default -> null;
         };
     }
