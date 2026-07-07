@@ -135,4 +135,54 @@ class DebateEventResourceTest {
         Matcher m = Pattern.compile("\"pointId\":\"([^\"]+)\"").matcher(raiseResult);
         return m.find() ? m.group(1) : "";
     }
+
+    @Test
+    void snapshotEndpoint_returns_content_for_valid_index() {
+        // Create a session and manually set snapshot content
+        String startResult = tools.startDebate("test-spec.md", null);
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        DebateSession session = registry.find(java.util.UUID.fromString(sessionId)).orElseThrow();
+        session.setSnapshotContent(java.util.Map.of(
+                0, "version 0 content",
+                1, "version 1 content",
+                2, "version 2 content"
+        ));
+
+        String body = RestAssured.given()
+                .accept(MediaType.TEXT_PLAIN)
+                .when()
+                .get("/api/debate/" + sessionId + "/snapshot/1")
+                .then()
+                .statusCode(200)
+                .extract().body().asString();
+
+        assertThat(body).isEqualTo("version 1 content");
+    }
+
+    @Test
+    void snapshotEndpoint_returns_404_for_invalid_index() {
+        String startResult = tools.startDebate("test-spec.md", null);
+        String sessionId = extractGroup(DEBATE_ID_PATTERN, startResult);
+        activeDebateSessionId = sessionId;
+
+        DebateSession session = registry.find(java.util.UUID.fromString(sessionId)).orElseThrow();
+        session.setSnapshotContent(java.util.Map.of(0, "version 0"));
+
+        RestAssured.given()
+                .when()
+                .get("/api/debate/" + sessionId + "/snapshot/99")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    void snapshotEndpoint_returns_404_for_invalid_session() {
+        RestAssured.given()
+                .when()
+                .get("/api/debate/00000000-0000-0000-0000-000000000000/snapshot/0")
+                .then()
+                .statusCode(404);
+    }
 }

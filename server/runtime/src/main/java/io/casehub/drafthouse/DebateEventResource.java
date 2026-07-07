@@ -168,6 +168,27 @@ public class DebateEventResource {
         return jakarta.ws.rs.core.Response.ok("{\"status\":\"ok\"}").build();
     }
 
+    @GET
+    @Path("/{debateSessionId}/snapshot/{index}")
+    @Produces(MediaType.TEXT_PLAIN)
+    public jakarta.ws.rs.core.Response snapshot(
+            @PathParam("debateSessionId") String debateSessionId,
+            @PathParam("index") int index) {
+        UUID channelId = parseSessionId(debateSessionId);
+        DebateSession session = registry.find(channelId)
+                .orElse(null);
+        if (session == null) {
+            return jakarta.ws.rs.core.Response.status(404)
+                    .entity("Session not found").build();
+        }
+        String content = session.snapshotContentAt(index);
+        if (content == null) {
+            return jakarta.ws.rs.core.Response.status(404)
+                    .entity("Snapshot not found").build();
+        }
+        return jakarta.ws.rs.core.Response.ok(content).build();
+    }
+
     private void pushSelectionEvent(UUID channelId, SelectionScope scope) {
         try {
             eventBus.pushMetadata(channelId, "selection-scope", java.util.Map.of(

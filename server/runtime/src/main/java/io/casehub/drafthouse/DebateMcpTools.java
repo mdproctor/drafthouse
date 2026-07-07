@@ -753,6 +753,11 @@ public class DebateMcpTools {
                     messageService, instanceService, channelGateway, eventBus);
             var result = adapter.replay(session, parseResult);
 
+            if (result.timeline() != null) {
+                session.setTimeline(result.timeline());
+                session.setSnapshotContent(result.snapshotContent());
+            }
+
             eventBus.broadcast("session-created", new DebateEventResource.SessionInfo(
                     session.debateSessionId(), session.channelName(),
                     parseResult.specPath(), null));

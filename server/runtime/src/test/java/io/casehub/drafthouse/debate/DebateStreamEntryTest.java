@@ -238,4 +238,35 @@ class DebateStreamEntryTest {
         assertThat(entry).isNotNull();
         assertThat(entry.round()).isEqualTo(0);
     }
+
+    // ── ROUND_SNAPSHOT with commitHash and documentPath ─────────────────────
+
+    @Test
+    void from_roundSnapshot_parsesWithNullRoleAndCommitFields() {
+        String content = META_SENTINEL + "entryType=ROUND_SNAPSHOT|round=2"
+                + "|commitHash=abc123|documentPath=docs/spec.md\n\nRound 2 snapshot";
+        Message msg = makeMessage(content, null, null, MessageType.STATUS);
+
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.entryType()).isEqualTo(EntryType.ROUND_SNAPSHOT);
+        assertThat(entry.agentRole()).isNull();
+        assertThat(entry.round()).isEqualTo(2);
+        assertThat(entry.commitHash()).isEqualTo("abc123");
+        assertThat(entry.documentPath()).isEqualTo("docs/spec.md");
+    }
+
+    @Test
+    void from_nonSnapshotEntry_hasNullCommitFields() {
+        String content = META_SENTINEL + "entryType=RAISE|role=REV|round=1\n\nSome issue";
+        Message msg = makeMessage(content, "R1-01", null, MessageType.QUERY);
+
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.entryType()).isEqualTo(EntryType.RAISE);
+        assertThat(entry.commitHash()).isNull();
+        assertThat(entry.documentPath()).isNull();
+    }
 }

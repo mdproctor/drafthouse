@@ -17,7 +17,8 @@ public final class WorkspaceParser {
             String mode,
             String contextNote,
             List<ParsedRound> rounds,
-            List<ParsedTrackerEntry> trackerStatuses) {}
+            List<ParsedTrackerEntry> trackerStatuses,
+            String projectRepoPath) {}
 
     public record ParsedRound(
             int roundNumber,
@@ -50,7 +51,8 @@ public final class WorkspaceParser {
             String issueId,
             String title,
             String status,
-            String evidence) {}
+            String evidence,
+            String commitHash) {}
 
     // ── Regex patterns (ported from parser.py) ───────────────────────────────
 
@@ -111,12 +113,20 @@ public final class WorkspaceParser {
         List<ParsedRound> rounds = parseRounds(workspaceDir);
         List<ParsedTrackerEntry> trackerStatuses = parseTracker(workspaceDir);
 
+        String projectRepoPath = null;
+        String sourceDirs = readFileOrNull(workspaceDir.resolve(".source-dirs"));
+        if (sourceDirs != null) {
+            String firstLine = sourceDirs.lines().findFirst().orElse(null);
+            if (firstLine != null) projectRepoPath = firstLine.trim();
+        }
+
         return new WorkspaceParseResult(
                 specPath != null ? specPath.trim() : null,
                 mode != null ? mode.trim() : null,
                 contextNote,
                 rounds,
-                trackerStatuses);
+                trackerStatuses,
+                projectRepoPath);
     }
 
     // ── Round parsing ────────────────────────────────────────────────────────
@@ -389,8 +399,14 @@ public final class WorkspaceParser {
                 evidence = raw.isEmpty() ? null : raw;
             }
 
+            String commitHash = null;
+            if (evidence != null) {
+                String cleaned = evidence.replaceFirst("^.*→\\s*", "").trim();
+                if (!cleaned.isEmpty()) commitHash = cleaned;
+            }
+
             entries.add(new ParsedTrackerEntry(
-                    headingData.get(i)[0], headingData.get(i)[1], status, evidence));
+                    headingData.get(i)[0], headingData.get(i)[1], status, evidence, commitHash));
         }
 
         return entries;

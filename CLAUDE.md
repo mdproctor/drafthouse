@@ -128,7 +128,8 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/runtime/src/main/webui/src/panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist (pages-event subscriber) |
 | `server/runtime/src/main/webui/src/panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (pages-event onMeta subscriber) |
 | `server/runtime/src/main/webui/src/panels/drafthouse-doc-picker.js` | `<drafthouse-doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
-| `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT), `AgentType` |
+| `server/runtime/src/main/webui/src/panels/drafthouse-timeline.js` | `<drafthouse-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
+| `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
 | `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (stub, pending platform#55) |
@@ -159,6 +160,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── DELETE /api/debate/{id}/selection  ← clear selection scope
   ├── GET /api/debate/{id}/documents  ← list working set documents + current comparison
   ├── POST /api/debate/{id}/comparison  ← browser-initiated comparison change
+  ├── GET /api/debate/{id}/snapshot/{index}  ← document content at timeline snapshot index
   └── GET /api/debate/sessions     ← active debate session list
 
 Browser UI (casehub-pages workbench + Web Component panels)
@@ -176,8 +178,11 @@ Browser UI (casehub-pages workbench + Web Component panels)
   │   └── pages-event              ← derives status per pointId from event stream
   ├── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
   │   └── pages-event (onMeta)     ← context-usage metadata events
-  └── <drafthouse-doc-picker>      ← document badge dropdown (Shadow DOM custom element, topbar)
-      └── pages-event              ← documents-changed, comparison-changed; POST /api/debate/{id}/comparison
+  ├── <drafthouse-doc-picker>      ← document badge dropdown (Shadow DOM custom element, topbar)
+  │   └── pages-event              ← documents-changed, comparison-changed; POST /api/debate/{id}/comparison
+  └── <drafthouse-timeline>        ← document version timeline (Shadow DOM Web Component)
+      ├── pages-event              ← filters ROUND_SNAPSHOT from debate-entries
+      └── timeline-comparison-changed → diff panel fetches snapshot content
 ```
 
 ## Architectural Direction

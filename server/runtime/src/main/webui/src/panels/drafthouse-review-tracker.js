@@ -404,12 +404,19 @@ class DraftHouseReviewTracker extends HTMLElement {
       // Check if QUALIFY was last status-changing entry
       const isQualifyActive = lastEntry.entryType === 'QUALIFY';
 
+      // Per-phase round numbers for timeline trail highlight
+      const fixEntry = entries.find(e => e.entryType === 'QUALIFY' || e.entryType === 'COUNTER');
+      const verifyEntry = entries.find(e => e.entryType === 'VERIFIED' || e.entryType === 'AGREE');
+
       points.push({
         pointId,
         status,
         summary,
         location: raiseEntry?.location || lastEntry.location,
         round: lastEntry.round,
+        raiseRound: raiseEntry?.round ?? null,
+        fixRound: fixEntry?.round ?? null,
+        verifyRound: verifyEntry?.round ?? null,
         trail,
         isQualifyActive,
       });
@@ -515,6 +522,9 @@ class DraftHouseReviewTracker extends HTMLElement {
         detail: {
           pointId: point.pointId,
           round: point.round,
+          raiseRound: point.raiseRound,
+          fixRound: point.fixRound,
+          verifyRound: point.verifyRound,
           location: point.location
         }
       }));

@@ -7,5 +7,6 @@ public enum EntryType {
     SUB_TASK_REQUEST,   // request for focused sub-agent analysis
     SUB_TASK_FINDING,   // sub-agent result (provenance: fresh context)
     SUB_TASK_ERROR,     // sub-agent execution failure
-    RESTART_CONTEXT     // session branch marker (infrastructure provenance)
+    RESTART_CONTEXT,    // session branch marker (infrastructure provenance)
+    ROUND_SNAPSHOT      // document snapshot at round end
 }

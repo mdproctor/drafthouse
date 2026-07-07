@@ -410,6 +410,21 @@ class DraftHouseDiff extends HTMLElement {
       });
     }
 
+    // Timeline snapshot comparison
+    document.addEventListener('timeline-comparison-changed', async (e) => {
+      const { sessionId, indexA, indexB, labelA, labelB } = e.detail;
+      try {
+        const [contentA, contentB] = await Promise.all([
+          fetch(this._apiUrl(`/api/debate/${sessionId}/snapshot/${indexA}`)).then(r => r.ok ? r.text() : null),
+          fetch(this._apiUrl(`/api/debate/${sessionId}/snapshot/${indexB}`)).then(r => r.ok ? r.text() : null),
+        ]);
+        if (contentA != null) this.loadContent('a', contentA, labelA);
+        if (contentB != null) this.loadContent('b', contentB, labelB);
+      } catch (err) {
+        console.error('Timeline snapshot fetch failed:', err);
+      }
+    });
+
     // Load pending files from configure()
     if (this._pendingPathA) this.loadFile('a', this._pendingPathA);
     if (this._pendingPathB) this.loadFile('b', this._pendingPathB);
@@ -676,6 +691,18 @@ class DraftHouseDiff extends HTMLElement {
     this._updateSwapButton();
   }
 
+  loadContent(panel, content, label) {
+    this._panels[panel].path = null;
+    this._panels[panel].label = label || 'Snapshot';
+    this._panels[panel].content = content;
+    this._syncPanelMeta(panel);
+    this._syncPanelContent(panel);
+    if (panel === 'a') this.#pathA = null;
+    if (panel === 'b') this.#pathB = null;
+    this._updateSwapButton();
+    this._updateDiffMap();
+  }
+
   // ── Private: API helpers ──────────────────────────────────────────
 
   _apiUrl(path) {
@@ -694,8 +721,8 @@ class DraftHouseDiff extends HTMLElement {
   _syncPanelMeta(panel) {
     const s = this._panels[panel];
     this._$(`label-${panel}`).value = s.label;
-    this._$(`path-${panel}`).textContent = s.path || 'No file selected';
-    this._$(`path-${panel}`).classList.toggle('loaded', !!s.path);
+    this._$(`path-${panel}`).textContent = s.path || s.label || 'No file selected';
+    this._$(`path-${panel}`).classList.toggle('loaded', !!(s.path || s.content));
   }
 
   _syncPanelContent(panel) {

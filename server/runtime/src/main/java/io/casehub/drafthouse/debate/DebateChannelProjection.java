@@ -1,13 +1,17 @@
 package io.casehub.drafthouse.debate;
 
 import io.casehub.blocks.channel.BoundedProjectionDecorator;
+import io.casehub.blocks.channel.ChannelMessageMeta;
 import io.casehub.blocks.conversation.*;
+import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ProjectionResult;
 import io.casehub.qhorus.api.spi.RenderableProjection;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * DraftHouse debate projection — extends {@link ConversationProjection} with
@@ -20,6 +24,8 @@ import java.util.Set;
 @ApplicationScoped
 public class DebateChannelProjection extends ConversationProjection
         implements RenderableProjection<ConversationState> {
+
+    private static final Logger LOG = Logger.getLogger(DebateChannelProjection.class.getName());
 
     private static final ConversationRendererConfig DEBATE_CONFIG =
             ConversationRendererConfig.builder()
@@ -88,6 +94,28 @@ public class DebateChannelProjection extends ConversationProjection
             case "DEFERRED" -> "DEFERRED";
             default -> null;
         };
+    }
+
+    /**
+     * Intercepts ROUND_SNAPSHOT entries before base class processing to prevent
+     * timeline markers from being treated as unknown domain entries (which would
+     * log warnings). Returns state unchanged for ROUND_SNAPSHOT.
+     * <p>
+     * Must never throw — see PP-20260610-a47ef5 (apply must not throw; no try-catch
+     * in ProjectionService.fold()). Wraps meta parsing in try-catch and falls through
+     * to super.apply() on any failure.
+     */
+    @Override
+    public ConversationState apply(ConversationState state, MessageView message) {
+        try {
+            Map<String, String> meta = ChannelMessageMeta.parseMeta(sentinel(), message.content());
+            if ("ROUND_SNAPSHOT".equals(meta.get(ConversationProtocol.ENTRY_TYPE))) {
+                return state;
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "ROUND_SNAPSHOT check failed — delegating to base", e);
+        }
+        return super.apply(state, message);
     }
 
     // ── RoundBoundedProjection ────────────────────────────────────────────────

@@ -230,4 +230,19 @@ class DebateChannelProjectionTest {
         assertThat(bounded.identity().points()).isEmpty();
         assertThat(bounded.identity().memos()).isEmpty();
     }
+
+    // ── ROUND_SNAPSHOT interception ──────────────────────────────────────────
+
+    @Test
+    void roundSnapshot_entry_returns_state_unchanged() {
+        ConversationState initial = proj.identity();
+
+        String metaHeader = "entryType=ROUND_SNAPSHOT|role=SYS|round=2|commitHash=abc123|documentPath=spec.md";
+        MessageView message = msg(MessageType.QUERY, null, metaHeader,
+                "Round 2 snapshot — 3 raised, 2 fixed");
+
+        ConversationState result = proj.apply(initial, message);
+
+        assertThat(result).isSameAs(initial);
+    }
 }

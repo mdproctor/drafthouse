@@ -18,7 +18,9 @@ public record DebateStreamEntry(
         String scope,
         String location,
         String sender,
-        Instant timestamp) {
+        Instant timestamp,
+        String commitHash,
+        String documentPath) {
 
     public static DebateStreamEntry from(Message msg) {
         Map<String, String> meta = DebateProtocol.parseMeta(msg.content());
@@ -42,7 +44,8 @@ public record DebateStreamEntry(
             } catch (IllegalArgumentException e) {
                 return null;
             }
-        } else if (entryType != EntryType.RESTART_CONTEXT) {
+        } else if (entryType != EntryType.RESTART_CONTEXT
+                && entryType != EntryType.ROUND_SNAPSHOT) {
             return null;
         }
 
@@ -60,13 +63,21 @@ public record DebateStreamEntry(
         String scope = meta.get("scope");
         String location = meta.get("location");
 
+        String commitHash = null;
+        String documentPath = null;
+        if (entryType == EntryType.ROUND_SNAPSHOT) {
+            commitHash = meta.get("commitHash");
+            documentPath = meta.get("documentPath");
+        }
+
         return new DebateStreamEntry(
                 entryType, agentRole, round, body,
                 pointId, subTaskId,
                 priority, scope,
                 location != null && !location.isBlank() ? location : null,
                 msg.sender(),
-                msg.createdAt() != null ? msg.createdAt() : Instant.now());
+                msg.createdAt() != null ? msg.createdAt() : Instant.now(),
+                commitHash, documentPath);
     }
 
     public static DebateStreamEntry from(io.casehub.qhorus.api.gateway.OutboundMessage msg) {
@@ -91,7 +102,8 @@ public record DebateStreamEntry(
             } catch (IllegalArgumentException e) {
                 return null;
             }
-        } else if (entryType != EntryType.RESTART_CONTEXT) {
+        } else if (entryType != EntryType.RESTART_CONTEXT
+                && entryType != EntryType.ROUND_SNAPSHOT) {
             return null;
         }
 
@@ -110,13 +122,21 @@ public record DebateStreamEntry(
         String scope = meta.get("scope");
         String location = meta.get("location");
 
+        String commitHash = null;
+        String documentPath = null;
+        if (entryType == EntryType.ROUND_SNAPSHOT) {
+            commitHash = meta.get("commitHash");
+            documentPath = meta.get("documentPath");
+        }
+
         return new DebateStreamEntry(
                 entryType, agentRole, round, body,
                 pointId, subTaskId,
                 priority, scope,
                 location != null && !location.isBlank() ? location : null,
                 msg.sender(),
-                Instant.now());
+                Instant.now(),
+                commitHash, documentPath);
     }
 
     private static Priority parsePriority(String s) {

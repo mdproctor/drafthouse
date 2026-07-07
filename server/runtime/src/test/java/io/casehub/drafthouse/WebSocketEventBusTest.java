@@ -112,7 +112,7 @@ class WebSocketEventBusTest {
         DebateStreamEntry entry = new DebateStreamEntry(
                 EntryType.RAISE, AgentType.REV, 1, "test content",
                 "p1", null, null, null, null, "rev-agent",
-                java.time.Instant.now());
+                java.time.Instant.now(), null, null);
         bus.pushDebateEntries(channelId, List.of(entry));
         verify(watcher).sendText(anyString());
         verify(other, never()).sendText(anyString());

@@ -13,6 +13,8 @@ import io.casehub.qhorus.runtime.gateway.ChannelGateway;
 import io.casehub.qhorus.runtime.instance.InstanceService;
 import io.casehub.qhorus.runtime.message.MessageService;
 
+import java.io.File;
+import java.time.Instant;
 import java.util.*;
 import java.util.logging.Logger;
 
@@ -21,7 +23,11 @@ public class WorkspaceReplayAdapter {
     private static final Logger LOG = Logger.getLogger(WorkspaceReplayAdapter.class.getName());
     private static final String HUMAN_INSTANCE_ID = "drafthouse-human";
 
-    public record ReplayResult(int entryCount, Map<String, String> statusDistribution) {}
+    public record ReplayResult(
+            int entryCount,
+            Map<String, String> statusDistribution,
+            DocumentTimeline timeline,
+            Map<Integer, String> snapshotContent) {}
 
     private final MessageService messageService;
     private final InstanceService instanceService;
@@ -196,6 +202,56 @@ public class WorkspaceReplayAdapter {
             }
         }
 
+        // 7. Build timeline and emit ROUND_SNAPSHOT entries
+        DocumentTimeline timeline = null;
+        Map<Integer, String> snapshotContent = new LinkedHashMap<>();
+        String specPath = parseResult.specPath();
+        String repoPath = parseResult.projectRepoPath();
+
+        if (specPath != null && repoPath != null) {
+            Map<Integer, String> roundCommits = buildRoundCommitMap(parseResult);
+            List<DocumentSnapshot> snapshots = new ArrayList<>();
+            int snapshotIndex = 0;
+
+            // Round 0 — original document
+            String initialCommit = findInitialCommit(repoPath, specPath);
+            if (initialCommit != null) {
+                String content = gitShow(repoPath, initialCommit, specPath);
+                if (content != null) {
+                    var source = new SnapshotSource.GitCommit(initialCommit, Instant.EPOCH, 0);
+                    snapshots.add(new DocumentSnapshot(specPath, "Round 0 (original)", source));
+                    snapshotContent.put(snapshotIndex, content);
+                    dispatchRoundSnapshot(channelId, revSender, 0, initialCommit, specPath,
+                            "Round 0 snapshot — original document");
+                    entryCount++;
+                    snapshotIndex++;
+                }
+            }
+
+            // Rounds with commits
+            for (var entry : roundCommits.entrySet()) {
+                int roundNum = entry.getKey();
+                String commitHash = entry.getValue();
+                String content = gitShow(repoPath, commitHash, specPath);
+                if (content != null) {
+                    long issueCount = countIssuesInRound(roundNum, parseResult);
+                    long fixCount = countFixesInRound(roundNum, parseResult);
+                    String label = String.format("Round %d (+%d raised, %d fixed)", roundNum, issueCount, fixCount);
+                    var source = new SnapshotSource.GitCommit(commitHash, Instant.now(), roundNum);
+                    snapshots.add(new DocumentSnapshot(specPath, label, source));
+                    snapshotContent.put(snapshotIndex, content);
+                    dispatchRoundSnapshot(channelId, revSender, roundNum, commitHash, specPath,
+                            String.format("Round %d snapshot — %d issues raised, %d fixed", roundNum, issueCount, fixCount));
+                    entryCount++;
+                    snapshotIndex++;
+                }
+            }
+
+            if (!snapshots.isEmpty()) {
+                timeline = new DocumentTimeline(specPath, snapshots);
+            }
+        }
+
         // Batch push to WebSocket
         var messages = messageService.pollAfter(channelId, 0L, Integer.MAX_VALUE);
         var entries = messages.stream()
@@ -210,7 +266,7 @@ public class WorkspaceReplayAdapter {
                     (a, b) -> String.valueOf(Integer.parseInt(a) + 1));
         }
 
-        return new ReplayResult(entryCount, statusDist);
+        return new ReplayResult(entryCount, statusDist, timeline, snapshotContent);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -302,5 +358,100 @@ public class WorkspaceReplayAdapter {
             }
         }
         return 1;
+    }
+
+    // ── Timeline / Snapshot helpers ─────────────────────────────────────────
+
+    private static Map<Integer, String> buildRoundCommitMap(
+            WorkspaceParser.WorkspaceParseResult parseResult) {
+        Map<Integer, String> roundToCommit = new LinkedHashMap<>();
+        for (var te : parseResult.trackerStatuses()) {
+            if (te.commitHash() == null) continue;
+            int fixRound = findEvidenceRound(te.issueId(), parseResult);
+            roundToCommit.putIfAbsent(fixRound, te.commitHash());
+        }
+        return roundToCommit;
+    }
+
+    private void dispatchRoundSnapshot(UUID channelId, String sender, int round,
+                                        String commitHash, String documentPath, String body) {
+        Map<String, String> meta = new LinkedHashMap<>();
+        meta.put(ConversationProtocol.ENTRY_TYPE, "ROUND_SNAPSHOT");
+        meta.put(ConversationProtocol.ROUND, String.valueOf(round));
+        meta.put("commitHash", commitHash);
+        meta.put("documentPath", documentPath);
+        String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, body);
+        messageService.dispatch(MessageDispatch.builder()
+                .channelId(channelId)
+                .sender(sender)
+                .type(MessageType.STATUS)
+                .content(encoded)
+                .actorType(ActorType.AGENT)
+                .build());
+    }
+
+    private static long countIssuesInRound(int round, WorkspaceParser.WorkspaceParseResult result) {
+        return result.rounds().stream()
+                .filter(r -> r.roundNumber() == round)
+                .mapToLong(r -> r.issues().size())
+                .sum();
+    }
+
+    private static long countFixesInRound(int round, WorkspaceParser.WorkspaceParseResult result) {
+        return result.rounds().stream()
+                .filter(r -> r.roundNumber() == round)
+                .mapToLong(r -> r.responses().stream().filter(resp -> "FIXED".equals(resp.status())).count())
+                .sum();
+    }
+
+    private static String gitShow(String repoPath, String commitHash, String filePath) {
+        try {
+            String relativePath = makeRelative(repoPath, filePath);
+            ProcessBuilder pb = new ProcessBuilder("git", "show", commitHash + ":" + relativePath);
+            pb.directory(new File(repoPath));
+            pb.redirectErrorStream(true);
+            Process p = pb.start();
+            String output = new String(p.getInputStream().readAllBytes());
+            boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                LOG.warning("git show timed out for " + commitHash + ":" + filePath);
+                return null;
+            }
+            return p.exitValue() == 0 ? output : null;
+        } catch (Exception e) {
+            LOG.warning("git show failed for " + commitHash + ":" + filePath + " — " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static String findInitialCommit(String repoPath, String filePath) {
+        try {
+            String relativePath = makeRelative(repoPath, filePath);
+            ProcessBuilder pb = new ProcessBuilder("git", "log", "--reverse", "--format=%H", "--", relativePath);
+            pb.directory(new File(repoPath));
+            Process p = pb.start();
+            String output = new String(p.getInputStream().readAllBytes()).trim();
+            boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                LOG.warning("git log --reverse timed out for " + filePath);
+                return null;
+            }
+            if (p.exitValue() != 0 || output.isEmpty()) return null;
+            return output.lines().findFirst().orElse(null);
+        } catch (Exception e) {
+            LOG.warning("git log --reverse failed for " + filePath + " — " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static String makeRelative(String repoPath, String filePath) {
+        if (filePath.startsWith(repoPath)) {
+            String rel = filePath.substring(repoPath.length());
+            if (rel.startsWith("/")) rel = rel.substring(1);
+            return rel;
+        }
+        return filePath;
     }
 }

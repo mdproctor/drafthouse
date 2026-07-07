@@ -2,6 +2,7 @@ package io.casehub.drafthouse;
 
 import io.casehub.blocks.channel.ContextTracker;
 import io.casehub.drafthouse.debate.AgentType;
+import io.casehub.drafthouse.debate.DocumentTimeline;
 
 import java.util.Collections;
 import java.util.List;
@@ -30,6 +31,8 @@ public class DebateSession {
     private final DocumentSet documentSet;
     private final ContextTracker contextTracker = new ContextTracker();
     private volatile SelectionScope currentSelection;
+    private volatile Map<Integer, String> snapshotContent = Map.of();
+    private volatile DocumentTimeline timeline;
 
     public DebateSession(final UUID channelId, final String debateSessionId,
                          final String channelName, final String agentId) {
@@ -126,6 +129,22 @@ public class DebateSession {
 
     public SelectionScope currentSelection() {
         return currentSelection;
+    }
+
+    public void setSnapshotContent(Map<Integer, String> content) {
+        this.snapshotContent = Map.copyOf(content);
+    }
+
+    public String snapshotContentAt(int index) {
+        return snapshotContent.get(index);
+    }
+
+    public void setTimeline(DocumentTimeline timeline) {
+        this.timeline = timeline;
+    }
+
+    public DocumentTimeline timeline() {
+        return timeline;
     }
 
     // ── Document operations ───────────────────────────────────────────────

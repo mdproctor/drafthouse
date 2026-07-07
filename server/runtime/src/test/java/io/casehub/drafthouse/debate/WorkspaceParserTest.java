@@ -156,4 +156,59 @@ class WorkspaceParserTest {
                 .toList();
         assertEquals(List.of("R1-01", "R1-02", "R1-03", "R2-01"), allIssueIds);
     }
+
+    @Test
+    void trackerEntry_extracts_commitHash_from_evidence() throws Exception {
+        java.nio.file.Path tempWorkspace = java.nio.file.Files.createTempDirectory("workspace-parser-test");
+        java.nio.file.Files.writeString(tempWorkspace.resolve("tracker.md"),
+                "# Tracker\n\n### R1-01: Some issue\n- **Status:** VERIFIED\n- **Spec commit:**  → abc123\n");
+
+        var result = WorkspaceParser.parse(tempWorkspace);
+        assertEquals(1, result.trackerStatuses().size());
+        assertEquals("abc123", result.trackerStatuses().get(0).commitHash());
+
+        // cleanup
+        java.nio.file.Files.deleteIfExists(tempWorkspace.resolve("tracker.md"));
+        java.nio.file.Files.deleteIfExists(tempWorkspace);
+    }
+
+    @Test
+    void trackerEntry_null_commitHash_when_no_evidence() throws Exception {
+        java.nio.file.Path tempWorkspace = java.nio.file.Files.createTempDirectory("workspace-parser-test");
+        java.nio.file.Files.writeString(tempWorkspace.resolve("tracker.md"),
+                "# Tracker\n\n### R1-01: Some issue\n- **Status:** OPEN\n");
+
+        var result = WorkspaceParser.parse(tempWorkspace);
+        assertEquals(1, result.trackerStatuses().size());
+        assertNull(result.trackerStatuses().get(0).commitHash());
+
+        // cleanup
+        java.nio.file.Files.deleteIfExists(tempWorkspace.resolve("tracker.md"));
+        java.nio.file.Files.deleteIfExists(tempWorkspace);
+    }
+
+    @Test
+    void parseResult_reads_projectRepoPath_from_sourceDirs() throws Exception {
+        java.nio.file.Path tempWorkspace = java.nio.file.Files.createTempDirectory("workspace-parser-test");
+        java.nio.file.Files.writeString(tempWorkspace.resolve(".source-dirs"),
+                "/Users/dev/project\n/Users/dev/workspace\n");
+
+        var result = WorkspaceParser.parse(tempWorkspace);
+        assertEquals("/Users/dev/project", result.projectRepoPath());
+
+        // cleanup
+        java.nio.file.Files.deleteIfExists(tempWorkspace.resolve(".source-dirs"));
+        java.nio.file.Files.deleteIfExists(tempWorkspace);
+    }
+
+    @Test
+    void parseResult_null_projectRepoPath_when_no_sourceDirs() throws Exception {
+        java.nio.file.Path tempWorkspace = java.nio.file.Files.createTempDirectory("workspace-parser-test");
+
+        var result = WorkspaceParser.parse(tempWorkspace);
+        assertNull(result.projectRepoPath());
+
+        // cleanup
+        java.nio.file.Files.deleteIfExists(tempWorkspace);
+    }
 }

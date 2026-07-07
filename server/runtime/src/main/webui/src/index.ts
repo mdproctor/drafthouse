@@ -9,6 +9,7 @@ import "./panels/drafthouse-debate.js";
 import "./panels/drafthouse-review-tracker.js";
 import "./panels/drafthouse-context-gauge.js";
 import "./panels/drafthouse-doc-picker.js";
+import "./panels/drafthouse-timeline.js";
 
 // ── Electron IPC Bridge ──────────────────────────────────────────────────
 
@@ -40,6 +41,7 @@ registerPanel("diff-viewer", "drafthouse-diff");
 registerPanel("debate-feed", "drafthouse-debate");
 registerPanel("review-tracker", "drafthouse-review-tracker");
 registerPanel("context-gauge", "drafthouse-context-gauge");
+registerPanel("document-timeline", "drafthouse-timeline");
 
 // Parse URL params
 const params = new URLSearchParams(window.location.search);
@@ -71,7 +73,10 @@ const workbench = rows(
 
   // Main content — split replaces columns+dockBar (see R1-04)
   split("horizontal", [
-    hostPanel("diff-viewer", { pathA, pathB }),
+    rows(
+      hostPanel("document-timeline", { sessionId: debateParam || "" }),
+      hostPanel("diff-viewer", { pathA, pathB }),
+    ),
     split("vertical", [
       withId("debate", hostPanel("debate-feed", {})),
       withId("review", hostPanel("review-tracker", {})),
@@ -119,6 +124,9 @@ function connectDebateSession(sessionId: string): void {
 
   if (debateEl) debateEl.configure({ debateSessionId: sessionId });
   if (reviewEl) reviewEl.configure({ debateSessionId: sessionId });
+
+  const timelineEl = document.querySelector("drafthouse-timeline") as any;
+  if (timelineEl) timelineEl.configure({ sessionId });
 
   const docPicker = document.querySelector('drafthouse-doc-picker') as any;
   if (docPicker) docPicker.setAttribute('session-id', sessionId);
