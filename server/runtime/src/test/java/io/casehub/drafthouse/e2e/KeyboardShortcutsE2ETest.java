@@ -80,14 +80,14 @@ class KeyboardShortcutsE2ETest {
 
         // Focus an input inside the diff panel (the file path input)
         // Access shadow DOM via evaluateHandle
-        page.evaluate("document.querySelector('drafthouse-diff').shadowRoot.querySelector('.panel-label').focus()");
+        page.evaluate("document.querySelector('document-diff').shadowRoot.querySelector('.panel-label').focus()");
 
         // Press ? — overlay should NOT appear
         page.keyboard().press("?");
         assertThat(page.locator("#shortcuts-overlay")).isHidden();
 
         // Blur the input
-        page.evaluate("document.querySelector('drafthouse-diff').shadowRoot.querySelector('.panel-label').blur()");
+        page.evaluate("document.querySelector('document-diff').shadowRoot.querySelector('.panel-label').blur()");
 
         // Now ? should work
         page.keyboard().press("?");

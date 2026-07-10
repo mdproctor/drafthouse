@@ -45,11 +45,11 @@ public final class DebateE2EFixtures {
     }
 
     public static void waitForDebateEntries(Page page, int count) {
-        page.locator("drafthouse-debate .entry").nth(count - 1).waitFor();
+        page.locator("channel-feed .entry").nth(count - 1).waitFor();
     }
 
     public static void waitForTrackerPoints(Page page, int count) {
-        page.locator("drafthouse-review-tracker .point-item").nth(count - 1).waitFor();
+        page.locator("review-tracker .point-item").nth(count - 1).waitFor();
     }
 
     public static void listenForPointSelected(Page page) {

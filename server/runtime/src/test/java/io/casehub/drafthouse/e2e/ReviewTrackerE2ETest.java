@@ -23,7 +23,7 @@ import static io.casehub.drafthouse.e2e.PlaywrightFixtures.loadFilePair;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * E2E tests for the {@code <drafthouse-review-tracker>} panel.
+ * E2E tests for the {@code <review-tracker>} panel.
  *
  * Covers status derivation from debate entry sequences, progress bar, filter
  * toggle, sort order, agent trail, location display, and point-selected events.
@@ -75,7 +75,7 @@ class ReviewTrackerE2ETest {
         // The bus has no SSE connection so no entries arrive, but configure()
         // triggers #initialize() → #render() which shows "No review points yet".
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("drafthouse-review-tracker .placeholder"))
+        assertThat(page.locator("review-tracker .placeholder"))
                 .containsText("No review points yet");
     }
 
@@ -83,7 +83,7 @@ class ReviewTrackerE2ETest {
     void emptyState_showsNoPoints() {
         sessionId = startDebateSession(tools);
         loadWithDebate(page, index, sessionId);
-        assertThat(page.locator("drafthouse-review-tracker .placeholder"))
+        assertThat(page.locator("review-tracker .placeholder"))
                 .containsText("No review points yet");
     }
 
@@ -96,8 +96,8 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-open")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-open .point-icon"))
+        assertThat(page.locator("review-tracker .point-item.status-open")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-open .point-icon"))
                 .containsText("○");
     }
 
@@ -109,13 +109,13 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-agreed")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-agreed .point-icon"))
+        assertThat(page.locator("review-tracker .point-item.status-agreed")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-agreed .point-icon"))
                 .containsText("✓");
 
         // Verify text-decoration: line-through via computed style inside shadow DOM
         String textDecoration = (String) page.evaluate("() => {"
-                + "const el = document.querySelector('drafthouse-review-tracker')"
+                + "const el = document.querySelector('review-tracker')"
                 + "  .shadowRoot.querySelector('.point-item.status-agreed .point-summary');"
                 + "return getComputedStyle(el).textDecorationLine || getComputedStyle(el).textDecoration;"
                 + "}");
@@ -131,10 +131,10 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-declined")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-declined")).hasCount(1);
 
         String textDecoration = (String) page.evaluate("() => {"
-                + "const el = document.querySelector('drafthouse-review-tracker')"
+                + "const el = document.querySelector('review-tracker')"
                 + "  .shadowRoot.querySelector('.point-item.status-declined .point-summary');"
                 + "return getComputedStyle(el).textDecorationLine || getComputedStyle(el).textDecoration;"
                 + "}");
@@ -150,8 +150,8 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-active")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-active .point-icon"))
+        assertThat(page.locator("review-tracker .point-item.status-active")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-active .point-icon"))
                 .containsText("⟳");
     }
 
@@ -163,8 +163,8 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-disputed")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-disputed .point-icon"))
+        assertThat(page.locator("review-tracker .point-item.status-disputed")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-disputed .point-icon"))
                 .containsText("✕");
     }
 
@@ -177,8 +177,8 @@ class ReviewTrackerE2ETest {
         waitForTrackerPoints(page, 1);
 
         // QUALIFY maps to ACTIVE status but also adds qualify-active class
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-active")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.qualify-active")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-active")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.qualify-active")).hasCount(1);
     }
 
     @Test
@@ -189,8 +189,8 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-pending_human")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-pending_human .point-icon"))
+        assertThat(page.locator("review-tracker .point-item.status-pending_human")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-pending_human .point-icon"))
                 .containsText("⚑");
     }
 
@@ -208,11 +208,11 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 3);
 
-        assertThat(page.locator("drafthouse-review-tracker .progress-label"))
+        assertThat(page.locator("review-tracker .progress-label"))
                 .containsText("1 of 3 resolved");
 
         Double fillWidth = (Double) page.evaluate("() => {"
-                + "const el = document.querySelector('drafthouse-review-tracker')"
+                + "const el = document.querySelector('review-tracker')"
                 + "  .shadowRoot.querySelector('.progress-fill');"
                 + "return parseFloat(el.style.width);"
                 + "}");
@@ -235,11 +235,11 @@ class ReviewTrackerE2ETest {
         waitForTrackerPoints(page, 3);
 
         // Toggle filter: check the checkbox
-        page.locator("drafthouse-review-tracker .filter-toggle input[type='checkbox']").check();
+        page.locator("review-tracker .filter-toggle input[type='checkbox']").check();
 
         // After filter, only the unresolved point should remain
-        assertThat(page.locator("drafthouse-review-tracker .point-item")).hasCount(1);
-        assertThat(page.locator("drafthouse-review-tracker .point-item.status-open")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item")).hasCount(1);
+        assertThat(page.locator("review-tracker .point-item.status-open")).hasCount(1);
     }
 
     @Test
@@ -254,9 +254,9 @@ class ReviewTrackerE2ETest {
         waitForTrackerPoints(page, 2);
 
         // Toggle filter
-        page.locator("drafthouse-review-tracker .filter-toggle input[type='checkbox']").check();
+        page.locator("review-tracker .filter-toggle input[type='checkbox']").check();
 
-        assertThat(page.locator("drafthouse-review-tracker .placeholder"))
+        assertThat(page.locator("review-tracker .placeholder"))
                 .containsText("All points resolved");
     }
 
@@ -274,9 +274,9 @@ class ReviewTrackerE2ETest {
         waitForTrackerPoints(page, 2);
 
         // First item should be OPEN, second should be AGREED
-        assertThat(page.locator("drafthouse-review-tracker .point-item").nth(0))
+        assertThat(page.locator("review-tracker .point-item").nth(0))
                 .hasClass(java.util.regex.Pattern.compile(".*status-open.*"));
-        assertThat(page.locator("drafthouse-review-tracker .point-item").nth(1))
+        assertThat(page.locator("review-tracker .point-item").nth(1))
                 .hasClass(java.util.regex.Pattern.compile(".*status-agreed.*"));
     }
 
@@ -290,9 +290,9 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-trail"))
+        assertThat(page.locator("review-tracker .point-trail"))
                 .containsText("REV raised");
-        assertThat(page.locator("drafthouse-review-tracker .point-trail"))
+        assertThat(page.locator("review-tracker .point-trail"))
                 .containsText("IMP countered");
     }
 
@@ -305,7 +305,7 @@ class ReviewTrackerE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        assertThat(page.locator("drafthouse-review-tracker .point-location"))
+        assertThat(page.locator("review-tracker .point-location"))
                 .containsText("§3.2");
     }
 
@@ -319,7 +319,7 @@ class ReviewTrackerE2ETest {
         waitForTrackerPoints(page, 1);
 
         listenForPointSelected(page);
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
 
         Object detail = getPointSelectedDetail(page);
         assertNotNull(detail, "point-selected event should have fired");

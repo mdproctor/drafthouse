@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * E2E tests for the {@code <drafthouse-debate>} panel.
+ * E2E tests for the {@code <channel-feed>} panel.
  *
  * Covers placeholder states, round dividers, entry type rendering (raise, agree,
  * counter, dispute, qualify, declined, flag_human, memo), and badge display.
@@ -88,14 +88,14 @@ class DebatePanelE2ETest {
         // When loaded without ?debate= param, shell calls configure({}) with no sessionId.
         // The bus has no connection, so the panel renders "No entries yet" (not "Waiting...").
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        assertThat(page.locator("drafthouse-debate .placeholder")).containsText("No entries yet");
+        assertThat(page.locator("channel-feed .placeholder")).containsText("No entries yet");
     }
 
     @Test
     void emptyState_whenDebateStartedButNoEntries() {
         sessionId = startDebateSession(tools);
         loadWithDebate(page, index, sessionId);
-        assertThat(page.locator("drafthouse-debate .placeholder")).containsText("No entries yet");
+        assertThat(page.locator("channel-feed .placeholder")).containsText("No entries yet");
     }
 
     // ── round dividers ───────────────────────────────────────────────────────
@@ -106,7 +106,7 @@ class DebatePanelE2ETest {
         dispatchRaise(tools, messageService, sessionId, "REV", 1, "Test point.", "MEDIUM", "ISOLATED", null);
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
-        assertThat(page.locator("drafthouse-debate .round-divider")).containsText("Round 1");
+        assertThat(page.locator("channel-feed .round-divider")).containsText("Round 1");
     }
 
     // ── raise entry with full structure ──────────────────────────────────────
@@ -118,11 +118,11 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
-        assertThat(page.locator("drafthouse-debate .entry-raise")).hasCount(1);
-        assertThat(page.locator("drafthouse-debate .badge-priority-high")).hasCount(1);
-        assertThat(page.locator("drafthouse-debate .badge-scope")).containsText("ISOLATED");
-        assertThat(page.locator("drafthouse-debate .badge-location")).containsText("§3.2");
-        assertThat(page.locator("drafthouse-debate .entry-agent")).containsText("Reviewer");
+        assertThat(page.locator("channel-feed .entry-raise")).hasCount(1);
+        assertThat(page.locator("channel-feed .badge-priority-high")).hasCount(1);
+        assertThat(page.locator("channel-feed .badge-scope")).containsText("ISOLATED");
+        assertThat(page.locator("channel-feed .badge-location")).containsText("§3.2");
+        assertThat(page.locator("channel-feed .entry-agent")).containsText("Reviewer");
     }
 
     // ── response entry types ─────────────────────────────────────────────────
@@ -135,7 +135,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-agree").count());
+        assertEquals(1, page.locator("channel-feed .entry-agree").count());
     }
 
     @Test
@@ -146,7 +146,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-counter").count());
+        assertEquals(1, page.locator("channel-feed .entry-counter").count());
     }
 
     @Test
@@ -157,7 +157,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-dispute").count());
+        assertEquals(1, page.locator("channel-feed .entry-dispute").count());
     }
 
     @Test
@@ -168,7 +168,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-qualify").count());
+        assertEquals(1, page.locator("channel-feed .entry-qualify").count());
     }
 
     @Test
@@ -179,7 +179,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-declined").count());
+        assertEquals(1, page.locator("channel-feed .entry-declined").count());
     }
 
     // ── flag_human entry ─────────────────────────────────────────────────────
@@ -192,11 +192,11 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-flag_human").count());
+        assertEquals(1, page.locator("channel-feed .entry-flag_human").count());
 
         // Assert ::before pseudo-element content
         Object beforeContent = page.evaluate("() => {"
-                + "const el = document.querySelector('drafthouse-debate')"
+                + "const el = document.querySelector('channel-feed')"
                 + "  .shadowRoot.querySelector('.entry-flag_human');"
                 + "return getComputedStyle(el, '::before').content;"
                 + "}");
@@ -213,7 +213,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 1);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-memo").count());
+        assertEquals(1, page.locator("channel-feed .entry-memo").count());
     }
 
     // ── restart context ───────────────────────────────────────────────────────
@@ -260,8 +260,8 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, newSessionId);
         waitForDebateEntries(page, 1);
 
-        assertThat(page.locator("drafthouse-debate .entry-restart_context")).hasCount(1);
-        assertThat(page.locator("drafthouse-debate .entry-restart_context")).containsText("session branched");
+        assertThat(page.locator("channel-feed .entry-restart_context")).hasCount(1);
+        assertThat(page.locator("channel-feed .entry-restart_context")).containsText("session branched");
     }
 
     // ── multiple rounds ─────────────────────────────────────────────────────
@@ -274,9 +274,9 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertThat(page.locator("drafthouse-debate .round-divider")).hasCount(2);
-        assertThat(page.locator("drafthouse-debate .round-divider").nth(0)).containsText("Round 1");
-        assertThat(page.locator("drafthouse-debate .round-divider").nth(1)).containsText("Round 2");
+        assertThat(page.locator("channel-feed .round-divider")).hasCount(2);
+        assertThat(page.locator("channel-feed .round-divider").nth(0)).containsText("Round 1");
+        assertThat(page.locator("channel-feed .round-divider").nth(1)).containsText("Round 2");
     }
 
     // ── auto-scroll ─────────────────────────────────────────────────────────
@@ -293,7 +293,7 @@ class DebatePanelE2ETest {
 
         // Read scroll state from inside shadow DOM
         Boolean isNearBottom = (Boolean) page.evaluate("() => {"
-                + "const el = document.querySelector('drafthouse-debate')"
+                + "const el = document.querySelector('channel-feed')"
                 + "  .shadowRoot.querySelector('.debate-container');"
                 + "return el.scrollTop + el.clientHeight >= el.scrollHeight - 50;"
                 + "}");
@@ -310,7 +310,7 @@ class DebatePanelE2ETest {
         waitForDebateEntries(page, 1);
 
         listenForPointSelected(page);
-        page.locator("drafthouse-debate .entry-raise").click();
+        page.locator("channel-feed .entry-raise").click();
 
         Object detail = getPointSelectedDetail(page);
         assertNotNull(detail, "point-selected event should have fired");
@@ -336,7 +336,7 @@ class DebatePanelE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForDebateEntries(page, 2);
 
-        assertEquals(1, page.locator("drafthouse-debate .entry-sub_task_request").count());
+        assertEquals(1, page.locator("channel-feed .entry-sub_task_request").count());
     }
 
     @Test
@@ -357,9 +357,9 @@ class DebatePanelE2ETest {
         // executes — so the async chain never fires and no SUB_TASK_FINDING appears.
         // TODO: Re-enable full assertion once casehub-ledger TENANCY_ID migration is applied.
         try {
-            page.locator("drafthouse-debate .entry-sub_task_finding")
+            page.locator("channel-feed .entry-sub_task_finding")
                     .waitFor(new com.microsoft.playwright.Locator.WaitForOptions().setTimeout(5000));
-            assertEquals(1, page.locator("drafthouse-debate .entry-sub_task_finding").count());
+            assertEquals(1, page.locator("channel-feed .entry-sub_task_finding").count());
         } catch (com.microsoft.playwright.TimeoutError e) {
             org.junit.jupiter.api.Assumptions.assumeTrue(false,
                     "Ledger TENANCY_ID drift prevents async fan-out — skipping");
@@ -380,10 +380,10 @@ class DebatePanelE2ETest {
         // The error message depends on the same async chain as SUB_TASK_FINDING — see above.
         // TODO: Re-enable full assertion once casehub-ledger TENANCY_ID migration is applied.
         try {
-            page.locator("drafthouse-debate .entry-sub_task_error")
+            page.locator("channel-feed .entry-sub_task_error")
                     .waitFor(new com.microsoft.playwright.Locator.WaitForOptions().setTimeout(5000));
-            assertEquals(1, page.locator("drafthouse-debate .entry-sub_task_error").count());
-            assertThat(page.locator("drafthouse-debate .entry-sub_task_error")).containsText("No handler matched");
+            assertEquals(1, page.locator("channel-feed .entry-sub_task_error").count());
+            assertThat(page.locator("channel-feed .entry-sub_task_error")).containsText("No handler matched");
         } catch (com.microsoft.playwright.TimeoutError e) {
             org.junit.jupiter.api.Assumptions.assumeTrue(false,
                     "Ledger TENANCY_ID drift prevents async fan-out — skipping");

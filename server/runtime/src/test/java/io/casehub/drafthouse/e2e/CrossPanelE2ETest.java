@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * E2E tests for cross-panel coordination: {@code point-selected} custom events
  * fired by debate/tracker panels route through the workspace shell to
- * {@code <drafthouse-diff>.scrollToLocation()}.
+ * {@code <document-diff>.scrollToLocation()}.
  *
  * <p>Tests verify that clicking a debate entry or review tracker point with a
  * section reference scrolls the diff panel to the corresponding heading, and
@@ -88,7 +88,7 @@ class CrossPanelE2ETest {
         assertEquals(0.0, scrollTopB(), "Panel B should start at top");
 
         // Click the debate entry — shell routes point-selected → scrollToLocation
-        page.locator("drafthouse-debate .entry-raise").click();
+        page.locator("channel-feed .entry-raise").click();
         page.waitForTimeout(500);
 
         assertTrue(scrollTopA() > 0, "Panel A should have scrolled after clicking debate entry with §3");
@@ -108,7 +108,7 @@ class CrossPanelE2ETest {
         assertEquals(0.0, scrollTopB(), "Panel B should start at top");
 
         // Click the review tracker point instead of the debate entry
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
 
         assertTrue(scrollTopA() > 0, "Panel A should have scrolled after clicking tracker point with §3");
@@ -128,7 +128,7 @@ class CrossPanelE2ETest {
         double beforeA = scrollTopA();
         double beforeB = scrollTopB();
 
-        page.locator("drafthouse-debate .entry-raise").click();
+        page.locator("channel-feed .entry-raise").click();
         page.waitForTimeout(500);
 
         assertEquals(beforeA, scrollTopA(), "Panel A scrollTop should be unchanged when no location");
@@ -148,7 +148,7 @@ class CrossPanelE2ETest {
         assertEquals(0.0, scrollTopA(), "Panel A should start at top");
         assertEquals(0.0, scrollTopB(), "Panel B should start at top");
 
-        page.locator("drafthouse-debate .entry-raise").click();
+        page.locator("channel-feed .entry-raise").click();
         page.waitForTimeout(500);
 
         assertTrue(scrollTopA() > 0, "Panel A should have scrolled to 'Scroll Sync' heading");
@@ -166,7 +166,7 @@ class CrossPanelE2ETest {
         // This exercises the shell listener → REST POST → DebateSession pipeline
         // without depending on the Shadow DOM Selection API (which varies by browser).
         page.evaluate("() => {"
-                + "const diff = document.querySelector('drafthouse-diff');"
+                + "const diff = document.querySelector('document-diff');"
                 + "diff.dispatchEvent(new CustomEvent('selection-changed', {"
                 + "  bubbles: true,"
                 + "  detail: { side: 'A', startLine: 0, endLine: 0, selectedText: 'test selection' }"
@@ -187,12 +187,12 @@ class CrossPanelE2ETest {
     // ── shadow DOM scroll helpers ──────────────────────────────────────
 
     private double scrollTopA() {
-        Object val = page.evaluate("() => document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-a').scrollTop");
+        Object val = page.evaluate("() => document.querySelector('document-diff').shadowRoot.getElementById('body-a').scrollTop");
         return ((Number) val).doubleValue();
     }
 
     private double scrollTopB() {
-        Object val = page.evaluate("() => document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-b').scrollTop");
+        Object val = page.evaluate("() => document.querySelector('document-diff').shadowRoot.getElementById('body-b').scrollTop");
         return ((Number) val).doubleValue();
     }
 

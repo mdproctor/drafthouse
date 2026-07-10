@@ -49,7 +49,7 @@ class SwapPanelsE2ETest {
     @Test
     void swapRerunsAndProducesDiffChunks() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()");
+        page.evaluate("() => document.querySelector('document-diff').swapPanels()");
         waitForRender(page);
         int count = page.locator("[data-diff-chunk]").count();
         assertTrue(count > 0, "diff chunks should be present after swap");
@@ -58,7 +58,7 @@ class SwapPanelsE2ETest {
     @Test
     void afterSwapAsideShowsOriginalBContent() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()");
+        page.evaluate("() => document.querySelector('document-diff').swapPanels()");
         waitForRender(page);
         String textA = page.locator("#render-a").innerText();
         assertTrue(textA.contains("New Section"),
@@ -68,9 +68,9 @@ class SwapPanelsE2ETest {
     @Test
     void swapTogglesBackToOriginal() {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
-        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()");
+        page.evaluate("() => document.querySelector('document-diff').swapPanels()");
         waitForRender(page);
-        page.evaluate("() => document.querySelector('drafthouse-diff').swapPanels()");
+        page.evaluate("() => document.querySelector('document-diff').swapPanels()");
         waitForRender(page);
         String restoredTextA = page.locator("#render-a").innerText();
         assertTrue(restoredTextA.contains("Summary"),

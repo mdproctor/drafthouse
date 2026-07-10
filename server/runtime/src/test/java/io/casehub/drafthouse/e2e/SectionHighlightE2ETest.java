@@ -80,7 +80,7 @@ class SectionHighlightE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
 
         int barCount = countHighlightBars();
@@ -144,7 +144,7 @@ class SectionHighlightE2ETest {
         loadWithSampleDocs(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
 
         int barCount = countHighlightBars();
@@ -167,7 +167,7 @@ class SectionHighlightE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        var point = page.locator("drafthouse-review-tracker .point-item").first();
+        var point = page.locator("review-tracker .point-item").first();
 
         point.click();
         page.waitForTimeout(500);
@@ -189,7 +189,7 @@ class SectionHighlightE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        var point = page.locator("drafthouse-review-tracker .point-item").first();
+        var point = page.locator("review-tracker .point-item").first();
 
         // Click once — selected
         point.click();
@@ -216,7 +216,7 @@ class SectionHighlightE2ETest {
         loadWithDebate(page, index, sessionId);
         waitForTrackerPoints(page, 2);
 
-        var points = page.locator("drafthouse-review-tracker .point-item");
+        var points = page.locator("review-tracker .point-item");
 
         // Select first point
         points.first().click();
@@ -244,7 +244,7 @@ class SectionHighlightE2ETest {
         loadWithSampleDocs(page, index, sessionId);
         waitForTrackerPoints(page, locations.length);
 
-        var points = page.locator("drafthouse-review-tracker .point-item");
+        var points = page.locator("review-tracker .point-item");
 
         for (int i = 0; i < locations.length; i++) {
             points.nth(i).click();
@@ -278,7 +278,7 @@ class SectionHighlightE2ETest {
         loadWithSampleDocs(page, index, sessionId);
         waitForTrackerPoints(page, locations.length);
 
-        var points = page.locator("drafthouse-review-tracker .point-item");
+        var points = page.locator("review-tracker .point-item");
 
         // Click forward: 0, 1, 2, 3, 4
         for (int i = 0; i < locations.length; i++) {
@@ -319,7 +319,7 @@ class SectionHighlightE2ETest {
         waitForTrackerPoints(page, 1);
 
         // Select the point
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
         assertThat(isPointSelected()).as("Point selected before re-render").isTrue();
         assertThat(countHighlightBars()).as("Bars appear before re-render").isGreaterThan(0);
@@ -336,13 +336,13 @@ class SectionHighlightE2ETest {
                 .as("Highlight bars survive re-render").isGreaterThan(0);
 
         // Clicking the first point again should DESELECT (toggle off)
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
         assertThat(isPointSelected())
                 .as("First point deselects on second click after re-render").isFalse();
 
         // Clicking it a third time should SELECT again
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
         assertThat(isPointSelected())
                 .as("First point re-selects on third click").isTrue();
@@ -361,7 +361,7 @@ class SectionHighlightE2ETest {
         loadWithSampleDocs(page, index, sessionId);
         waitForTrackerPoints(page, 1);
 
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
 
         // Should have at least one bar (A side only)
@@ -380,37 +380,37 @@ class SectionHighlightE2ETest {
 
     private int countHighlightBars() {
         Object val = page.evaluate(
-                "() => document.querySelector('drafthouse-diff').shadowRoot.querySelectorAll('.section-highlight-bar').length");
+                "() => document.querySelector('document-diff').shadowRoot.querySelectorAll('.section-highlight-bar').length");
         return ((Number) val).intValue();
     }
 
     private boolean isPointSelected() {
         Object val = page.evaluate(
-                "() => document.querySelector('drafthouse-review-tracker').shadowRoot.querySelectorAll('.point-item.selected').length > 0");
+                "() => document.querySelector('review-tracker').shadowRoot.querySelectorAll('.point-item.selected').length > 0");
         return (Boolean) val;
     }
 
     private int countSelectedPoints() {
         Object val = page.evaluate(
-                "() => document.querySelector('drafthouse-review-tracker').shadowRoot.querySelectorAll('.point-item.selected').length");
+                "() => document.querySelector('review-tracker').shadowRoot.querySelectorAll('.point-item.selected').length");
         return ((Number) val).intValue();
     }
 
     private boolean isPointNthSelected(int n) {
         Object val = page.evaluate(
-                "n => { const items = document.querySelector('drafthouse-review-tracker').shadowRoot.querySelectorAll('.point-item');"
+                "n => { const items = document.querySelector('review-tracker').shadowRoot.querySelectorAll('.point-item');"
                         + "return items[n] && items[n].classList.contains('selected'); }", n);
         return (Boolean) val;
     }
 
     private double scrollTopA() {
-        Object val = page.evaluate("() => document.querySelector('drafthouse-diff').shadowRoot.getElementById('body-a').scrollTop");
+        Object val = page.evaluate("() => document.querySelector('document-diff').shadowRoot.getElementById('body-a').scrollTop");
         return ((Number) val).doubleValue();
     }
 
     private boolean hasScrollFlash() {
         Object val = page.evaluate(
-                "() => document.querySelector('drafthouse-diff').shadowRoot.querySelectorAll('.scroll-target').length > 0");
+                "() => document.querySelector('document-diff').shadowRoot.querySelectorAll('.scroll-target').length > 0");
         return (Boolean) val;
     }
 }

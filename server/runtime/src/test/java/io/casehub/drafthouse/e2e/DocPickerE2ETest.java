@@ -70,7 +70,7 @@ class DocPickerE2ETest {
         PlaywrightFixtures.waitForRender(page);
 
         // Verify badge is visible with count 4 (spec + 3 added documents)
-        Locator picker = page.locator("drafthouse-doc-picker");
+        Locator picker = page.locator("doc-picker");
         Locator badge = picker.locator(".badge");
         assertThat(badge).containsText("4");
 

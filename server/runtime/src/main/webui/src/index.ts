@@ -4,12 +4,12 @@ import {
 } from "@casehubio/pages-ui";
 
 // Import panels — side-effect imports register custom elements
-import "./panels/drafthouse-diff.js";
-import "./panels/drafthouse-debate.js";
-import "./panels/drafthouse-review-tracker.js";
-import "./panels/drafthouse-context-gauge.js";
-import "./panels/drafthouse-doc-picker.js";
-import "./panels/drafthouse-timeline.js";
+import "./panels/document-diff.js";
+import "./panels/channel-feed.js";
+import "./panels/review-tracker.js";
+import "./panels/context-gauge.js";
+import "./panels/doc-picker.js";
+import "./panels/document-timeline.js";
 
 // ── Electron IPC Bridge ──────────────────────────────────────────────────
 
@@ -24,11 +24,11 @@ declare global {
 
 if (window.compare) {
   window.compare.onInitConfig((cfg: any) => {
-    const diffEl = document.querySelector("drafthouse-diff") as any;
+    const diffEl = document.querySelector("document-diff") as any;
     if (diffEl) diffEl.configure({ apiPort: cfg.port });
   });
   window.compare.onInitFiles((a: string, b: string) => {
-    const diffEl = document.querySelector("drafthouse-diff") as any;
+    const diffEl = document.querySelector("document-diff") as any;
     if (diffEl) {
       diffEl.loadFile("a", a);
       diffEl.loadFile("b", b);
@@ -37,11 +37,11 @@ if (window.compare) {
 }
 
 // Register panel types with pages
-registerPanel("diff-viewer", "drafthouse-diff");
-registerPanel("debate-feed", "drafthouse-debate");
-registerPanel("review-tracker", "drafthouse-review-tracker");
-registerPanel("context-gauge", "drafthouse-context-gauge");
-registerPanel("document-timeline", "drafthouse-timeline");
+registerPanel("diff-viewer", "document-diff");
+registerPanel("debate-feed", "channel-feed");
+registerPanel("review-tracker", "review-tracker");
+registerPanel("context-gauge", "context-gauge");
+registerPanel("document-timeline", "document-timeline");
 
 // Parse URL params
 const params = new URLSearchParams(window.location.search);
@@ -65,7 +65,7 @@ const workbench = rows(
       <span style="display:inline-block;width:10px;height:10px;background:var(--diff-del);border:1px solid var(--diff-del-text);border-radius:2px;" class="legend-del"></span> A
       <span style="display:inline-block;width:10px;height:10px;background:var(--diff-ins);border:1px solid var(--diff-ins-text);border-radius:2px;" class="legend-ins"></span> B
     </span>
-    <drafthouse-doc-picker></drafthouse-doc-picker>
+    <doc-picker></doc-picker>
     <span style="flex:1" id="topbar-spacer"></span>
     <button id="btn-debate" class="active" title="Toggle debate panel">💬 Debate</button>
     <button id="btn-review" class="active" title="Toggle review panel">📋 Review</button>
@@ -85,7 +85,7 @@ const workbench = rows(
 
   // Status bar — passive status info separated from action controls (workbench convention)
   html(`<div class="statusbar" style="padding:2px 12px; font-size:11px; background:var(--statusbar-bg); color:var(--statusbar-fg);">
-    <drafthouse-context-gauge></drafthouse-context-gauge>
+    <context-gauge></context-gauge>
   </div>`),
 );
 
@@ -102,8 +102,9 @@ const wsSource = createWebSocketSource(`${wsProto}//${location.host}/api/ws`, {
 
 // Dummy subscription to establish the connection — listener is a no-op.
 // Server silently ignores unrecognized dataset patterns.
-const noOp = () => {};
-wsSource.subscribe("_events" as any, { uuid: "_events" as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
+const noOpListener = () => {};
+const noOpError = () => {};
+wsSource.subscribe("_events" as any, { uuid: "_events" as any } as any, noOpListener, noOpError);
 
 let currentSessionId: string | null = null;
 let watchedFiles: string[] = [];
@@ -116,19 +117,19 @@ function connectDebateSession(sessionId: string): void {
   }
   currentSessionId = sessionId;
   wsSource.subscribe(("debate:" + sessionId) as any,
-    { uuid: ("debate:" + sessionId) as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
+    { uuid: ("debate:" + sessionId) as any } as any, noOpListener, noOpError);
 
-  const debateEl = document.querySelector("drafthouse-debate") as any;
-  const reviewEl = document.querySelector("drafthouse-review-tracker") as any;
-  const diffEl = document.querySelector("drafthouse-diff") as any;
+  const debateEl = document.querySelector("channel-feed") as any;
+  const reviewEl = document.querySelector("review-tracker") as any;
+  const diffEl = document.querySelector("document-diff") as any;
 
   if (debateEl) debateEl.configure({ debateSessionId: sessionId });
   if (reviewEl) reviewEl.configure({ debateSessionId: sessionId });
 
-  const timelineEl = document.querySelector("drafthouse-timeline") as any;
+  const timelineEl = document.querySelector("document-timeline") as any;
   if (timelineEl) timelineEl.configure({ sessionId });
 
-  const docPicker = document.querySelector('drafthouse-doc-picker') as any;
+  const docPicker = document.querySelector('doc-picker') as any;
   if (docPicker) docPicker.setAttribute('session-id', sessionId);
 
   // Fetch initial documents — comparison comes via catch-up events
@@ -149,7 +150,7 @@ function watchFiles(...paths: (string | null)[]): void {
     if (!watchedFiles.includes(p!)) {
       watchedFiles.push(p!);
       wsSource.subscribe(("file:" + p) as any,
-        { uuid: ("file:" + p) as any }, { snapshot: noOp, append: noOp, replace: noOp, remove: noOp }, noOp);
+        { uuid: ("file:" + p) as any }, noOpListener, noOpError);
     }
   });
 }
@@ -172,7 +173,7 @@ document.addEventListener("pages-event", ((e: CustomEvent) => {
     connectDebateSession(payload.debateSessionId);
   }
   if (topic === "comparison-changed") {
-    const diff = document.querySelector("drafthouse-diff") as any;
+    const diff = document.querySelector("document-diff") as any;
     if (diff) {
       // Unwatch old files
       watchedFiles.forEach(f => wsSource.unsubscribe(("file:" + f) as any));
@@ -191,7 +192,7 @@ if (debateParam) {
 
 // ── Topbar wiring ─────────────────────────────────────────────────────
 
-const diffEl = document.querySelector("drafthouse-diff") as any;
+const diffEl = document.querySelector("document-diff") as any;
 
 document.getElementById("btn-sync")?.addEventListener("click", () => {
   if (diffEl) {

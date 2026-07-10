@@ -8,11 +8,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@casehubio/pages-component": "file:../../../../../../pages/packages/pages-component",
+    "@casehubio/pages-data": "file:../../../../../../pages/packages/pages-data",
     "@casehubio/pages-runtime": "file:../../../../../../pages/packages/pages-runtime",
     "@casehubio/pages-ui": "file:../../../../../../pages/packages/pages-ui",
-    "@casehubio/pages-component": "file:../../../../../../pages/packages/pages-component",
     "@casehubio/pages-viz": "file:../../../../../../pages/packages/pages-viz",
-    "@casehubio/pages-data": "file:../../../../../../pages/packages/pages-data",
+    "lit": "^3.3.3",
     "marked": "^15.0.0"
   },
   "devDependencies": {

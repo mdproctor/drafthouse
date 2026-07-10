@@ -67,10 +67,10 @@ This repo is a CaseHub application-tier project. Before implementing any feature
 that touches shared concerns (channels, audit, orchestration), check the platform
 architecture:
 
-```
-../parent/docs/PLATFORM.md
-../parent/docs/APPLICATIONS.md
-```
+## Platform Docs
+- [Platform Index](https://raw.githubusercontent.com/casehubio/parent/main/docs/INDEX.md) — discovery index (start here)
+- [Building Apps](https://raw.githubusercontent.com/casehubio/parent/main/docs/guides/building-apps.md) — app developer guide with cross-app patterns
+- [This repo's deep-dive](https://raw.githubusercontent.com/casehubio/parent/main/docs/repos/casehub-drafthouse.md)
 
 ## Reference Documents (casehub-parent)
 
@@ -122,13 +122,13 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/` | Multi-module Maven parent (api/ + runtime/ + claude-agent/) |
 | `server/runtime/src/main/webui/` | TypeScript webui built with Quinoa — panels, workbench, WebSocket connection |
 | `server/runtime/src/main/webui/src/index.ts` | Workbench entry point — casehub-pages layout, topbar, Electron IPC, WebSocket connection |
-| `server/runtime/src/main/webui/src/panels/` | Web Component panels (Shadow DOM, adoptedStyleSheets) |
-| `server/runtime/src/main/webui/src/panels/drafthouse-diff.js` | `<drafthouse-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
-| `server/runtime/src/main/webui/src/panels/drafthouse-debate.js` | `<drafthouse-debate>` — debate event conversation feed (pages-event subscriber) |
-| `server/runtime/src/main/webui/src/panels/drafthouse-review-tracker.js` | `<drafthouse-review-tracker>` — review point status checklist (pages-event subscriber) |
-| `server/runtime/src/main/webui/src/panels/drafthouse-context-gauge.js` | `<drafthouse-context-gauge>` — topbar context usage gauge (pages-event onMeta subscriber) |
-| `server/runtime/src/main/webui/src/panels/drafthouse-doc-picker.js` | `<drafthouse-doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
-| `server/runtime/src/main/webui/src/panels/drafthouse-timeline.js` | `<drafthouse-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
+| `server/runtime/src/main/webui/src/panels/` | Lit (LitElement) panels with Shadow DOM — blocks-ui-compatible naming |
+| `server/runtime/src/main/webui/src/panels/document-diff.ts` | `<document-diff>` — two-panel markdown diff viewer + minimap + scroll sync |
+| `server/runtime/src/main/webui/src/panels/channel-feed.ts` | `<channel-feed>` — debate event conversation feed (pages-event subscriber) |
+| `server/runtime/src/main/webui/src/panels/review-tracker.ts` | `<review-tracker>` — review point status checklist (pages-event subscriber) |
+| `server/runtime/src/main/webui/src/panels/context-gauge.ts` | `<context-gauge>` — topbar context usage gauge (pages-event subscriber) |
+| `server/runtime/src/main/webui/src/panels/doc-picker.ts` | `<doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
+| `server/runtime/src/main/webui/src/panels/document-timeline.ts` | `<document-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
 | `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
 | `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
@@ -163,36 +163,36 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/debate/{id}/snapshot/{index}  ← document content at timeline snapshot index
   └── GET /api/debate/sessions     ← active debate session list
 
-Browser UI (casehub-pages workbench + Web Component panels)
+Browser UI (casehub-pages workbench + Lit panels)
   ├── index.ts                     ← workbench shell (casehub-pages layout, topbar, WebSocket connection, Electron IPC)
-  ├── <drafthouse-diff>            ← diff panel (Shadow DOM Web Component)
+  ├── <document-diff>              ← diff panel (LitElement, Shadow DOM)
   │   ├── fetch /api/file          ← load file content
   │   ├── pages-event file-changed ← live reload on file change (via WebSocket)
-  │   ├── marked.js + highlight.js ← render markdown
+  │   ├── marked.js                ← render markdown
   │   ├── LCS line diff + word-level highlights
   │   ├── Canvas minimap           ← red=A-side, green=B-side changes
   │   └── Scroll sync via anchors  ← heading-based anchor matching
-  ├── <drafthouse-debate>          ← debate feed (Shadow DOM Web Component)
+  ├── <channel-feed>               ← debate feed (LitElement, Shadow DOM)
   │   └── pages-event              ← debate events via WebSocket, grouped by round
-  ├── <drafthouse-review-tracker>  ← review checklist (Shadow DOM Web Component)
+  ├── <review-tracker>             ← review checklist (LitElement, Shadow DOM)
   │   └── pages-event              ← derives status per pointId from event stream
-  ├── <drafthouse-context-gauge>   ← context usage gauge (Shadow DOM Web Component, topbar)
-  │   └── pages-event (onMeta)     ← context-usage metadata events
-  ├── <drafthouse-doc-picker>      ← document badge dropdown (Shadow DOM custom element, topbar)
+  ├── <context-gauge>              ← context usage gauge (LitElement, Shadow DOM, topbar)
+  │   └── pages-event              ← context-usage metadata events
+  ├── <doc-picker>                 ← document badge dropdown (LitElement, Shadow DOM, topbar)
   │   └── pages-event              ← documents-changed, comparison-changed; POST /api/debate/{id}/comparison
-  └── <drafthouse-timeline>        ← document version timeline (Shadow DOM Web Component)
+  └── <document-timeline>          ← document version timeline (LitElement, Shadow DOM)
       ├── pages-event              ← filters ROUND_SNAPSHOT from debate-entries
       └── timeline-comparison-changed → diff panel fetches snapshot content
 ```
 
 ## Architectural Direction
 
-DraftHouse uses **casehub-pages workbench** with Web Component panels. The workbench is built with `@casehubio/pages-ui` layout primitives (`rows()`, `split()`, `html()`) and rendered via `@casehubio/pages-runtime`. Panels are custom elements with Shadow DOM encapsulation, registered via `registerPanel()`, and orchestrated through the `pages-event` system.
+DraftHouse uses **casehub-pages workbench** with **Lit** (LitElement) panels. The workbench is built with `@casehubio/pages-ui` layout primitives (`rows()`, `split()`, `html()`) and rendered via `@casehubio/pages-runtime`. Panels are Lit custom elements with Shadow DOM encapsulation, registered via `registerPanel()`, and orchestrated through `onPagesEvent()` from `@casehubio/pages-component`. Tag names follow blocks-ui convention (bare descriptive names, no `drafthouse-` prefix) for future promotion to `@casehubio/blocks-ui`.
 
 **Practical implications:**
-- Panels are Web Components with `configure(props)` — the method pages-runtime calls to initialize
-- Shadow DOM encapsulation ensures panels can't leak styles or state; CSS custom properties on `:root` provide theming
-- `pages-event` is the communication backbone — WebSocket events are dispatched by pages data pipeline, panels subscribe to topics
+- Panels are LitElement with `configure(props)` — the method pages-runtime calls to initialize; `@property` and `@state` decorators drive reactive rendering
+- Shadow DOM encapsulation ensures panels can't leak styles or state; CSS custom properties on `:root` provide theming; `static styles = css` replaces `adoptedStyleSheets`
+- `onPagesEvent()` from `@casehubio/pages-component` is the event subscription pattern — `_cleanups[]` array for uniform teardown in `disconnectedCallback()`
 - The workbench layout is declarative TypeScript (not DOM manipulation) — composition via `rows()`, `split()`, `hostPanel()`
 - TypeScript source is in `server/runtime/src/main/webui/src/`, bundled by Quinoa → `app.js`
 - Quinoa serves the bundled app at `/` — no separate static file server needed

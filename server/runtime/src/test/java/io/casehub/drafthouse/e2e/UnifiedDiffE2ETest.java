@@ -52,12 +52,12 @@ class UnifiedDiffE2ETest {
         page.locator("#btn-view-mode").click();
 
         // Panel B and divider hidden
-        assertThat(page.locator("drafthouse-diff").locator("#panel-b")).not().isVisible();
-        assertThat(page.locator("drafthouse-diff").locator("#divider")).not().isVisible();
+        assertThat(page.locator("document-diff").locator("#panel-b")).not().isVisible();
+        assertThat(page.locator("document-diff").locator("#divider")).not().isVisible();
 
         // Unified diff blocks visible in panel A
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-del").first()).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-ins").first()).isVisible();
+        assertThat(page.locator("document-diff").locator(".diff-unified-del").first()).isVisible();
+        assertThat(page.locator("document-diff").locator(".diff-unified-ins").first()).isVisible();
 
         // Button label updated
         assertThat(page.locator("#btn-view-mode")).hasText("☰ Unified");
@@ -69,16 +69,16 @@ class UnifiedDiffE2ETest {
 
         // Switch to unified
         page.locator("#btn-view-mode").click();
-        assertThat(page.locator("drafthouse-diff").locator("#panel-b")).not().isVisible();
+        assertThat(page.locator("document-diff").locator("#panel-b")).not().isVisible();
 
         // Switch back to split
         page.locator("#btn-view-mode").click();
-        assertThat(page.locator("drafthouse-diff").locator("#panel-b")).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator("#divider")).isVisible();
+        assertThat(page.locator("document-diff").locator("#panel-b")).isVisible();
+        assertThat(page.locator("document-diff").locator("#divider")).isVisible();
 
         // Split-mode diff annotations restored
-        assertThat(page.locator("drafthouse-diff").locator("#render-a [data-diff-chunk]").first()).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator("#render-b [data-diff-chunk]").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-a [data-diff-chunk]").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-b [data-diff-chunk]").first()).isVisible();
 
         // Button label restored
         assertThat(page.locator("#btn-view-mode")).hasText("⫏ Split");
@@ -90,8 +90,8 @@ class UnifiedDiffE2ETest {
         page.locator("#btn-view-mode").click();
 
         // Word-level marks inside unified containers
-        Locator delMarks = page.locator("drafthouse-diff").locator(".diff-unified-del mark.diff-word-a");
-        Locator insMarks = page.locator("drafthouse-diff").locator(".diff-unified-ins mark.diff-word-b");
+        Locator delMarks = page.locator("document-diff").locator(".diff-unified-del mark.diff-word-a");
+        Locator insMarks = page.locator("document-diff").locator(".diff-unified-ins mark.diff-word-b");
         assertThat(delMarks.first()).isVisible();
         assertThat(insMarks.first()).isVisible();
     }
@@ -117,23 +117,23 @@ class UnifiedDiffE2ETest {
         loadFilePair(page, index, fixturePath("diff-a.md"), fixturePath("diff-b.md"));
 
         // Start in split — verify annotations
-        assertThat(page.locator("drafthouse-diff").locator("#render-a [data-diff-chunk]").first()).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator("#render-b [data-diff-chunk]").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-a [data-diff-chunk]").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-b [data-diff-chunk]").first()).isVisible();
 
         // Switch to unified
         page.locator("#btn-view-mode").click();
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-del").first()).isVisible();
+        assertThat(page.locator("document-diff").locator(".diff-unified-del").first()).isVisible();
 
         // Switch back to split
         page.locator("#btn-view-mode").click();
 
         // Verify split annotations are correct (not stale unified DOM)
-        assertThat(page.locator("drafthouse-diff").locator("#render-a .diff-del").first()).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator("#render-b .diff-ins").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-a .diff-del").first()).isVisible();
+        assertThat(page.locator("document-diff").locator("#render-b .diff-ins").first()).isVisible();
 
         // No unified blocks should remain
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-del")).hasCount(0);
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-ins")).hasCount(0);
+        assertThat(page.locator("document-diff").locator(".diff-unified-del")).hasCount(0);
+        assertThat(page.locator("document-diff").locator(".diff-unified-ins")).hasCount(0);
     }
 
     @Test
@@ -142,7 +142,7 @@ class UnifiedDiffE2ETest {
         page.keyboard().press("u");
 
         // Should be in unified mode
-        assertThat(page.locator("drafthouse-diff").locator("#panel-b")).not().isVisible();
+        assertThat(page.locator("document-diff").locator("#panel-b")).not().isVisible();
         assertThat(page.locator("#btn-view-mode")).hasText("☰ Unified");
     }
 
@@ -155,7 +155,7 @@ class UnifiedDiffE2ETest {
         page.locator("#btn-swap").click();
 
         // Unified diff blocks still visible after swap
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-del").first()).isVisible();
-        assertThat(page.locator("drafthouse-diff").locator(".diff-unified-ins").first()).isVisible();
+        assertThat(page.locator("document-diff").locator(".diff-unified-del").first()).isVisible();
+        assertThat(page.locator("document-diff").locator(".diff-unified-ins").first()).isVisible();
     }
 }

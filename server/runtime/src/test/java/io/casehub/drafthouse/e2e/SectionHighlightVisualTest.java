@@ -107,7 +107,7 @@ class SectionHighlightVisualTest {
     private String dumpState(int clickIndex, String phase) {
         Object result = page.evaluate("(args) => {"
                 + "const tracker = document.querySelector('drafthouse-review-tracker');"
-                + "const diff = document.querySelector('drafthouse-diff');"
+                + "const diff = document.querySelector('document-diff');"
                 + "const trackerShadow = tracker.shadowRoot;"
                 + "const diffShadow = diff.shadowRoot;"
                 + ""
@@ -173,7 +173,7 @@ class SectionHighlightVisualTest {
 
             // Dump stale scroll-target classes
             Object staleCount = page.evaluate(
-                    "() => document.querySelector('drafthouse-diff').shadowRoot.querySelectorAll('.scroll-target').length");
+                    "() => document.querySelector('document-diff').shadowRoot.querySelectorAll('.scroll-target').length");
             System.out.println("Revisit click " + idx + " (" + locations[idx] + "): stale .scroll-target count = " + staleCount);
 
             assertThat(isPointNthSelected(idx))
@@ -194,7 +194,7 @@ class SectionHighlightVisualTest {
 
     private int countHighlightBars() {
         Object val = page.evaluate(
-                "() => document.querySelector('drafthouse-diff').shadowRoot.querySelectorAll('.section-highlight-bar').length");
+                "() => document.querySelector('document-diff').shadowRoot.querySelectorAll('.section-highlight-bar').length");
         return ((Number) val).intValue();
     }
 }

@@ -28,7 +28,7 @@ import java.util.Comparator;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * E2E tests for the {@code <drafthouse-timeline>} panel.
+ * E2E tests for the {@code <document-timeline>} panel.
  *
  * <p>Covers timeline rendering after workspace replay, click navigation between
  * snapshots (verifying diff panel content updates), and cross-panel interaction
@@ -256,12 +256,12 @@ class TimelineE2ETest {
         DebateE2EFixtures.waitForTrackerPoints(page, 1);
 
         // Click the first tracker point
-        page.locator("drafthouse-review-tracker .point-item").first().click();
+        page.locator("review-tracker .point-item").first().click();
         page.waitForTimeout(500);
 
         // Verify a timeline marker got trail-fix class
         Boolean hasTrailFix = (Boolean) page.evaluate("() => {"
-                + "const timeline = document.querySelector('drafthouse-timeline');"
+                + "const timeline = document.querySelector('document-timeline');"
                 + "if (!timeline || !timeline.shadowRoot) return false;"
                 + "return timeline.shadowRoot.querySelector('.marker.trail-fix') !== null;"
                 + "}");
@@ -295,7 +295,7 @@ class TimelineE2ETest {
 
         // The timeline should be hidden when no snapshots exist
         Boolean isHidden = (Boolean) page.evaluate("() => {"
-                + "const timeline = document.querySelector('drafthouse-timeline');"
+                + "const timeline = document.querySelector('document-timeline');"
                 + "if (!timeline) return true;"
                 + "return timeline.classList.contains('hidden');"
                 + "}");
@@ -331,7 +331,7 @@ class TimelineE2ETest {
 
     private void waitForTimelineMarkers(int expectedCount) {
         page.waitForFunction("(count) => {"
-                        + "const timeline = document.querySelector('drafthouse-timeline');"
+                        + "const timeline = document.querySelector('document-timeline');"
                         + "if (!timeline || !timeline.shadowRoot) return false;"
                         + "return timeline.shadowRoot.querySelectorAll('.marker').length >= count;"
                         + "}",
@@ -341,7 +341,7 @@ class TimelineE2ETest {
 
     private int countTimelineMarkers() {
         return (int) page.evaluate("() => {"
-                + "const timeline = document.querySelector('drafthouse-timeline');"
+                + "const timeline = document.querySelector('document-timeline');"
                 + "if (!timeline || !timeline.shadowRoot) return 0;"
                 + "return timeline.shadowRoot.querySelectorAll('.marker').length;"
                 + "}");
@@ -349,7 +349,7 @@ class TimelineE2ETest {
 
     private int countTimelineConnectors() {
         return (int) page.evaluate("() => {"
-                + "const timeline = document.querySelector('drafthouse-timeline');"
+                + "const timeline = document.querySelector('document-timeline');"
                 + "if (!timeline || !timeline.shadowRoot) return 0;"
                 + "return timeline.shadowRoot.querySelectorAll('.connector').length;"
                 + "}");
@@ -357,7 +357,7 @@ class TimelineE2ETest {
 
     private void clickTimelineMarker(int index) {
         page.evaluate("(idx) => {"
-                + "const timeline = document.querySelector('drafthouse-timeline');"
+                + "const timeline = document.querySelector('document-timeline');"
                 + "if (!timeline || !timeline.shadowRoot) return;"
                 + "const markers = timeline.shadowRoot.querySelectorAll('.marker');"
                 + "if (markers[idx]) markers[idx].click();"
@@ -366,7 +366,7 @@ class TimelineE2ETest {
 
     private String diffPanelRenderedText(String panel) {
         return (String) page.evaluate("(p) => {"
-                + "const diff = document.querySelector('drafthouse-diff');"
+                + "const diff = document.querySelector('document-diff');"
                 + "if (!diff || !diff.shadowRoot) return null;"
                 + "const el = diff.shadowRoot.getElementById('render-' + p);"
                 + "return el ? el.textContent : null;"

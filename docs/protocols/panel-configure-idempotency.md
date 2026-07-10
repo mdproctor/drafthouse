@@ -11,4 +11,9 @@ violation_hint: "Timeline renders 6 markers instead of 3, or debate entries appe
 created: 2026-07-07
 ---
 
+**Retired:** Lit migration (2026-07-10) eliminates this class of bug. Listeners
+now live in `connectedCallback()` / `disconnectedCallback()`, not `configure()`.
+`configure()` only sets `@property` values — idempotent by nature. See spec
+`docs/superpowers/specs/2026-07-09-lit-migration-design.md`.
+
 Web Component panels that register document-level event listeners (`pages-event`, custom events) must guard against duplicate registration when `configure()` is called multiple times. `pages-runtime` calls `configure()` on initial layout render, and application code (e.g. `connectDebateSession()` in `index.ts`) may call it again with updated props. Without an `#initialized` flag, listeners register twice and every event is processed/emitted in duplicate — doubling entries, markers, or state mutations with no error signal.
