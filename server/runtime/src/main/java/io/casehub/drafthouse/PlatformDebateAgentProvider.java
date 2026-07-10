@@ -5,11 +5,13 @@ import io.casehub.drafthouse.debate.DebateAgentProvider;
 import io.casehub.platform.agent.AgentEvent;
 import io.casehub.platform.agent.AgentProvider;
 import io.casehub.platform.agent.AgentSessionConfig;
+import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
+@DefaultBean
 @ApplicationScoped
-public class ClaudeAgentSdkDebateAgentProvider implements DebateAgentProvider {
+public class PlatformDebateAgentProvider implements DebateAgentProvider {
 
     @Inject AgentProvider agentProvider;
 

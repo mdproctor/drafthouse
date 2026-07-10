@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,6 +32,7 @@ class DebateWebSocketTest {
 
     private static final Pattern DEBATE_ID_PATTERN =
             Pattern.compile("\"debateSessionId\":\"([^\"]+)\"");
+    private static final AtomicInteger REQ_COUNTER = new AtomicInteger();
 
     @TestHTTPResource("/api/ws")
     URI wsUri;
@@ -65,8 +67,8 @@ class DebateWebSocketTest {
 
         assertThat(client.awaitMessages(5)).isTrue();
         List<JsonNode> messages = client.parsedMessages(mapper);
-        assertThat(messages).anyMatch(m -> "reconnected".equals(m.get("topic").asText()));
-        assertThat(messages).anyMatch(m -> "sessions".equals(m.get("topic").asText()));
+        assertThat(messages).anyMatch(m -> "reconnected".equals(topicOf(m)));
+        assertThat(messages).anyMatch(m -> "sessions".equals(topicOf(m)));
     }
 
     @Test
@@ -79,43 +81,43 @@ class DebateWebSocketTest {
         TestClient client = new TestClient(5);
         wsSession = connectWebSocket(client);
         client.awaitMessages(5);
-        client.resetLatch(3);  // Expect 3 catch-up events (no comparison set)
+        client.resetLatch(4);  // ack + debate-entries + context-usage + documents-changed
 
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        sendSubscribe(wsSession, "debate:" + activeDebateSessionId);
 
         assertThat(client.awaitMessages(5)).isTrue();
         List<JsonNode> messages = client.parsedMessages(mapper);
-        assertThat(messages).anyMatch(m -> "debate-entries".equals(m.get("topic").asText()));
-        assertThat(messages).anyMatch(m -> "context-usage".equals(m.get("topic").asText()));
-        assertThat(messages).anyMatch(m -> "documents-changed".equals(m.get("topic").asText()));
+        assertThat(messages).anyMatch(m -> "debate-entries".equals(topicOf(m)));
+        assertThat(messages).anyMatch(m -> "context-usage".equals(topicOf(m)));
+        assertThat(messages).anyMatch(m -> "documents-changed".equals(topicOf(m)));
     }
 
     @Test
-    void subscribe_to_nonexistent_session_silently_ignored() throws Exception {
+    void subscribe_to_nonexistent_session_returns_error() throws Exception {
         TestClient client = new TestClient(2);
         wsSession = connectWebSocket(client);
         client.awaitMessages(5);
-        client.resetLatch(1);
+        client.resetLatch(1);  // error response
 
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:00000000-0000-0000-0000-000000000000\"}");
+        sendSubscribe(wsSession, "debate:00000000-0000-0000-0000-000000000000");
 
-        // Should NOT receive any catch-up events — just silence
-        assertThat(client.awaitMessages(2)).isFalse();
+        assertThat(client.awaitMessages(5)).isTrue();
+        List<JsonNode> messages = client.parsedMessages(mapper);
+        assertThat(messages).anyMatch(m -> "error".equals(opOf(m)));
     }
 
     @Test
-    void unrecognized_dataset_silently_ignored() throws Exception {
+    void unrecognized_dataset_receives_ack() throws Exception {
         TestClient client = new TestClient(2);
         wsSession = connectWebSocket(client);
         client.awaitMessages(5);
-        client.resetLatch(1);
+        client.resetLatch(1);  // ack response
 
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"_events\"}");
+        sendSubscribe(wsSession, "_events");
 
-        assertThat(client.awaitMessages(2)).isFalse();
+        assertThat(client.awaitMessages(5)).isTrue();
+        List<JsonNode> messages = client.parsedMessages(mapper);
+        assertThat(messages).anyMatch(m -> "ack".equals(opOf(m)));
     }
 
     @Test
@@ -127,93 +129,76 @@ class DebateWebSocketTest {
         wsSession.getBasicRemote().sendText("not json at all");
         wsSession.getBasicRemote().sendText("{\"no_op_field\": true}");
 
-        // Connection should still be alive
         assertThat(wsSession.isOpen()).isTrue();
     }
 
     @Test
     void reconnect_receives_full_catch_up_matching_pre_disconnect_state() throws Exception {
-        // Phase 1: Create debate, raise a point
         String startResult = tools.startDebate("test-spec.md", null);
         activeDebateSessionId = extractDebateId(startResult);
         tools.raisePoint(activeDebateSessionId, "REV", 1,
                 "First point", "HIGH", null, null);
 
-        // Phase 2: Connect client-1, subscribe, verify catch-up
         TestClient client1 = new TestClient(5);
         Session session1 = connectWebSocket(client1);
-        client1.awaitMessages(5); // reconnected + sessions
-        client1.resetLatch(3);    // debate-entries, context-usage, documents-changed
-        session1.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        client1.awaitMessages(5);
+        client1.resetLatch(4);  // ack + debate-entries + context-usage + documents-changed
+        sendSubscribe(session1, "debate:" + activeDebateSessionId);
         assertThat(client1.awaitMessages(5)).isTrue();
 
-        // Phase 3: Raise a second point (live push)
         client1.resetLatch(1);
         tools.raisePoint(activeDebateSessionId, "REV", 1,
                 "Second point", "MEDIUM", null, null);
         assertThat(client1.awaitMessages(5)).isTrue();
 
-        // Phase 4: Close client-1 (simulates disconnect)
         session1.close();
 
-        // Phase 5: Open client-2 (fresh connection = reconnection)
         TestClient client2 = new TestClient(2);
         wsSession = connectWebSocket(client2);
         assertThat(client2.awaitMessages(5)).isTrue();
 
-        // Positional assertion: first message MUST be reconnected
         JsonNode firstMsg = mapper.readTree(client2.received.get(0));
-        assertThat(firstMsg.get("topic").asText()).isEqualTo("reconnected");
+        assertThat(topicOf(firstMsg)).isEqualTo("reconnected");
 
-        // Phase 6: Re-subscribe — catch-up must contain BOTH points
-        client2.resetLatch(3); // debate-entries, context-usage, documents-changed
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        client2.resetLatch(4);  // ack + debate-entries + context-usage + documents-changed
+        sendSubscribe(wsSession, "debate:" + activeDebateSessionId);
         assertThat(client2.awaitMessages(5)).isTrue();
 
         List<JsonNode> catchUp = client2.parsedMessages(mapper);
         JsonNode entries = catchUp.stream()
-                .filter(m -> "debate-entries".equals(m.get("topic").asText()))
+                .filter(m -> "debate-entries".equals(topicOf(m)))
                 .findFirst().orElseThrow(() -> new AssertionError("No debate-entries in catch-up"));
         assertThat(entries.get("payload").size()).isGreaterThanOrEqualTo(2);
     }
 
     @Test
     void stale_subscription_after_session_end_silently_ignored_on_reconnect() throws Exception {
-        // Phase 1: Create debate, connect, subscribe
         String startResult = tools.startDebate("test-spec.md", null);
         activeDebateSessionId = extractDebateId(startResult);
 
         TestClient client1 = new TestClient(5);
         Session session1 = connectWebSocket(client1);
         client1.awaitMessages(5);
-        client1.resetLatch(2);  // context-usage + documents-changed (no entries yet)
-        session1.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        client1.resetLatch(3);  // ack + context-usage + documents-changed (no entries yet)
+        sendSubscribe(session1, "debate:" + activeDebateSessionId);
         assertThat(client1.awaitMessages(5)).isTrue();
 
-        // Phase 2: End debate while still connected
         tools.endDebate(activeDebateSessionId, false);
-
-        // Phase 3: Close connection
         session1.close();
 
-        // Phase 4: Reconnect
         TestClient client2 = new TestClient(2);
         wsSession = connectWebSocket(client2);
         assertThat(client2.awaitMessages(5)).isTrue();
 
-        // Phase 5: Re-subscribe to the ended session
-        client2.resetLatch(1);
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        client2.resetLatch(1);  // error response (session not found)
+        sendSubscribe(wsSession, "debate:" + activeDebateSessionId);
 
-        // No catch-up — session is ended. Latch should NOT count down.
-        assertThat(client2.awaitMessages(2)).isFalse();
+        assertThat(client2.awaitMessages(2)).isTrue();
+        List<JsonNode> messages = client2.parsedMessages(mapper);
+        assertThat(messages).anyMatch(m -> "error".equals(opOf(m)));
         assertThat(wsSession.isOpen()).isTrue();
 
-        activeDebateSessionId = null; // already ended — skip teardown
+        activeDebateSessionId = null;
     }
 
     @Test
@@ -224,12 +209,10 @@ class DebateWebSocketTest {
         TestClient client = new TestClient(5);
         wsSession = connectWebSocket(client);
         client.awaitMessages(5);
-        client.resetLatch(2);  // context-usage + documents-changed (no entries yet)
-        wsSession.getBasicRemote().sendText(
-                "{\"op\":\"subscribe\",\"dataset\":\"debate:" + activeDebateSessionId + "\"}");
+        client.resetLatch(3);  // ack + context-usage + documents-changed (no entries yet)
+        sendSubscribe(wsSession, "debate:" + activeDebateSessionId);
         assertThat(client.awaitMessages(5)).isTrue();
 
-        // Fire two pushes from different threads, synchronized via CyclicBarrier
         client.resetLatch(2);
         CyclicBarrier barrier = new CyclicBarrier(2);
 
@@ -250,13 +233,12 @@ class DebateWebSocketTest {
         push2.join();
         assertThat(client.awaitMessages(5)).isTrue();
 
-        // Verify all messages are valid JSON (not garbled from interleaving)
         for (String raw : client.received) {
             assertThat(mapper.readTree(raw)).isNotNull();
         }
         List<JsonNode> msgs = client.parsedMessages(mapper);
-        assertThat(msgs).anyMatch(m -> "debate-entries".equals(m.get("topic").asText()));
-        assertThat(msgs).anyMatch(m -> "context-usage".equals(m.get("topic").asText()));
+        assertThat(msgs).anyMatch(m -> "debate-entries".equals(topicOf(m)));
+        assertThat(msgs).anyMatch(m -> "context-usage".equals(topicOf(m)));
     }
 
     private Session connectWebSocket(TestClient client) throws Exception {
@@ -269,6 +251,20 @@ class DebateWebSocketTest {
         Matcher m = DEBATE_ID_PATTERN.matcher(result);
         assertThat(m.find()).isTrue();
         return m.group(1);
+    }
+
+    private static void sendSubscribe(Session session, String dataset) throws Exception {
+        String id = String.valueOf(REQ_COUNTER.incrementAndGet());
+        session.getBasicRemote().sendText(
+                "{\"op\":\"subscribe\",\"id\":\"" + id + "\",\"dataset\":\"" + dataset + "\"}");
+    }
+
+    private static String topicOf(JsonNode msg) {
+        return msg.has("topic") ? msg.get("topic").asText() : null;
+    }
+
+    private static String opOf(JsonNode msg) {
+        return msg.has("op") ? msg.get("op").asText() : null;
     }
 
     @ClientEndpoint

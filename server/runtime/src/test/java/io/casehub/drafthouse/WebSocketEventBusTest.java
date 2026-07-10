@@ -28,7 +28,6 @@ class WebSocketEventBusTest {
         bus = new WebSocketEventBus();
         mapper = new ObjectMapper();
         mapper.findAndRegisterModules();
-        // Inject mapper via reflection (package-private field)
         try {
             var f = WebSocketEventBus.class.getDeclaredField("mapper");
             f.setAccessible(true);
@@ -149,8 +148,20 @@ class WebSocketEventBusTest {
         when(deadConn.sendText(anyString())).thenReturn(Uni.createFrom().failure(new RuntimeException("closed")));
         bus.register(deadConn);
         bus.broadcast("test", "payload");
-        // Give the Uni subscriber time to fire
         assertThat(bus.connectionCount()).isEqualTo(0);
+    }
+
+    @Test
+    void formatEvent_uses_push_message_wire_format() {
+        WebSocketConnection conn = mockConnection();
+        bus.register(conn);
+        bus.broadcast("test-topic", java.util.Map.of("key", "value"));
+        var captor = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(conn).sendText(captor.capture());
+        String json = captor.getValue();
+        assertThat(json).contains("\"op\":\"event\"");
+        assertThat(json).contains("\"topic\":\"test-topic\"");
+        assertThat(json).contains("\"payload\":");
     }
 
     private WebSocketConnection mockConnection() {

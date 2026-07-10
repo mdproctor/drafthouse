@@ -46,7 +46,7 @@ See research spec: `docs/superpowers/specs/2026-05-26-document-review-tool-resea
 
 - [ ] MCP tool surface (start_review, push_revision, get_cursor_context, get_diff, end_review)
 - [ ] Qhorus channels for conversation threading
-- [ ] Single LLM reviewer via LangChain4j
+- [x] Single LLM reviewer via platform AgentProvider (#89)
 - [ ] Git worktree versioning (JGit)
 - [x] Quarkus Playwright E2E tests — debate panel, review tracker, cross-panel coordination (#55)
 

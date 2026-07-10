@@ -218,11 +218,13 @@ public class WorkspaceReplayAdapter {
             if (initialCommit != null) {
                 String content = gitShow(repoPath, initialCommit, specPath);
                 if (content != null) {
-                    var source = new SnapshotSource.GitCommit(initialCommit, Instant.EPOCH, 0);
-                    snapshots.add(new DocumentSnapshot(specPath, "Round 0 (original)", source));
+                    Instant commitTs = gitCommitTimestamp(repoPath, initialCommit);
+                    String label = "Round 0 (original)";
+                    var source = new SnapshotSource.GitCommit(initialCommit, commitTs, 0);
+                    snapshots.add(new DocumentSnapshot(specPath, label, source));
                     snapshotContent.put(snapshotIndex, content);
                     dispatchRoundSnapshot(channelId, revSender, 0, initialCommit, specPath,
-                            "Round 0 snapshot — original document");
+                            label, commitTs, label);
                     entryCount++;
                     snapshotIndex++;
                 }
@@ -237,11 +239,12 @@ public class WorkspaceReplayAdapter {
                     long issueCount = countIssuesInRound(roundNum, parseResult);
                     long fixCount = countFixesInRound(roundNum, parseResult);
                     String label = String.format("Round %d (+%d raised, %d fixed)", roundNum, issueCount, fixCount);
-                    var source = new SnapshotSource.GitCommit(commitHash, Instant.now(), roundNum);
+                    Instant commitTs = gitCommitTimestamp(repoPath, commitHash);
+                    var source = new SnapshotSource.GitCommit(commitHash, commitTs, roundNum);
                     snapshots.add(new DocumentSnapshot(specPath, label, source));
                     snapshotContent.put(snapshotIndex, content);
                     dispatchRoundSnapshot(channelId, revSender, roundNum, commitHash, specPath,
-                            String.format("Round %d snapshot — %d issues raised, %d fixed", roundNum, issueCount, fixCount));
+                            label, commitTs, label);
                     entryCount++;
                     snapshotIndex++;
                 }
@@ -374,12 +377,15 @@ public class WorkspaceReplayAdapter {
     }
 
     private void dispatchRoundSnapshot(UUID channelId, String sender, int round,
-                                        String commitHash, String documentPath, String body) {
+                                        String commitHash, String documentPath,
+                                        String label, Instant timestamp, String body) {
         Map<String, String> meta = new LinkedHashMap<>();
         meta.put(ConversationProtocol.ENTRY_TYPE, "ROUND_SNAPSHOT");
         meta.put(ConversationProtocol.ROUND, String.valueOf(round));
         meta.put("commitHash", commitHash);
         meta.put("documentPath", documentPath);
+        meta.put("label", label);
+        if (timestamp != null) meta.put("timestamp", timestamp.toString());
         String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, body);
         messageService.dispatch(MessageDispatch.builder()
                 .channelId(channelId)
@@ -442,6 +448,26 @@ public class WorkspaceReplayAdapter {
             return output.lines().findFirst().orElse(null);
         } catch (Exception e) {
             LOG.warning("git log --reverse failed for " + filePath + " — " + e.getMessage());
+            return null;
+        }
+    }
+
+    private static Instant gitCommitTimestamp(String repoPath, String commitHash) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder("git", "log", "-1", "--format=%aI", commitHash);
+            pb.directory(new File(repoPath));
+            Process p = pb.start();
+            String output = new String(p.getInputStream().readAllBytes()).trim();
+            boolean finished = p.waitFor(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                p.destroyForcibly();
+                LOG.warning("git log timestamp timed out for " + commitHash);
+                return null;
+            }
+            if (p.exitValue() != 0 || output.isEmpty()) return null;
+            return java.time.OffsetDateTime.parse(output).toInstant();
+        } catch (Exception e) {
+            LOG.warning("git log timestamp failed for " + commitHash + " — " + e.getMessage());
             return null;
         }
     }

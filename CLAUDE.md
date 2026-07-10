@@ -130,9 +130,9 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/runtime/src/main/webui/src/panels/doc-picker.ts` | `<doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
 | `server/runtime/src/main/webui/src/panels/document-timeline.ts` | `<document-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
 | `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline` |
-| `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, LangChain4j |
-| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
-| `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (stub, pending platform#55) |
+| `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, platform AgentProvider |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, DocumentReviewer, PlatformDebateAgentProvider, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
+| `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (AgentProvider-backed, displaces PlatformDebateAgentProvider) |
 | `server/runtime/src/main/resources/application.properties` | Quarkus config |
 | `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
 | `docs/FEATURES.md` | Feature backlog and DraftHouse MVP roadmap |
@@ -201,7 +201,7 @@ DraftHouse uses **casehub-pages workbench** with **Lit** (LitElement) panels. Th
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3 (quarkus-langchain4j 1.9.1, quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, quarkus-quinoa 2.8.3)
+- Version: 3.34.3 (quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, casehub-pages-push 0.2-SNAPSHOT, casehub-platform-agent-api 0.2-SNAPSHOT, quarkus-quinoa 2.8.3)
 - Java package: `io.casehub.drafthouse`
 - Quinoa serves bundled TypeScript webui from `server/runtime/src/main/webui/` — bundles on every build
 - Port: 9001 (default), configurable via `quarkus.http.port`

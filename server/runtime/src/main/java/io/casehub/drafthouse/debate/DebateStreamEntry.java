@@ -65,18 +65,25 @@ public record DebateStreamEntry(
 
         String commitHash = null;
         String documentPath = null;
+        String displayContent = body;
+        Instant ts = msg.createdAt() != null ? msg.createdAt() : Instant.now();
         if (entryType == EntryType.ROUND_SNAPSHOT) {
             commitHash = meta.get("commitHash");
             documentPath = meta.get("documentPath");
+            String label = meta.get("label");
+            if (label != null && !label.isBlank()) displayContent = label;
+            String tsStr = meta.get("timestamp");
+            if (tsStr != null) {
+                try { ts = Instant.parse(tsStr); } catch (Exception ignored) {}
+            }
         }
 
         return new DebateStreamEntry(
-                entryType, agentRole, round, body,
+                entryType, agentRole, round, displayContent,
                 pointId, subTaskId,
                 priority, scope,
                 location != null && !location.isBlank() ? location : null,
-                msg.sender(),
-                msg.createdAt() != null ? msg.createdAt() : Instant.now(),
+                msg.sender(), ts,
                 commitHash, documentPath);
     }
 
@@ -124,18 +131,25 @@ public record DebateStreamEntry(
 
         String commitHash = null;
         String documentPath = null;
+        String displayContent = body;
+        Instant ts = Instant.now();
         if (entryType == EntryType.ROUND_SNAPSHOT) {
             commitHash = meta.get("commitHash");
             documentPath = meta.get("documentPath");
+            String label = meta.get("label");
+            if (label != null && !label.isBlank()) displayContent = label;
+            String tsStr = meta.get("timestamp");
+            if (tsStr != null) {
+                try { ts = Instant.parse(tsStr); } catch (Exception ignored) {}
+            }
         }
 
         return new DebateStreamEntry(
-                entryType, agentRole, round, body,
+                entryType, agentRole, round, displayContent,
                 pointId, subTaskId,
                 priority, scope,
                 location != null && !location.isBlank() ? location : null,
-                msg.sender(),
-                Instant.now(),
+                msg.sender(), ts,
                 commitHash, documentPath);
     }
 

@@ -256,7 +256,7 @@ export class DocumentTimeline extends LitElement {
           <div class=${this._markerClass(i, snap)}
                @click=${(e: MouseEvent) => this._handleClick(i, e.shiftKey)}>
             <div class="marker-dot"></div>
-            <div class="marker-label">${snap.label.split(' — ')[0] || `Round ${snap.round}`}</div>
+            <div class="marker-label">${snap.label || `Round ${snap.round}`}</div>
           </div>
         `)}
       </div>

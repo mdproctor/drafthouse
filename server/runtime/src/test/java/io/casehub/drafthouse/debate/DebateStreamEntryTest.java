@@ -258,6 +258,44 @@ class DebateStreamEntryTest {
     }
 
     @Test
+    void from_roundSnapshot_usesTimestampFromMeta() {
+        String content = META_SENTINEL + "entryType=ROUND_SNAPSHOT|round=2"
+                + "|commitHash=abc123|documentPath=docs/spec.md"
+                + "|timestamp=2026-05-15T14:30:00Z\n\nRound 2 (+3 raised, 2 fixed)";
+        Message msg = makeMessage(content, null, null, MessageType.STATUS);
+
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.timestamp()).isEqualTo(Instant.parse("2026-05-15T14:30:00Z"));
+    }
+
+    @Test
+    void from_roundSnapshot_usesLabelFromMeta() {
+        String content = META_SENTINEL + "entryType=ROUND_SNAPSHOT|round=2"
+                + "|commitHash=abc123|documentPath=docs/spec.md"
+                + "|label=Round 2 (+3 raised, 2 fixed)\n\nBody content here";
+        Message msg = makeMessage(content, null, null, MessageType.STATUS);
+
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.content()).isEqualTo("Round 2 (+3 raised, 2 fixed)");
+    }
+
+    @Test
+    void from_roundSnapshot_fallsBackToBodyWhenNoLabel() {
+        String content = META_SENTINEL + "entryType=ROUND_SNAPSHOT|round=2"
+                + "|commitHash=abc123|documentPath=docs/spec.md\n\nRound 2 snapshot";
+        Message msg = makeMessage(content, null, null, MessageType.STATUS);
+
+        DebateStreamEntry entry = DebateStreamEntry.from(msg);
+
+        assertThat(entry).isNotNull();
+        assertThat(entry.content()).isEqualTo("Round 2 snapshot");
+    }
+
+    @Test
     void from_nonSnapshotEntry_hasNullCommitFields() {
         String content = META_SENTINEL + "entryType=RAISE|role=REV|round=1\n\nSome issue";
         Message msg = makeMessage(content, "R1-01", null, MessageType.QUERY);

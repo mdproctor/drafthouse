@@ -7,11 +7,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
+import io.casehub.pages.push.PushMessage;
+import io.casehub.pages.push.PushRequest;
 import io.casehub.qhorus.api.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
 import io.quarkus.websockets.next.*;
@@ -48,26 +49,19 @@ public class DebateWebSocket {
     @OnTextMessage
     @RunOnVirtualThread
     void onMessage(WebSocketConnection connection, String message) {
-        JsonNode node;
+        PushRequest request;
         try {
-            node = mapper.readTree(message);
-        } catch (Exception e) {
-            LOG.warning("Malformed JSON from WebSocket client: " + e.getMessage());
+            request = PushRequest.parse(message);
+        } catch (IllegalArgumentException e) {
+            LOG.warning("Malformed push request: " + e.getMessage());
             return;
         }
 
-        String op = node.has("op") ? node.get("op").asText() : null;
-        if (op == null) {
-            LOG.warning("WebSocket message missing 'op' field");
-            return;
-        }
-
-        String dataset = node.has("dataset") ? node.get("dataset").asText() : null;
-
-        switch (op) {
-            case "subscribe" -> handleSubscribe(connection, dataset);
-            case "unsubscribe" -> handleUnsubscribe(connection, dataset);
-            default -> LOG.warning("Unknown WebSocket op: " + op);
+        switch (request) {
+            case PushRequest.Subscribe sub -> handleSubscribe(connection, sub.id(), sub.dataset());
+            case PushRequest.Unsubscribe unsub -> handleUnsubscribe(connection, unsub.id(), unsub.dataset());
+            case PushRequest.Listen listen -> handleListen(connection, listen.id(), listen.topics());
+            case PushRequest.Unlisten unlisten -> handleUnlisten(connection, unlisten.id(), unlisten.topics());
         }
     }
 
@@ -82,8 +76,11 @@ public class DebateWebSocket {
         cleanup(connection);
     }
 
-    private void handleSubscribe(WebSocketConnection connection, String dataset) {
-        if (dataset == null) return;
+    private void handleSubscribe(WebSocketConnection connection, String requestId, String dataset) {
+        if (dataset == null) {
+            sendSafe(connection, PushMessage.error(requestId, "missing dataset"));
+            return;
+        }
 
         if (dataset.startsWith("debate:")) {
             String sessionIdStr = dataset.substring("debate:".length());
@@ -91,29 +88,36 @@ public class DebateWebSocket {
             try {
                 channelId = UUID.fromString(sessionIdStr);
             } catch (IllegalArgumentException e) {
-                LOG.warning("Invalid debate session UUID: " + sessionIdStr);
+                sendSafe(connection, PushMessage.error(requestId, "invalid session UUID"));
                 return;
             }
             DebateSession session = registry.find(channelId).orElse(null);
-            if (session == null) return;
+            if (session == null) {
+                sendSafe(connection, PushMessage.error(requestId, "session not found"));
+                return;
+            }
 
             eventBus.watchSession(connection, channelId);
             connectionSessions.computeIfAbsent(connection, k -> ConcurrentHashMap.newKeySet()).add(channelId);
+            sendSafe(connection, PushMessage.ack(requestId));
             sendCatchUp(connection, session, channelId);
 
         } else if (dataset.startsWith("file:")) {
             String path = dataset.substring("file:".length());
             if (!isPathAllowed(connection, path)) {
                 LOG.warning("File watch rejected — path not in any watched session's document set: " + path);
+                sendSafe(connection, PushMessage.error(requestId, "path not allowed"));
                 return;
             }
             eventBus.watchFile(connection, path);
             startFileWatch(path);
+            sendSafe(connection, PushMessage.ack(requestId));
+        } else {
+            sendSafe(connection, PushMessage.ack(requestId));
         }
-        // Unrecognized dataset patterns are silently ignored (e.g. "_events" dummy subscription)
     }
 
-    private void handleUnsubscribe(WebSocketConnection connection, String dataset) {
+    private void handleUnsubscribe(WebSocketConnection connection, String requestId, String dataset) {
         if (dataset == null) return;
 
         if (dataset.startsWith("debate:")) {
@@ -131,6 +135,48 @@ public class DebateWebSocket {
             eventBus.unwatchFile(connection, path);
             stopFileWatchIfUnused(path);
         }
+        sendSafe(connection, PushMessage.ack(requestId));
+    }
+
+    private void handleListen(WebSocketConnection connection, String requestId, List<String> topics) {
+        for (String topic : topics) {
+            if (topic.startsWith("debate:")) {
+                String sessionIdStr = topic.substring("debate:".length());
+                try {
+                    UUID channelId = UUID.fromString(sessionIdStr);
+                    eventBus.watchSession(connection, channelId);
+                    connectionSessions.computeIfAbsent(connection, k -> ConcurrentHashMap.newKeySet()).add(channelId);
+                    DebateSession session = registry.find(channelId).orElse(null);
+                    if (session != null) sendCatchUp(connection, session, channelId);
+                } catch (IllegalArgumentException ignored) {}
+            } else if (topic.startsWith("file:")) {
+                String path = topic.substring("file:".length());
+                if (isPathAllowed(connection, path)) {
+                    eventBus.watchFile(connection, path);
+                    startFileWatch(path);
+                }
+            }
+        }
+        sendSafe(connection, PushMessage.ack(requestId, topics));
+    }
+
+    private void handleUnlisten(WebSocketConnection connection, String requestId, List<String> topics) {
+        for (String topic : topics) {
+            if (topic.startsWith("debate:")) {
+                String sessionIdStr = topic.substring("debate:".length());
+                try {
+                    UUID channelId = UUID.fromString(sessionIdStr);
+                    eventBus.unwatchSession(connection, channelId);
+                    Set<UUID> sessions = connectionSessions.get(connection);
+                    if (sessions != null) sessions.remove(channelId);
+                } catch (IllegalArgumentException ignored) {}
+            } else if (topic.startsWith("file:")) {
+                String path = topic.substring("file:".length());
+                eventBus.unwatchFile(connection, path);
+                stopFileWatchIfUnused(path);
+            }
+        }
+        sendSafe(connection, PushMessage.ack(requestId));
     }
 
     private void sendCatchUp(WebSocketConnection connection, DebateSession session, UUID channelId) {
@@ -148,7 +194,7 @@ public class DebateWebSocket {
         var ctxMap = new HashMap<String, Object>();
         ctxMap.put("serverContributionChars", ctxSnapshot.serverContributionChars());
         ctxMap.put("windowSizeChars", ctxSnapshot.windowSizeChars());
-        ctxMap.put("agentReportedPercent", ctxSnapshot.agentReportedPercent()); // null → JSON null via Jackson
+        ctxMap.put("agentReportedPercent", ctxSnapshot.agentReportedPercent());
         ctxMap.put("effectivePercent", ctxSnapshot.effectivePercent());
         ctxMap.put("messageCount", ctxSnapshot.messageCount());
         ctxMap.put("thresholdExceeded", ctxSnapshot.thresholdExceeded());
@@ -164,7 +210,6 @@ public class DebateWebSocket {
     }
 
     private boolean isPathAllowed(WebSocketConnection connection, String path) {
-        // Allow if path is in any session this connection is watching
         Set<UUID> sessions = connectionSessions.get(connection);
         if (sessions == null || sessions.isEmpty()) return false;
         for (UUID channelId : sessions) {
@@ -208,7 +253,6 @@ public class DebateWebSocket {
             FileWatchHandle newHandle = new FileWatchHandle(ws, watchThread);
             FileWatchHandle existing = activeFileWatches.putIfAbsent(path, newHandle);
             if (existing != null) {
-                // Another thread won the race — clean up our resources
                 watchThread.interrupt();
                 try { ws.close(); } catch (IOException ignored) {}
             }
@@ -229,7 +273,6 @@ public class DebateWebSocket {
     private void cleanup(WebSocketConnection connection) {
         eventBus.unregister(connection);
         connectionSessions.remove(connection);
-        // Check all file watches for cleanup
         for (String path : new ArrayList<>(activeFileWatches.keySet())) {
             stopFileWatchIfUnused(path);
         }
@@ -238,20 +281,19 @@ public class DebateWebSocket {
     private void sendEvent(WebSocketConnection connection, String topic, Object payload) {
         try {
             String payloadJson = mapper.writeValueAsString(payload);
-            String json = "{\"op\":\"event\",\"topic\":\"" + topic + "\",\"payload\":" + payloadJson + "}";
-            connection.sendText(json).subscribe().with(v -> {}, err -> {
-                LOG.fine("sendEvent failed: " + err.getMessage());
-                eventBus.unregister(connection);
-            });
+            sendSafe(connection, PushMessage.event(topic, payloadJson));
         } catch (Exception e) {
             LOG.warning("Failed to serialize event '" + topic + "': " + e.getMessage());
         }
     }
 
     private void sendEventRaw(WebSocketConnection connection, String topic, String payloadJson) {
-        String json = "{\"op\":\"event\",\"topic\":\"" + topic + "\",\"payload\":" + payloadJson + "}";
+        sendSafe(connection, PushMessage.event(topic, payloadJson));
+    }
+
+    private void sendSafe(WebSocketConnection connection, String json) {
         connection.sendText(json).subscribe().with(v -> {}, err -> {
-            LOG.fine("sendEventRaw failed: " + err.getMessage());
+            LOG.fine("sendText failed: " + err.getMessage());
             eventBus.unregister(connection);
         });
     }
