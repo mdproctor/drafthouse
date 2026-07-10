@@ -26,7 +26,7 @@ DraftHouse is an MCP-driven document review tool. An LLM client opens a document
 |---|---|---|
 | 1 | Portability | Domain logic imports into Claudony without framework changes |
 | 2 | MCP-first API | All review session control available as MCP tools |
-| 3 | Provider replaceability | LangChain4j replaced with Claude Agent SDK without domain changes |
+| 3 | Provider replaceability | Platform AgentProvider replaces LangChain4j without domain changes |
 
 **Artifact schema**
 
@@ -49,11 +49,11 @@ DraftHouse is an MCP-driven document review tool. An LLM client opens a document
 | Java 17 | Sealed types, exhaustive switches on `EntryType` |
 | Quarkus 3.34.3 | Platform BOM version |
 | casehub-qhorus 0.2-SNAPSHOT | Pre-release; `ChannelProjection` SPI (qhorus#230 ✅ shipped) |
-| quarkus-langchain4j 1.9.1 | Built against Quarkus 3.33.1; validated on 3.34.3; 0.x line incompatible |
+| casehub-platform-agent-api 0.2-SNAPSHOT | Platform AgentProvider SPI — provider-agnostic LLM invocation |
 | CaseHub parent BOM | `casehubio/parent` — no dependency version overrides outside BOM |
 | Browser-only UI | No Electron; npm build via Quinoa at compile time — no Node.js at runtime |
 | Filesystem access | Documents read from local filesystem; no upload or remote fetch |
-| Claude Agent SDK | Coordinates not on Maven Central (platform#55); provider is a stub |
+| casehub-pages-push 0.2-SNAPSHOT | Typed push protocol SDK — wire builders, topic registry, event store |
 
 ---
 
@@ -66,13 +66,13 @@ C4Context
   System(drafthouse, "DraftHouse", "MCP-driven document review — comparison rendering and structured LLM critique")
   System_Ext(filesystem, "Local Filesystem", "Source documents — Markdown, text")
   System_Ext(qhorus, "Qhorus Channel Mesh", "Agent communication — QUERY/RESPONSE commitment loop")
-  System_Ext(anthropic, "Anthropic Claude API", "Reviewer LLM — via LangChain4j")
+  System_Ext(agent_api, "Platform AgentProvider", "Reviewer LLM — via casehub-platform-agent-api")
 
   Rel(llm_client, drafthouse, "MCP tools — start_review, update_selection, query_review, end_review")
   Rel(llm_client, drafthouse, "Browser — ?a=path&b=path")
   Rel(drafthouse, filesystem, "GET /api/file, SSE /api/watch")
   Rel(drafthouse, qhorus, "ChannelProjection<ReviewState>, DebateEvent commits")
-  Rel(drafthouse, anthropic, "quarkus-langchain4j-anthropic")
+  Rel(drafthouse, agent_api, "casehub-platform-agent-api")
 ```
 
 **System boundaries**
@@ -100,11 +100,11 @@ C4Context
 What this strategy establishes:
 - **Standalone today, Claudony plugin tomorrow** — diff engine, domain pipeline, and review anchoring are pure-Java with no UI framework coupling; when Claudony's plugin API stabilises they import as JARs unchanged
 - **MCP-first API** — LLM clients control review sessions via tools, not browser UI; the browser is a visualisation surface only
-- **Dual provider abstraction** — LangChain4j runs production; `ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` displaces it without configuration change when platform#55 delivers coordinates
+- **Platform AgentProvider** — `PlatformDebateAgentProvider @DefaultBean` backed by `AgentProvider.invoke()`; `ClaudeAgentSdkDebateAgentProvider` in claude-agent displaces it when on classpath
 - **Minimal delta sequencing** — infrastructure established first; domain model second; MCP surface and channel integration third; each Chapter adds one concern
 
 **Chapter sequencing rationale:**
-- C1 before C2: Quarkus application and module structure required before Qhorus and LangChain4j can be wired
+- C1 before C2: Quarkus application and module structure required before Qhorus and AgentProvider can be wired
 - C2 before C3: Framework dependencies required before `DebateAgentProvider` and `ChannelProjection` can compile and test
 - C3 before C4: `ReviewSessionService` and `DebateAgentProvider` required before MCP tools can be implemented
 - C4 and C5 independent: MCP surface does not depend on Qhorus `DebateChannel` type; channel type does not depend on MCP surface; either can ship first
@@ -118,8 +118,8 @@ What this strategy establishes:
 | Module | Type | Responsibilities |
 |---|---|---|
 | `server/api/` | Pure-Java JAR | Domain model — `DebateEvent`, `ReviewState`, `ReviewPoint`, `DebateAgentProvider` SPI; no Quarkus or Qhorus compile-scope deps |
-| `server/runtime/` | Quarkus app | All JAX-RS resources, Qhorus wiring, LangChain4j agents, REST stubs; depends on `server/api/` |
-| `server/claude-agent/` | Optional JAR | `ClaudeAgentSdkDebateAgentProvider @Alternative @Priority(1)` stub — not a runtime dep until platform#55 ships |
+| `server/runtime/` | Quarkus app | All JAX-RS resources, Qhorus wiring, platform AgentProvider, push protocol; depends on `server/api/` |
+| `server/claude-agent/` | Optional JAR | `ClaudeAgentSdkDebateAgentProvider` — displaces `PlatformDebateAgentProvider @DefaultBean` when on classpath |
 | `index.html` | Browser UI | Diff engine (LCS), word-level highlights, canvas minimap, scroll sync — no build step |
 | `styles.css` | Browser assets | Archive Room CSS tokens, panel/diff/minimap styles |
 
@@ -138,13 +138,14 @@ C4Container
   Container_Boundary(b2, "Layer: Platform Wiring") {
     Container(api_mod, "server/api", "Pure Java", "Domain model — ports and types only; no framework deps")
     Container(qhorus_dep, "casehub-qhorus", "Quarkus ext", "Channel mesh, ChannelProjection SPI")
-    Container(lc4j, "quarkus-langchain4j", "Quarkus ext", "@AiService, Anthropic provider")
+    Container(agent_api_dep, "casehub-platform-agent-api", "Platform SPI", "AgentProvider — provider-agnostic LLM invocation")
+    Container(push_dep, "casehub-pages-push", "Platform SDK", "Typed push protocol — PushMessage, PushRequest, TopicRegistry")
   }
 
   Container_Boundary(b3, "Layer: Review Domain") {
     Container(debate_pkg, "debate/ package", "Pure Java (server/api)", "DebateEvent sealed type, ReviewState fold state, DebateAgentProvider SPI")
     Container(projector, "SummaryProjector", "Pure Java SPI (server/api)", "ChannelProjection<ReviewState> — incremental fold; discovered by Qhorus at startup")
-    Container(agents, "LangChain4jDebateAgentProvider", "Quarkus CDI @DefaultBean", "Production reviewer via LangChain4j")
+    Container(agents, "PlatformDebateAgentProvider", "Quarkus CDI @DefaultBean", "Production reviewer via AgentProvider")
     Container(session_svc, "ReviewSessionService", "Quarkus CDI", "JGit session storage; fold recovery on restart")
   }
 
