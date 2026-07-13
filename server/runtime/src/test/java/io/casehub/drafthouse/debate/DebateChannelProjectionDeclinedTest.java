@@ -5,6 +5,7 @@ import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.MessageView;
 import org.junit.jupiter.api.Test;
+import java.util.List;
 
 import static io.casehub.drafthouse.debate.DebateProtocol.META_SENTINEL;
 import static org.assertj.core.api.Assertions.*;
@@ -23,7 +24,7 @@ class DebateChannelProjectionDeclinedTest {
     private static MessageView msg(MessageType type, String correlationId, String metaHeader, String bodyContent) {
         String encodedContent = META_SENTINEL + metaHeader + "\n\n" + bodyContent;
         return new MessageView(null, null, "test-sender", type,
-                encodedContent, correlationId, null, null, null, ActorType.AGENT, null, null, 0);
+                encodedContent, correlationId, null, null, null, List.of(), ActorType.AGENT, null, null, 0);
     }
 
     private static String ratefacts(String entryType, String role, int round) {

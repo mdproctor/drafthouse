@@ -137,7 +137,7 @@ class ReviewerChannelBackendTest {
     void nonQueryMessages_areIgnored() {
         backend.post(channelRef, new OutboundMessage(
                 UUID.randomUUID(), "user", MessageType.EVENT, "ping",
-                CORRELATION_ID, null, ActorType.HUMAN));
+                CORRELATION_ID, null, ActorType.HUMAN, List.of()));
         verifyNoInteractions(llm, messageService);
     }
 
@@ -269,12 +269,12 @@ class ReviewerChannelBackendTest {
     private OutboundMessage query(String content) {
         return new OutboundMessage(
                 UUID.randomUUID(), "human:tester", MessageType.QUERY, content,
-                CORRELATION_ID, null, ActorType.HUMAN);
+                CORRELATION_ID, null, ActorType.HUMAN, List.of());
     }
 
     private OutboundMessage outboundMessage(MessageType type, String content, String correlationId) {
         return new OutboundMessage(
                 UUID.randomUUID(), "user", type, content,
-                correlationId, null, ActorType.HUMAN);
+                correlationId, null, ActorType.HUMAN, List.of());
     }
 }

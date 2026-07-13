@@ -13,7 +13,7 @@ import java.util.UUID;
 import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.blocks.conversation.ConversationState;
 import io.casehub.blocks.conversation.SubTaskFinding;
-import io.casehub.blocks.conversation.SubTaskStatus;
+import io.casehub.api.model.TaskStatus;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;
 import io.casehub.platform.api.identity.ActorType;
@@ -734,15 +734,15 @@ class DebateMcpToolsTest {
         when(registry.find(originalId)).thenReturn(Optional.of(sessionFor(originalId)));
 
         ConversationState boundedState = stateWithFindings(
-                finding("f1", SubTaskStatus.COMPLETE),
-                finding("f2", SubTaskStatus.COMPLETE),
-                finding("f3", SubTaskStatus.PENDING));
+                finding("f1", TaskStatus.COMPLETED),
+                finding("f2", TaskStatus.COMPLETED),
+                finding("f3", TaskStatus.PENDING));
         ConversationState fullState = stateWithFindings(
-                finding("f1", SubTaskStatus.COMPLETE),
-                finding("f2", SubTaskStatus.COMPLETE),
-                finding("f3", SubTaskStatus.PENDING),
-                finding("f4", SubTaskStatus.COMPLETE),
-                finding("f5", SubTaskStatus.COMPLETE));
+                finding("f1", TaskStatus.COMPLETED),
+                finding("f2", TaskStatus.COMPLETED),
+                finding("f3", TaskStatus.PENDING),
+                finding("f4", TaskStatus.COMPLETED),
+                finding("f5", TaskStatus.COMPLETED));
 
         Channel newCh = newChannel();
         when(channelService.create(any(ChannelCreateRequest.class)))
@@ -1153,10 +1153,10 @@ class DebateMcpToolsTest {
         return new ConversationState(Map.of(), List.of(), List.of(), map);
     }
 
-    private static SubTaskFinding finding(final String id, final SubTaskStatus status) {
+    private static SubTaskFinding finding(final String id, final TaskStatus status) {
         return new SubTaskFinding(id, "VERIFY", "REV", null,
-                status == SubTaskStatus.COMPLETE ? "the finding text" : null,
-                status == SubTaskStatus.ERROR ? "error occurred" : null,
+                status == TaskStatus.COMPLETED ? "the finding text" : null,
+                status == TaskStatus.FAULTED ? "error occurred" : null,
                 status);
     }
 }

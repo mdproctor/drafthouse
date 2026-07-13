@@ -1,5 +1,6 @@
 package io.casehub.drafthouse;
 
+import io.casehub.api.model.TaskStatus;
 import io.casehub.blocks.channel.ChannelMessageMeta;
 import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.blocks.conversation.ConversationProtocol;
@@ -457,13 +458,18 @@ public class DebateMcpTools {
 
         var bounded       = new DebateChannelProjection.RoundBoundedProjection(round, debateProjection);
         var boundedResult = projectionService.project(original.channelId(), bounded);
+        var fullResult    = projectionService.project(original.channelId(), debateProjection);
 
         String summary = renderBounded(boundedResult.state(), round);
-        // TODO #105: subTaskFindings counts stubbed — SubTaskStatus not yet in casehub-blocks
-        int findingsComplete       = 0;
-        int findingsPending        = 0;
-        int findingsInOriginalOnly = 0;
-        int pointCount             = boundedResult.state().points().size();
+        int findingsComplete = (int) boundedResult.state().subTaskFindings().values().stream()
+                .filter(f -> f.status() == TaskStatus.COMPLETED)
+                .count();
+        int findingsPending = (int) boundedResult.state().subTaskFindings().values().stream()
+                .filter(f -> f.status() == TaskStatus.PENDING)
+                .count();
+        int findingsInOriginalOnly = fullResult.state().subTaskFindings().size()
+                - boundedResult.state().subTaskFindings().size();
+        int pointCount = boundedResult.state().points().size();
 
         String        debateSlug  = "d-" + UUID.randomUUID();
         String        channelName = "drafthouse/debate/" + debateSlug;

@@ -76,7 +76,7 @@ public class DebateChannelBackend implements ChannelBackend {
         }
 
         String correlationId = message.correlationId() != null
-                ? message.correlationId().toString() : UUID.randomUUID().toString();
+                ? message.correlationId() : UUID.randomUUID().toString();
         channelAgentEvent.fireAsync(new ChannelAgentRequest(channel.id(), correlationId, message));
     }
 }

@@ -49,15 +49,17 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
         String entryId = message.correlationId();
         if (entryId == null) {return state;}
 
-        // Review channels never carry artefactRefs — classification comes from meta sentinel
-        Map<String, String> meta           = Map.of();
-        Priority            priority       = Priority.LOW;
-        String              scope          = "ISOLATED";
-        String              location       = null;
-        var                 classification = new PointClassification(priority, scope, location);
+        String              topicMeta = message.topic() != null ? message.topic() : "";
+        Map<String, String> meta      = parseArtefacts(topicMeta);
+        Priority            priority  = parsePriority(meta.getOrDefault("priority", "LOW"));
+        String              scope     = parseScope(meta.getOrDefault("scope", "ISOLATED"));
+        String              location  = meta.get("location");
+        var classification = new PointClassification(priority, scope,
+                                                     location != null && !location.isBlank() ? location : null);
 
         return ConversationFold.createPoint(state, entryId, classification,
-                                            role(message), 0, "RAISE", message.content());}
+                                            role(message), 0, "RAISE", message.content());
+    }
 
     private ConversationState handleResponse(ConversationState state, MessageView message,
                                               String entryType, String newStatus) {

@@ -121,7 +121,7 @@ public record DebateStreamEntry(
                 || entryType == EntryType.SUB_TASK_FINDING
                 || entryType == EntryType.SUB_TASK_ERROR;
 
-        String correlationId = msg.correlationId() != null ? msg.correlationId().toString() : null;
+        String correlationId = msg.correlationId() != null ? msg.correlationId() : null;
         String pointId = isSubTask ? meta.get("pointId") : correlationId;
         String subTaskId = isSubTask ? correlationId : null;
 

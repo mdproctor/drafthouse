@@ -62,7 +62,7 @@ public class ReviewerChannelBackend implements ChannelBackend {
         }
 
         Long inReplyTo = messageService
-                .findByCorrelationId(message.correlationId().toString())
+                .findByCorrelationId(message.correlationId())
                 .map(m -> m.id())
                 .orElse(null);
         if (inReplyTo == null) {
@@ -106,7 +106,7 @@ public class ReviewerChannelBackend implements ChannelBackend {
                 .type(type)
                 .content(result.content())
                 .inReplyTo(inReplyTo)
-                .correlationId(message.correlationId().toString())
+                .correlationId(message.correlationId())
                 .actorType(ActorType.AGENT)
                 .build());
     }
