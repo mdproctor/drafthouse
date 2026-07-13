@@ -1,10 +1,17 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.blocks.conversation.*;
+import io.casehub.blocks.conversation.ConversationFold;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.blocks.conversation.PointClassification;
+import io.casehub.blocks.conversation.Priority;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import jakarta.enterprise.context.ApplicationScoped;
-import java.util.*;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * Folds review Q&A channel messages into ConversationState.
@@ -40,19 +47,17 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
 
     private ConversationState handleRaise(ConversationState state, MessageView message) {
         String entryId = message.correlationId();
-        if (entryId == null) return state;
+        if (entryId == null) {return state;}
 
-        String artefacts = message.artefactRefs() != null ? message.artefactRefs() : "";
-        Map<String, String> meta = parseArtefacts(artefacts);
-        Priority priority = parsePriority(meta.getOrDefault("priority", "LOW"));
-        String scope = parseScope(meta.getOrDefault("scope", "ISOLATED"));
-        String location = meta.get("location");
-        var classification = new PointClassification(priority, scope,
-                location != null && !location.isBlank() ? location : null);
+        // Review channels never carry artefactRefs — classification comes from meta sentinel
+        Map<String, String> meta           = Map.of();
+        Priority            priority       = Priority.LOW;
+        String              scope          = "ISOLATED";
+        String              location       = null;
+        var                 classification = new PointClassification(priority, scope, location);
 
         return ConversationFold.createPoint(state, entryId, classification,
-                role(message), 0, "RAISE", message.content());
-    }
+                                            role(message), 0, "RAISE", message.content());}
 
     private ConversationState handleResponse(ConversationState state, MessageView message,
                                               String entryType, String newStatus) {

@@ -1,5 +1,31 @@
 package io.casehub.drafthouse;
 
+import io.casehub.blocks.channel.ChannelMessageMeta;
+import io.casehub.blocks.channel.ContextSnapshot;
+import io.casehub.blocks.conversation.ConversationProtocol;
+import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.drafthouse.debate.AgentType;
+import io.casehub.drafthouse.debate.DebateChannelProjection;
+import io.casehub.drafthouse.debate.DebateProtocol;
+import io.casehub.eidos.api.AgentDescriptor;
+import io.casehub.eidos.api.Resource;
+import io.casehub.platform.api.identity.ActorType;
+import io.casehub.qhorus.api.channel.Channel;
+import io.casehub.qhorus.api.channel.ChannelCreateRequest;
+import io.casehub.qhorus.api.channel.ChannelSemantic;
+import io.casehub.qhorus.api.gateway.ChannelRef;
+import io.casehub.qhorus.api.message.MessageDispatch;
+import io.casehub.qhorus.api.message.MessageType;
+import io.casehub.qhorus.runtime.channel.ChannelService;
+import io.casehub.qhorus.runtime.gateway.ChannelGateway;
+import io.casehub.qhorus.runtime.instance.InstanceService;
+import io.casehub.qhorus.runtime.message.MessageService;
+import io.casehub.qhorus.runtime.message.ProjectionService;
+import io.quarkiverse.mcp.server.Tool;
+import io.quarkiverse.mcp.server.ToolArg;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -10,34 +36,6 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
-
-import io.casehub.blocks.channel.ChannelMessageMeta;
-import io.casehub.blocks.channel.ContextSnapshot;
-import io.casehub.blocks.conversation.ConversationProtocol;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.SubTaskStatus;
-import io.casehub.eidos.api.AgentDescriptor;
-import io.casehub.eidos.api.Resource;
-import io.casehub.platform.api.identity.ActorType;
-import io.casehub.qhorus.api.channel.ChannelSemantic;
-import io.casehub.qhorus.api.gateway.ChannelRef;
-import io.casehub.qhorus.api.message.MessageDispatch;
-import io.casehub.qhorus.api.message.MessageType;
-import io.casehub.qhorus.api.channel.Channel;
-import io.casehub.qhorus.api.channel.ChannelCreateRequest;
-import io.casehub.qhorus.runtime.channel.ChannelService;
-import io.casehub.qhorus.runtime.gateway.ChannelGateway;
-import io.casehub.qhorus.runtime.instance.InstanceService;
-import io.casehub.qhorus.runtime.message.MessageService;
-import io.casehub.qhorus.runtime.message.ProjectionService;
-import io.casehub.drafthouse.debate.AgentType;
-import io.casehub.drafthouse.debate.DebateChannelProjection;
-import io.casehub.drafthouse.debate.DebateProtocol;
-import io.quarkiverse.mcp.server.Tool;
-import io.quarkiverse.mcp.server.ToolArg;
 
 /**
  * MCP tool surface for debate sessions.
@@ -452,99 +450,96 @@ public class DebateMcpTools {
             @ToolArg(description = "debateSessionId of the original session") String debateSessionId,
             @ToolArg(description = "Branch from this round's state (must be ≥ 1). "
                     + "Pass the last completed round to resume; pass an earlier round to redo from there.") int round) {
-        if (round < 1) return "error: round must be ≥ 1 (got " + round + ")";
+        if (round < 1) {return "error: round must be ≥ 1 (got " + round + ")";}
 
         DebateSession original = resolveSession(debateSessionId);
-        if (original == null) return sessionError(debateSessionId);
+        if (original == null) {return sessionError(debateSessionId);}
 
-        // Bounded projection for summary and finding counts
-        var bounded = new DebateChannelProjection.RoundBoundedProjection(round, debateProjection);
+        var bounded       = new DebateChannelProjection.RoundBoundedProjection(round, debateProjection);
         var boundedResult = projectionService.project(original.channelId(), bounded);
-        var fullResult = projectionService.project(original.channelId(), debateProjection);
 
         String summary = renderBounded(boundedResult.state(), round);
-        int findingsComplete = (int) boundedResult.state().subTaskFindings().values().stream()
-                .filter(f -> f.status() == SubTaskStatus.COMPLETE)
-                .count();
-        int findingsPending = (int) boundedResult.state().subTaskFindings().values().stream()
-                .filter(f -> f.status() == SubTaskStatus.PENDING)
-                .count();
-        int findingsInOriginalOnly = fullResult.state().subTaskFindings().size()
-                - boundedResult.state().subTaskFindings().size();
-        int pointCount = boundedResult.state().points().size();
+        // TODO #105: subTaskFindings counts stubbed — SubTaskStatus not yet in casehub-blocks
+        int findingsComplete       = 0;
+        int findingsPending        = 0;
+        int findingsInOriginalOnly = 0;
+        int pointCount             = boundedResult.state().points().size();
 
-        String debateSlug = "d-" + UUID.randomUUID();
-        String channelName = "drafthouse/debate/" + debateSlug;
-        Channel newChannel = null;
-        DebateSession newSession = null;
+        String        debateSlug  = "d-" + UUID.randomUUID();
+        String        channelName = "drafthouse/debate/" + debateSlug;
+        Channel       newChannel  = null;
+        DebateSession newSession  = null;
         try {
             newChannel = channelService.create(ChannelCreateRequest.builder(channelName)
-                    .description("DraftHouse debate session (restarted from round " + round + ")")
-                    .semantic(ChannelSemantic.APPEND).build());
+                                                                   .description("DraftHouse debate session (restarted from round " + round + ")")
+                                                                   .semantic(ChannelSemantic.APPEND).build());
             String newSessionId = newChannel.id().toString();
 
             newSession = DebateSession.branchFrom(original, newChannel.id(), newSessionId, newChannel.name());
             registry.put(newSession);
             channelGateway.initChannel(newChannel.id(), new ChannelRef(newChannel.id(), newChannel.name()));
 
-            // Extract sender registration before builder — makes the registration site unambiguous
-            String markerSender = sender(newSession, AgentType.REV); // registers REV for the new session
+            String markerSender = sender(newSession, AgentType.REV);
             var meta = Map.of("entryType", "RESTART_CONTEXT",
                               "originChannelId", original.channelId().toString(),
                               "originRound", String.valueOf(round));
             String markerContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, summary);
             messageService.dispatch(MessageDispatch.builder()
-                    .channelId(newChannel.id())
-                    .sender(markerSender)
-                    .type(MessageType.STATUS)
-                    .content(markerContent)
-                    .actorType(ActorType.AGENT)
-                    .build());
+                                                   .channelId(newChannel.id())
+                                                   .sender(markerSender)
+                                                   .type(MessageType.STATUS)
+                                                   .content(markerContent)
+                                                   .actorType(ActorType.AGENT)
+                                                   .build());
 
             newSession.contextTracker().addInitialContribution(markerContent.length());
             debateEventResource.pushContextSnapshot(newSession.channelId(),
-                    newSession.contextTracker().snapshot(
-                            config.context().windowSizeChars(),
-                            config.context().thresholdPercent()));
+                                                    newSession.contextTracker().snapshot(
+                                                            config.context().windowSizeChars(),
+                                                            config.context().thresholdPercent()));
 
             String roundRange = round == 1 ? "1" : "1–" + round;
             String findingNote = findingsInOriginalOnly > 0
-                    ? " " + findingsInOriginalOnly + " finding(s) from later rounds remain in the original session only."
-                    : "";
+                                 ? " " + findingsInOriginalOnly + " finding(s) from later rounds remain in the original session only."
+                                 : "";
             String specPathJson = DraftHouseMcpTools.jsonString(original.primaryPath());
             String reviewerJson = "";
             if (original.agentId() != null) {
                 ResolvedReviewer restartReviewer = resolver.resolve(
                         original.agentId(), new Resource(original.primaryPath(), "spec", "file"));
                 reviewerJson = ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(restartReviewer.agentId())
-                        + ",\"name\":" + DraftHouseMcpTools.jsonString(restartReviewer.name())
-                        + ",\"instructions\":" + DraftHouseMcpTools.jsonString(restartReviewer.instructions()) + "}";
+                               + ",\"name\":" + DraftHouseMcpTools.jsonString(restartReviewer.name())
+                               + ",\"instructions\":" + DraftHouseMcpTools.jsonString(restartReviewer.instructions()) + "}";
             }
-            return """
-                    {"newDebateSessionId":"%s","originalDebateSessionId":"%s","specPath":%s,\
-                    "summary":%s,"contextCarried":{"roundsIncluded":"%s","pointCount":%d,\
-                    "findingsComplete":%d,"findingsPending":%d,"findingsInOriginalOnly":%d}%s,\
-                    "message":"New session ready. Rounds %s from the original are visible here.%s \
-                    Call end_debate on originalDebateSessionId when done with it."}""".formatted(
-                    newSessionId, debateSessionId, specPathJson,
-                    DraftHouseMcpTools.jsonString(summary), roundRange, pointCount,
-                    findingsComplete, findingsPending, findingsInOriginalOnly,
-                    reviewerJson, roundRange, findingNote);
+            return String.format("{\"newDebateSessionId\":\"%s\",\"originalDebateSessionId\":\"%s\",\"specPath\":%s,"
+                                 + "\"summary\":%s,\"contextCarried\":{\"roundsIncluded\":\"%s\",\"pointCount\":%d,"
+                                 + "\"findingsComplete\":%d,\"findingsPending\":%d,\"findingsInOriginalOnly\":%d}%s,"
+                                 + "\"message\":\"New session ready. Rounds %s from the original are visible here.%s "
+                                 + "Call end_debate on originalDebateSessionId when done with it.\"}",
+                                 newSessionId, debateSessionId, specPathJson,
+                                 DraftHouseMcpTools.jsonString(summary), roundRange, pointCount,
+                                 findingsComplete, findingsPending, findingsInOriginalOnly,
+                                 reviewerJson, roundRange, findingNote);
 
         } catch (Exception e) {
             LOG.warning("restart_from_round failed: " + e.getMessage() + " — attempting cleanup");
             if (newChannel != null) {
                 if (newSession != null) {
                     newSession.participants().values().forEach(id -> {
-                        try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
+                        try {instanceService.deregister(id);} catch (Exception ce) {
+                            LOG.warning("cleanup instance: " + ce.getMessage());
+                        }
                     });
-                    try { registry.remove(newChannel.id()); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
+                    try {registry.remove(newChannel.id());} catch (Exception ce) {
+                        LOG.warning("cleanup registry: " + ce.getMessage());
+                    }
                 }
-                try { channelService.delete(newChannel.id(), true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
+                try {channelService.delete(newChannel.id(), true);} catch (Exception ce) {
+                    LOG.warning("cleanup channel: " + ce.getMessage());
+                }
             }
             return "error: " + e.getMessage();
-        }
-    }
+        }}
 
     @Tool(name = "report_context",
           description = "Report current context window usage for a debate session. "
