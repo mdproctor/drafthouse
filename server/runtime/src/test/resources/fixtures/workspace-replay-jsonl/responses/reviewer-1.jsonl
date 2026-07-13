@@ -1,0 +1,6 @@
+{"event": "schema_version", "version": 1}
+{"event": "issue_raised", "round": 1, "id": "R1-01", "title": "Missing error handling in parser", "body": "The parser does not handle malformed input.", "location": "§3.2", "priority": "HIGH", "depends": [], "scope": null}
+{"event": "issue_raised", "round": 1, "id": "R1-02", "title": "API endpoint returns wrong status code", "body": "Returns 200 on validation failure.", "location": "§4.1", "priority": "MEDIUM", "depends": [], "scope": null}
+{"event": "issue_raised", "round": 1, "id": "R1-03", "title": "Race condition in concurrent access", "body": "Multiple threads can modify shared state.", "location": null, "priority": "HIGH", "depends": ["R1-01"], "scope": null}
+{"event": "assumption", "round": 1, "text": "All input files are UTF-8 encoded.", "source": "reviewer-1.md"}
+{"event": "round_signal", "round": 1, "role": "reviewer", "signal": "CONTINUE", "description": null}

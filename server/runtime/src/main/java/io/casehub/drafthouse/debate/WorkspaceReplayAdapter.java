@@ -15,7 +15,13 @@ import io.casehub.qhorus.runtime.message.MessageService;
 
 import java.io.File;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 public class WorkspaceReplayAdapter {
@@ -46,39 +52,42 @@ public class WorkspaceReplayAdapter {
 
     public ReplayResult replay(DebateSession session,
                                 WorkspaceParser.WorkspaceParseResult parseResult) {
-
-        UUID channelId = session.channelId();
+        UUID   channelId = session.channelId();
         String revSender = registerSender(session, AgentType.REV);
         String impSender = registerSender(session, AgentType.IMP);
 
         channelGateway.initChannel(channelId,
-                new ChannelRef(channelId, session.channelName()));
+                                   new ChannelRef(channelId, session.channelName()));
 
         Map<String, Long> raiseMessageIds = new HashMap<>();
-        int entryCount = 0;
+        int               entryCount      = 0;
 
         for (var round : parseResult.rounds()) {
             int n = round.roundNumber();
 
             // 1. RAISE entries
             for (var issue : round.issues()) {
-                String location = extractLocation(issue.body());
+                String location = issue.location();
                 if (location == null) {
-                    location = findLocationFromResponses(issue.issueId(), round.responses());
+                    location = extractLocation(issue.body());
+                    if (location == null) {
+                        location = findLocationFromResponses(issue.issueId(), round.responses());
+                    }
                 }
+                String priority = issue.priority();
 
-                var meta = buildMeta("RAISE", "REV", n, null, null, location);
+                var meta = buildMeta("RAISE", "REV", n, priority, null, location);
                 String encoded = ChannelMessageMeta.encode(
                         DebateProtocol.META_SENTINEL, meta, issue.title() + "\n\n" + issue.body());
 
                 DispatchResult dr = messageService.dispatch(MessageDispatch.builder()
-                        .channelId(channelId)
-                        .sender(revSender)
-                        .type(MessageType.QUERY)
-                        .content(encoded)
-                        .correlationId(issue.issueId())
-                        .actorType(ActorType.AGENT)
-                        .build());
+                                                                           .channelId(channelId)
+                                                                           .sender(revSender)
+                                                                           .type(MessageType.QUERY)
+                                                                           .content(encoded)
+                                                                           .correlationId(issue.issueId())
+                                                                           .actorType(ActorType.AGENT)
+                                                                           .build());
 
                 raiseMessageIds.put(issue.issueId(), dr.messageId());
                 entryCount++;
@@ -99,20 +108,20 @@ public class WorkspaceReplayAdapter {
                     default -> MessageType.RESPONSE;
                 };
 
-                var meta = buildMeta(entryType, "IMP", n, null, null, null);
+                var    meta    = buildMeta(entryType, "IMP", n, null, null, null);
                 String content = resp.body().isEmpty() ? resp.rationale() : resp.body();
                 String encoded = ChannelMessageMeta.encode(
                         DebateProtocol.META_SENTINEL, meta, content);
 
                 Long inReplyTo = raiseMessageIds.get(resp.issueId());
                 var dispatchBuilder = MessageDispatch.builder()
-                        .channelId(channelId)
-                        .sender(impSender)
-                        .type(msgType)
-                        .content(encoded)
-                        .correlationId(resp.issueId())
-                        .inReplyTo(inReplyTo)
-                        .actorType(ActorType.AGENT);
+                                                     .channelId(channelId)
+                                                     .sender(impSender)
+                                                     .type(msgType)
+                                                     .content(encoded)
+                                                     .correlationId(resp.issueId())
+                                                     .inReplyTo(inReplyTo)
+                                                     .actorType(ActorType.AGENT);
 
                 if (msgType == MessageType.HANDOFF) {
                     dispatchBuilder.target(HUMAN_INSTANCE_ID);
@@ -122,51 +131,55 @@ public class WorkspaceReplayAdapter {
                 entryCount++;
             }
 
-            // 3. VERIFIED / DISPUTE / AGREE entries (from next round's reviewer)
+            // 3. VERIFIED / DISPUTE / AGREE entries (in-source-round model)
             for (var conf : round.confirmations()) {
-                String entryType;
+                String      entryType;
                 MessageType msgType;
-                String content;
+                String      content;
 
-                if (conf.resolved()) {
-                    entryType = "VERIFIED";
-                    msgType = MessageType.DONE;
-                    content = "Fix verified.";
-                } else if (conf.accepted()) {
-                    entryType = "AGREE";
-                    msgType = MessageType.DONE;
-                    content = "Rejection accepted.";
-                } else {
-                    entryType = "DISPUTE";
-                    msgType = MessageType.DECLINE;
-                    content = conf.reason().isEmpty() ? "Still open." : conf.reason();
+                switch (conf.verdict()) {
+                    case "resolved" -> {
+                        entryType = "VERIFIED";
+                        msgType   = MessageType.DONE;
+                        content   = "Fix verified.";
+                    }
+                    case "accepted" -> {
+                        entryType = "AGREE";
+                        msgType   = MessageType.DONE;
+                        content   = "Rejection accepted.";
+                    }
+                    default -> {
+                        entryType = "DISPUTE";
+                        msgType   = MessageType.DECLINE;
+                        content   = conf.reason().isEmpty() ? "Still open." : conf.reason();
+                    }
                 }
 
-                var meta = buildMeta(entryType, "REV", n + 1, null, null, null);
+                var meta = buildMeta(entryType, "REV", n, null, null, null);
                 String encoded = ChannelMessageMeta.encode(
                         DebateProtocol.META_SENTINEL, meta, content);
 
                 Long inReplyTo = raiseMessageIds.get(conf.issueId());
                 messageService.dispatch(MessageDispatch.builder()
-                        .channelId(channelId)
-                        .sender(revSender)
-                        .type(msgType)
-                        .content(encoded)
-                        .correlationId(conf.issueId())
-                        .inReplyTo(inReplyTo)
-                        .actorType(ActorType.AGENT)
-                        .build());
+                                                       .channelId(channelId)
+                                                       .sender(revSender)
+                                                       .type(msgType)
+                                                       .content(encoded)
+                                                       .correlationId(conf.issueId())
+                                                       .inReplyTo(inReplyTo)
+                                                       .actorType(ActorType.AGENT)
+                                                       .build());
                 entryCount++;
             }
 
             // 4. MEMO entries (assumptions + settled decisions)
             for (String assumption : round.assumptions()) {
                 entryCount += dispatchMemo(channelId, revSender, n,
-                        "ASSUMPTION: " + assumption);
+                                           "ASSUMPTION: " + assumption);
             }
             for (var sd : round.settledDecisions()) {
                 String text = "SETTLED: " + sd.text();
-                if (!sd.fromIssue().isEmpty()) text += " (from " + sd.fromIssue() + ")";
+                if (!sd.fromIssue().isEmpty()) {text += " (from " + sd.fromIssue() + ")";}
                 entryCount += dispatchMemo(channelId, revSender, n, text);
             }
         }
@@ -175,20 +188,20 @@ public class WorkspaceReplayAdapter {
         for (var te : parseResult.trackerStatuses()) {
             if ("DEFERRED".equals(te.status())) {
                 int deferredRound = findDeferredRound(te.issueId(), parseResult);
-                var meta = buildMeta("DEFERRED", "REV", deferredRound, null, null, null);
+                var meta          = buildMeta("DEFERRED", "REV", deferredRound, null, null, null);
                 String encoded = ChannelMessageMeta.encode(
                         DebateProtocol.META_SENTINEL, meta, "Issue deferred.");
 
                 Long inReplyTo = raiseMessageIds.get(te.issueId());
                 messageService.dispatch(MessageDispatch.builder()
-                        .channelId(channelId)
-                        .sender(revSender)
-                        .type(MessageType.DECLINE)
-                        .content(encoded)
-                        .correlationId(te.issueId())
-                        .inReplyTo(inReplyTo)
-                        .actorType(ActorType.AGENT)
-                        .build());
+                                                       .channelId(channelId)
+                                                       .sender(revSender)
+                                                       .type(MessageType.DECLINE)
+                                                       .content(encoded)
+                                                       .correlationId(te.issueId())
+                                                       .inReplyTo(inReplyTo)
+                                                       .actorType(ActorType.AGENT)
+                                                       .build());
                 entryCount++;
             }
         }
@@ -198,20 +211,20 @@ public class WorkspaceReplayAdapter {
             if (te.evidence() != null) {
                 int evidenceRound = findEvidenceRound(te.issueId(), parseResult);
                 entryCount += dispatchMemo(channelId, revSender, evidenceRound,
-                        te.issueId() + ": spec commit " + te.evidence());
+                                           te.issueId() + ": spec commit " + te.evidence());
             }
         }
 
         // 7. Build timeline and emit ROUND_SNAPSHOT entries
-        DocumentTimeline timeline = null;
+        DocumentTimeline     timeline        = null;
         Map<Integer, String> snapshotContent = new LinkedHashMap<>();
-        String specPath = parseResult.specPath();
-        String repoPath = parseResult.projectRepoPath();
+        String               specPath        = parseResult.specPath();
+        String               repoPath        = parseResult.projectRepoPath();
 
         if (specPath != null && repoPath != null) {
-            Map<Integer, String> roundCommits = buildRoundCommitMap(parseResult);
-            List<DocumentSnapshot> snapshots = new ArrayList<>();
-            int snapshotIndex = 0;
+            Map<Integer, String>   roundCommits  = buildRoundCommitMap(parseResult);
+            List<DocumentSnapshot> snapshots     = new ArrayList<>();
+            int                    snapshotIndex = 0;
 
             // Round 0 — original document
             String initialCommit = findInitialCommit(repoPath, specPath);
@@ -219,12 +232,12 @@ public class WorkspaceReplayAdapter {
                 String content = gitShow(repoPath, initialCommit, specPath);
                 if (content != null) {
                     Instant commitTs = gitCommitTimestamp(repoPath, initialCommit);
-                    String label = "Round 0 (original)";
-                    var source = new SnapshotSource.GitCommit(initialCommit, commitTs, 0);
+                    String  label    = "Round 0 (original)";
+                    var     source   = new SnapshotSource.GitCommit(initialCommit, commitTs, 0);
                     snapshots.add(new DocumentSnapshot(specPath, label, source));
                     snapshotContent.put(snapshotIndex, content);
                     dispatchRoundSnapshot(channelId, revSender, 0, initialCommit, specPath,
-                            label, commitTs, label);
+                                          label, commitTs, label);
                     entryCount++;
                     snapshotIndex++;
                 }
@@ -232,19 +245,19 @@ public class WorkspaceReplayAdapter {
 
             // Rounds with commits
             for (var entry : roundCommits.entrySet()) {
-                int roundNum = entry.getKey();
+                int    roundNum   = entry.getKey();
                 String commitHash = entry.getValue();
-                String content = gitShow(repoPath, commitHash, specPath);
+                String content    = gitShow(repoPath, commitHash, specPath);
                 if (content != null) {
-                    long issueCount = countIssuesInRound(roundNum, parseResult);
-                    long fixCount = countFixesInRound(roundNum, parseResult);
-                    String label = String.format("Round %d (+%d raised, %d fixed)", roundNum, issueCount, fixCount);
-                    Instant commitTs = gitCommitTimestamp(repoPath, commitHash);
-                    var source = new SnapshotSource.GitCommit(commitHash, commitTs, roundNum);
+                    long    issueCount = countIssuesInRound(roundNum, parseResult);
+                    long    fixCount   = countFixesInRound(roundNum, parseResult);
+                    String  label      = String.format("Round %d (+%d raised, %d fixed)", roundNum, issueCount, fixCount);
+                    Instant commitTs   = gitCommitTimestamp(repoPath, commitHash);
+                    var     source     = new SnapshotSource.GitCommit(commitHash, commitTs, roundNum);
                     snapshots.add(new DocumentSnapshot(specPath, label, source));
                     snapshotContent.put(snapshotIndex, content);
                     dispatchRoundSnapshot(channelId, revSender, roundNum, commitHash, specPath,
-                            label, commitTs, label);
+                                          label, commitTs, label);
                     entryCount++;
                     snapshotIndex++;
                 }
@@ -258,19 +271,18 @@ public class WorkspaceReplayAdapter {
         // Batch push to WebSocket
         var messages = messageService.pollAfter(channelId, 0L, Integer.MAX_VALUE);
         var entries = messages.stream()
-                .map(DebateStreamEntry::from)
-                .filter(Objects::nonNull)
-                .toList();
+                              .map(DebateStreamEntry::from)
+                              .filter(Objects::nonNull)
+                              .toList();
         eventBus.pushDebateEntries(channelId, entries);
 
         Map<String, String> statusDist = new LinkedHashMap<>();
         for (var te : parseResult.trackerStatuses()) {
             statusDist.merge(te.status(), "1",
-                    (a, b) -> String.valueOf(Integer.parseInt(a) + 1));
+                             (a, b) -> String.valueOf(Integer.parseInt(a) + 1));
         }
 
-        return new ReplayResult(entryCount, statusDist, timeline, snapshotContent);
-    }
+        return new ReplayResult(entryCount, statusDist, timeline, snapshotContent);}
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -333,18 +345,17 @@ public class WorkspaceReplayAdapter {
                                           WorkspaceParser.WorkspaceParseResult result) {
         for (var round : result.rounds()) {
             for (var conf : round.confirmations()) {
-                if (conf.issueId().equals(issueId) && !conf.resolved() && !conf.accepted()) {
-                    return round.roundNumber() + 1;
+                if (conf.issueId().equals(issueId) && "contested".equals(conf.verdict())) {
+                    return round.roundNumber();
                 }
             }
         }
         for (var round : result.rounds()) {
             for (var issue : round.issues()) {
-                if (issue.issueId().equals(issueId)) return round.roundNumber();
+                if (issue.issueId().equals(issueId)) {return round.roundNumber();}
             }
         }
-        return 1;
-    }
+        return 1;}
 
     private static int findEvidenceRound(String issueId,
                                           WorkspaceParser.WorkspaceParseResult result) {

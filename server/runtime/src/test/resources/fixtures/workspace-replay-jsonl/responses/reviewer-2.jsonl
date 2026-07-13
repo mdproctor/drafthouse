@@ -1,0 +1,7 @@
+{"event": "schema_version", "version": 1}
+{"event": "confirmation", "round": 2, "id": "R1-01", "verdict": "resolved", "reason": ""}
+{"event": "confirmation", "round": 2, "id": "R1-02", "verdict": "accepted", "reason": ""}
+{"event": "confirmation", "round": 2, "id": "R1-03", "verdict": "contested", "reason": "needs architectural input"}
+{"event": "issue_raised", "round": 2, "id": "R2-01", "title": "Test coverage below threshold", "body": "Coverage is 45%.", "location": null, "priority": "MEDIUM", "depends": [], "scope": null}
+{"event": "settled_decision", "round": 2, "text": "Response-envelope pattern is the standard for this API", "fromIssue": "R1-02"}
+{"event": "round_signal", "round": 2, "role": "reviewer", "signal": "APPROVED", "description": null}

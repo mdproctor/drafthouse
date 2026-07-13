@@ -1,0 +1,3 @@
+{"event": "schema_version", "version": 1}
+{"event": "confirmation", "round": 3, "id": "R2-01", "verdict": "resolved", "reason": ""}
+{"event": "round_signal", "round": 3, "role": "reviewer", "signal": "APPROVED", "description": null}

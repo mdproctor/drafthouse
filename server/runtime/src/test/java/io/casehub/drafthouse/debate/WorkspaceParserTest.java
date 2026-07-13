@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class WorkspaceParserTest {
 
@@ -62,25 +64,19 @@ class WorkspaceParserTest {
     }
 
     @Test
-    void round1_confirmations_from_reviewer2() {
-        var round1 = result.rounds().get(0);
-        assertEquals(3, round1.confirmations().size());
+    void round1_confirmations_from_reviewer2() {    // In-source-round model: confirmations from reviewer-2.md are now in round 2, not round 1
+        var round2 = result.rounds().get(1);
+        var confs  = round2.confirmations();
+        assertTrue(confs.size() >= 3, "round 2 should have confirmations from reviewer-2.md");
 
-        var c1 = round1.confirmations().get(0);
-        assertEquals("R1-01", c1.issueId());
-        assertTrue(c1.resolved());
-        assertFalse(c1.accepted());
+        var c1 = confs.stream().filter(c -> "R1-01".equals(c.issueId())).findFirst().orElseThrow();
+        assertEquals("resolved", c1.verdict());
 
-        var c2 = round1.confirmations().get(1);
-        assertEquals("R1-02", c2.issueId());
-        assertFalse(c2.resolved());
-        assertTrue(c2.accepted());
+        var c2 = confs.stream().filter(c -> "R1-02".equals(c.issueId())).findFirst().orElseThrow();
+        assertEquals("accepted", c2.verdict());
 
-        var c3 = round1.confirmations().get(2);
-        assertEquals("R1-03", c3.issueId());
-        assertFalse(c3.resolved());
-        assertFalse(c3.accepted());
-    }
+        var c3 = confs.stream().filter(c -> "R1-03".equals(c.issueId())).findFirst().orElseThrow();
+        assertEquals("contested", c3.verdict());}
 
     @Test
     void round2_issues() {
@@ -92,13 +88,11 @@ class WorkspaceParserTest {
     }
 
     @Test
-    void round2_confirmations_from_reviewer3() {
-        var round2 = result.rounds().get(1);
-        assertEquals(1, round2.confirmations().size());
-        var c = round2.confirmations().get(0);
-        assertEquals("R2-01", c.issueId());
-        assertTrue(c.resolved());
-    }
+    void round2_confirmations_from_reviewer3() {    // In-source-round model: confirmation from reviewer-3.md is now in round 3
+        var round3 = result.rounds().get(2);
+        var confs  = round3.confirmations();
+        var c      = confs.stream().filter(cf -> "R2-01".equals(cf.issueId())).findFirst().orElseThrow();
+        assertEquals("resolved", c.verdict());}
 
     @Test
     void signal_extraction() {
@@ -211,4 +205,72 @@ class WorkspaceParserTest {
         // cleanup
         java.nio.file.Files.deleteIfExists(tempWorkspace);
     }
+
+    @Test
+    void jsonl_round_count() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay-jsonl");
+        var  result  = WorkspaceParser.parse(fixture);
+        assertEquals(3, result.rounds().size());
+    }
+
+    @Test
+    void jsonl_round1_issues_with_metadata() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay-jsonl");
+        var  result  = WorkspaceParser.parse(fixture);
+        var  round1  = result.rounds().get(0);
+        assertEquals(3, round1.issues().size());
+
+        var r101 = round1.issues().get(0);
+        assertEquals("R1-01", r101.issueId());
+        assertEquals("§3.2", r101.location());
+        assertEquals("HIGH", r101.priority());
+        assertTrue(r101.depends().isEmpty());
+
+        var r103 = round1.issues().get(2);
+        assertEquals(List.of("R1-01"), r103.depends());
+    }
+
+    @Test
+    void jsonl_round1_responses_with_evidence() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay-jsonl");
+        var  result  = WorkspaceParser.parse(fixture);
+        var  round1  = result.rounds().get(0);
+
+        var resp1 = round1.responses().get(0);
+        assertEquals("FIXED", resp1.status());
+        assertEquals(1, resp1.evidence().size());
+        assertEquals("§3.2", resp1.evidence().get(0).location());
+        assertEquals("abc123", resp1.evidence().get(0).commit());
+    }
+
+    @Test
+    void jsonl_confirmations_use_verdict() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay-jsonl");
+        var  result  = WorkspaceParser.parse(fixture);
+        var  round2  = result.rounds().get(1);
+
+        assertTrue(round2.confirmations().stream().anyMatch(c -> c.issueId().equals("R1-01")
+                                                                 && "resolved".equals(c.verdict())));
+        assertTrue(round2.confirmations().stream().anyMatch(c -> c.issueId().equals("R1-02")
+                                                                 && "accepted".equals(c.verdict())));
+        assertTrue(round2.confirmations().stream().anyMatch(c -> c.issueId().equals("R1-03")
+                                                                 && "contested".equals(c.verdict())));
+    }
+
+    @Test
+    void jsonl_signal_extraction() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay-jsonl");
+        var  result  = WorkspaceParser.parse(fixture);
+        assertEquals("CONTINUE", result.rounds().get(0).signal());
+        assertEquals("APPROVED", result.rounds().get(1).signal());
+    }
+
+    @Test
+    void markdown_fallback_still_works() {
+        Path fixture = Path.of("src/test/resources/fixtures/workspace-replay");
+        var  result  = WorkspaceParser.parse(fixture);
+        assertEquals(3, result.rounds().size());
+        assertEquals(3, result.rounds().get(0).issues().size());
+    }
+
 }

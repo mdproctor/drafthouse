@@ -1,0 +1,5 @@
+{"event": "schema_version", "version": 1}
+{"event": "issue_fixed", "round": 1, "id": "R1-01", "sectionRef": "3.2", "evidence": [{"location": "§3.2", "commit": "abc123"}], "rationale": "Added try-catch blocks."}
+{"event": "issue_rejected", "round": 1, "id": "R1-02", "rationale": "200 is intentional — response-envelope pattern."}
+{"event": "issue_escalated", "round": 1, "id": "R1-03", "rationale": "Needs architectural decision."}
+{"event": "round_signal", "round": 1, "role": "implementor", "signal": "CONTINUE", "description": null}
