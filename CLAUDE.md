@@ -98,6 +98,7 @@ Then open `http://localhost:9001/?a=/path/to/file-a.md&b=/path/to/file-b.md` in 
 - Quinoa serves the bundled webui (built from `server/runtime/src/main/webui/`)
 - Query params `?a=` and `?b=` — initial file paths to load
 - Query param `?debate=` — debate session ID to auto-connect
+- Query param `?mode=brainstorm` — brainstorming layout (terminal + brainstorm panels)
 
 ## Testing
 
@@ -129,9 +130,9 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/runtime/src/main/webui/src/panels/context-gauge.ts` | `<context-gauge>` — topbar context usage gauge (pages-event subscriber) |
 | `server/runtime/src/main/webui/src/panels/doc-picker.ts` | `<doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
 | `server/runtime/src/main/webui/src/panels/document-timeline.ts` | `<document-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
-| `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline` |
+| `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline`, `BrainstormSession`, `BrainstormOption` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, platform AgentProvider |
-| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, DocumentReviewer, PlatformDebateAgentProvider, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, BrainstormMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, BrainstormSessionRegistry, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, TerminalEndpoint, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, DocumentReviewer, PlatformDebateAgentProvider, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (AgentProvider-backed, displaces PlatformDebateAgentProvider) |
 | `server/runtime/src/main/resources/application.properties` | Quarkus config |
 | `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
@@ -161,7 +162,9 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── GET /api/debate/{id}/documents  ← list working set documents + current comparison
   ├── POST /api/debate/{id}/comparison  ← browser-initiated comparison change
   ├── GET /api/debate/{id}/snapshot/{index}  ← document content at timeline snapshot index
-  └── GET /api/debate/sessions     ← active debate session list
+  ├── GET /api/debate/sessions     ← active debate session list
+  ├── MCP tools (brainstorm) ← start_brainstorm, present_options, update_option, set_recommendation, mark_eliminated, mark_selected, end_brainstorm
+  └── WS  /api/terminal     ← PTY-over-WebSocket (pty4j) — terminal sessions for brainstorming mode
 
 Browser UI (casehub-pages workbench + Lit panels)
   ├── index.ts                     ← workbench shell (casehub-pages layout, topbar, WebSocket connection, Electron IPC)
@@ -180,9 +183,10 @@ Browser UI (casehub-pages workbench + Lit panels)
   │   └── pages-event              ← context-usage metadata events
   ├── <doc-picker>                 ← document badge dropdown (LitElement, Shadow DOM, topbar)
   │   └── pages-event              ← documents-changed, comparison-changed; POST /api/debate/{id}/comparison
-  └── <document-timeline>          ← document version timeline (LitElement, Shadow DOM)
-      ├── pages-event              ← filters ROUND_SNAPSHOT from debate-entries
-      └── timeline-comparison-changed → diff panel fetches snapshot content
+  ├── <document-timeline>          ← document version timeline (LitElement, Shadow DOM)
+  │   ├── pages-event              ← filters ROUND_SNAPSHOT from debate-entries
+  │   └── timeline-comparison-changed → diff panel fetches snapshot content
+  └── <pages-component-terminal>   ← xterm.js terminal (from @casehubio/pages-component-terminal, brainstorm mode only)
 ```
 
 ## Architectural Direction
@@ -201,7 +205,7 @@ DraftHouse uses **casehub-pages workbench** with **Lit** (LitElement) panels. Th
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3 (quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, casehub-pages-push 0.2-SNAPSHOT, casehub-platform-agent-api 0.2-SNAPSHOT, quarkus-quinoa 2.8.3)
+- Version: 3.34.3 (quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, casehub-pages-push 0.2-SNAPSHOT, casehub-platform-agent-api 0.2-SNAPSHOT, quarkus-quinoa 2.8.3, pty4j 0.13.11)
 - Java package: `io.casehub.drafthouse`
 - Quinoa serves bundled TypeScript webui from `server/runtime/src/main/webui/` — bundles on every build
 - Port: 9001 (default), configurable via `quarkus.http.port`

@@ -90,6 +90,13 @@
       <version>6.9.0.202403050737-r</version>
     </dependency>
 
+    <!-- pty4j — PTY management for terminal WebSocket endpoint (first native dependency) -->
+    <dependency>
+      <groupId>org.jetbrains.pty4j</groupId>
+      <artifactId>pty4j</artifactId>
+      <version>0.13.11</version>
+    </dependency>
+
     <!-- Test dependencies -->
     <dependency>
       <groupId>io.quarkus</groupId>

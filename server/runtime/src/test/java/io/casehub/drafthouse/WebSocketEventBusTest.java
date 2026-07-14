@@ -1,22 +1,23 @@
 package io.casehub.drafthouse;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
-
-import java.util.List;
-import java.util.UUID;
-
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
 import io.casehub.drafthouse.debate.EntryType;
 import io.quarkus.websockets.next.WebSocketConnection;
 import io.smallrye.mutiny.Uni;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 class WebSocketEventBusTest {
 
@@ -163,6 +164,43 @@ class WebSocketEventBusTest {
         assertThat(json).contains("\"topic\":\"test-topic\"");
         assertThat(json).contains("\"payload\":");
     }
+
+    @Test
+    void watchBrainstorm_and_unwatchBrainstorm() {
+        WebSocketConnection conn = mockConnection();
+        bus.register(conn);
+        bus.watchBrainstorm(conn, "bs-1");
+        assertThat(bus.brainstormWatcherCount("bs-1")).isEqualTo(1);
+        bus.unwatchBrainstorm(conn, "bs-1");
+        assertThat(bus.brainstormWatcherCount("bs-1")).isEqualTo(0);
+    }
+
+    @Test
+    void pushBrainstormEvent_sends_only_to_brainstorm_watchers() {
+        WebSocketConnection watcher = mockConnection();
+        WebSocketConnection other   = mockConnection();
+        bus.register(watcher);
+        bus.register(other);
+        bus.watchBrainstorm(watcher, "bs-1");
+        bus.pushBrainstormEvent("bs-1", "brainstorm-options", java.util.Map.of("options", java.util.List.of()));
+        verify(watcher).sendText(anyString());
+        verify(other, never()).sendText(anyString());
+    }
+
+    @Test
+    void pushBrainstormEvent_noWatchers_noError() {
+        bus.pushBrainstormEvent("bs-nonexistent", "brainstorm-options", java.util.Map.of());
+    }
+
+    @Test
+    void unregister_removes_brainstorm_watchers() {
+        WebSocketConnection conn = mockConnection();
+        bus.register(conn);
+        bus.watchBrainstorm(conn, "bs-1");
+        bus.unregister(conn);
+        assertThat(bus.brainstormWatcherCount("bs-1")).isEqualTo(0);
+    }
+
 
     private WebSocketConnection mockConnection() {
         WebSocketConnection conn = mock(WebSocketConnection.class);

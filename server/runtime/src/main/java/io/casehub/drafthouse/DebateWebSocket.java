@@ -1,48 +1,68 @@
 package io.casehub.drafthouse;
 
-import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-
 import io.casehub.blocks.channel.ContextSnapshot;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
 import io.casehub.pages.push.PushMessage;
 import io.casehub.pages.push.PushRequest;
 import io.casehub.qhorus.api.message.Message;
 import io.casehub.qhorus.runtime.message.MessageService;
-import io.quarkus.websockets.next.*;
+import io.quarkus.websockets.next.OnClose;
+import io.quarkus.websockets.next.OnError;
+import io.quarkus.websockets.next.OnOpen;
+import io.quarkus.websockets.next.OnTextMessage;
+import io.quarkus.websockets.next.WebSocket;
+import io.quarkus.websockets.next.WebSocketConnection;
 import io.smallrye.common.annotation.RunOnVirtualThread;
 import jakarta.inject.Inject;
+
+import java.io.IOException;
+import java.nio.file.ClosedWatchServiceException;
+import java.nio.file.FileSystems;
+import java.nio.file.Path;
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
+import java.nio.file.WatchKey;
+import java.nio.file.WatchService;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 @WebSocket(path = "/api/ws")
 public class DebateWebSocket {
 
     private static final Logger LOG = Logger.getLogger(DebateWebSocket.class.getName());
-
-    @Inject WebSocketEventBus eventBus;
-    @Inject DebateSessionRegistry registry;
-    @Inject MessageService messageService;
-    @Inject DraftHouseConfig config;
-    @Inject ObjectMapper mapper;
-
-    private final ConcurrentHashMap<String, FileWatchHandle> activeFileWatches = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, FileWatchHandle>        activeFileWatches  = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<WebSocketConnection, Set<UUID>> connectionSessions = new ConcurrentHashMap<>();
-
-    record FileWatchHandle(WatchService watchService, Thread watchThread) {}
+    @Inject
+    WebSocketEventBus     eventBus;
+    @Inject
+    DebateSessionRegistry registry;
+    @Inject
+    MessageService        messageService;
+    @Inject
+    DraftHouseConfig      config;
+    @Inject
+    ObjectMapper          mapper;
+    @Inject
+    BrainstormSessionRegistry brainstormRegistry;
 
     @OnOpen
     void onOpen(WebSocketConnection connection) {
         eventBus.register(connection);
         sendEvent(connection, "reconnected", Map.of());
         Collection<DebateEventResource.SessionInfo> sessions = registry.activeSessions().stream()
-                .map(s -> new DebateEventResource.SessionInfo(
-                        s.debateSessionId(), s.channelName(), s.primaryPath(), s.agentId()))
-                .toList();
+                                                                       .map(s -> new DebateEventResource.SessionInfo(
+                                                                               s.debateSessionId(), s.channelName(), s.primaryPath(), s.agentId()))
+                                                                       .toList();
         sendEvent(connection, "sessions", sessions);
     }
 
@@ -84,7 +104,7 @@ public class DebateWebSocket {
 
         if (dataset.startsWith("debate:")) {
             String sessionIdStr = dataset.substring("debate:".length());
-            UUID channelId;
+            UUID   channelId;
             try {
                 channelId = UUID.fromString(sessionIdStr);
             } catch (IllegalArgumentException e) {
@@ -102,6 +122,17 @@ public class DebateWebSocket {
             sendSafe(connection, PushMessage.ack(requestId));
             sendCatchUp(connection, session, channelId);
 
+        } else if (dataset.startsWith("brainstorm:")) {
+            String            sessionId = dataset.substring("brainstorm:".length());
+            BrainstormSession session   = brainstormRegistry.find(sessionId).orElse(null);
+            if (session == null) {
+                sendSafe(connection, PushMessage.error(requestId, "brainstorm session not found"));
+                return;
+            }
+            eventBus.watchBrainstorm(connection, sessionId);
+            sendSafe(connection, PushMessage.ack(requestId));
+            sendBrainstormCatchUp(connection, session);
+
         } else if (dataset.startsWith("file:")) {
             String path = dataset.substring("file:".length());
             if (!isPathAllowed(connection, path)) {
@@ -118,7 +149,7 @@ public class DebateWebSocket {
     }
 
     private void handleUnsubscribe(WebSocketConnection connection, String requestId, String dataset) {
-        if (dataset == null) return;
+        if (dataset == null) {return;}
 
         if (dataset.startsWith("debate:")) {
             String sessionIdStr = dataset.substring("debate:".length());
@@ -126,10 +157,13 @@ public class DebateWebSocket {
                 UUID channelId = UUID.fromString(sessionIdStr);
                 eventBus.unwatchSession(connection, channelId);
                 Set<UUID> sessions = connectionSessions.get(connection);
-                if (sessions != null) sessions.remove(channelId);
+                if (sessions != null) {sessions.remove(channelId);}
             } catch (IllegalArgumentException e) {
                 // ignore
             }
+        } else if (dataset.startsWith("brainstorm:")) {
+            String sessionId = dataset.substring("brainstorm:".length());
+            eventBus.unwatchBrainstorm(connection, sessionId);
         } else if (dataset.startsWith("file:")) {
             String path = dataset.substring("file:".length());
             eventBus.unwatchFile(connection, path);
@@ -147,8 +181,13 @@ public class DebateWebSocket {
                     eventBus.watchSession(connection, channelId);
                     connectionSessions.computeIfAbsent(connection, k -> ConcurrentHashMap.newKeySet()).add(channelId);
                     DebateSession session = registry.find(channelId).orElse(null);
-                    if (session != null) sendCatchUp(connection, session, channelId);
+                    if (session != null) {sendCatchUp(connection, session, channelId);}
                 } catch (IllegalArgumentException ignored) {}
+            } else if (topic.startsWith("brainstorm:")) {
+                String sessionId = topic.substring("brainstorm:".length());
+                eventBus.watchBrainstorm(connection, sessionId);
+                BrainstormSession session = brainstormRegistry.find(sessionId).orElse(null);
+                if (session != null) {sendBrainstormCatchUp(connection, session);}
             } else if (topic.startsWith("file:")) {
                 String path = topic.substring("file:".length());
                 if (isPathAllowed(connection, path)) {
@@ -168,8 +207,11 @@ public class DebateWebSocket {
                     UUID channelId = UUID.fromString(sessionIdStr);
                     eventBus.unwatchSession(connection, channelId);
                     Set<UUID> sessions = connectionSessions.get(connection);
-                    if (sessions != null) sessions.remove(channelId);
+                    if (sessions != null) {sessions.remove(channelId);}
                 } catch (IllegalArgumentException ignored) {}
+            } else if (topic.startsWith("brainstorm:")) {
+                String sessionId = topic.substring("brainstorm:".length());
+                eventBus.unwatchBrainstorm(connection, sessionId);
             } else if (topic.startsWith("file:")) {
                 String path = topic.substring("file:".length());
                 eventBus.unwatchFile(connection, path);
@@ -182,9 +224,9 @@ public class DebateWebSocket {
     private void sendCatchUp(WebSocketConnection connection, DebateSession session, UUID channelId) {
         List<Message> messages = messageService.pollAfter(channelId, 0L, config.debate().catchUpLimit());
         List<DebateStreamEntry> entries = messages.stream()
-                .map(DebateStreamEntry::from)
-                .filter(Objects::nonNull)
-                .toList();
+                                                  .map(DebateStreamEntry::from)
+                                                  .filter(Objects::nonNull)
+                                                  .toList();
         if (!entries.isEmpty()) {
             sendEvent(connection, "debate-entries", entries);
         }
@@ -209,14 +251,30 @@ public class DebateWebSocket {
         }
     }
 
+    private void sendBrainstormCatchUp(WebSocketConnection connection, BrainstormSession session) {
+        if (!session.options().isEmpty()) {
+            var optionMaps = session.options().stream().map(o -> Map.of(
+                    "id", o.id(),
+                    "title", o.title(),
+                    "description", o.description(),
+                    "tradeoffs", o.tradeoffs(),
+                    "status", o.status().name()
+                                                                       )).toList();
+            sendEvent(connection, "brainstorm-options", Map.of(
+                    "sessionId", session.sessionId(),
+                    "options", optionMaps,
+                    "state", session.state().name()));
+        }
+    }
+
     private boolean isPathAllowed(WebSocketConnection connection, String path) {
         Set<UUID> sessions = connectionSessions.get(connection);
-        if (sessions == null || sessions.isEmpty()) return false;
+        if (sessions == null || sessions.isEmpty()) {return false;}
         for (UUID channelId : sessions) {
             DebateSession session = registry.find(channelId).orElse(null);
             if (session != null) {
                 for (DocumentEntry doc : session.documents()) {
-                    if (path.equals(doc.path())) return true;
+                    if (path.equals(doc.path())) {return true;}
                 }
             }
         }
@@ -225,36 +283,36 @@ public class DebateWebSocket {
 
     private void startFileWatch(String path) {
         try {
-            Path target = Path.of(path);
-            Path dir = target.getParent();
-            String name = target.getFileName().toString();
-            WatchService ws = FileSystems.getDefault().newWatchService();
+            Path         target = Path.of(path);
+            Path         dir    = target.getParent();
+            String       name   = target.getFileName().toString();
+            WatchService ws     = FileSystems.getDefault().newWatchService();
             dir.register(ws, StandardWatchEventKinds.ENTRY_MODIFY);
 
             Thread watchThread = Thread.ofVirtual().start(() -> {
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         WatchKey key = ws.poll(200, TimeUnit.MILLISECONDS);
-                        if (key == null) continue;
+                        if (key == null) {continue;}
                         for (WatchEvent<?> event : key.pollEvents()) {
                             if (name.equals(event.context().toString())) {
                                 eventBus.pushFileChanged(path);
                             }
                         }
-                        if (!key.reset()) break;
+                        if (!key.reset()) {break;}
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } catch (ClosedWatchServiceException ignored) {
                 } finally {
-                    try { ws.close(); } catch (IOException ignored) {}
+                    try {ws.close();} catch (IOException ignored) {}
                 }
             });
             FileWatchHandle newHandle = new FileWatchHandle(ws, watchThread);
-            FileWatchHandle existing = activeFileWatches.putIfAbsent(path, newHandle);
+            FileWatchHandle existing  = activeFileWatches.putIfAbsent(path, newHandle);
             if (existing != null) {
                 watchThread.interrupt();
-                try { ws.close(); } catch (IOException ignored) {}
+                try {ws.close();} catch (IOException ignored) {}
             }
         } catch (IOException e) {
             LOG.warning("Failed to start file watch for " + path + ": " + e.getMessage());
@@ -262,11 +320,11 @@ public class DebateWebSocket {
     }
 
     private void stopFileWatchIfUnused(String path) {
-        if (eventBus.hasFileWatchers(path)) return;
+        if (eventBus.hasFileWatchers(path)) {return;}
         FileWatchHandle handle = activeFileWatches.remove(path);
         if (handle != null) {
             handle.watchThread().interrupt();
-            try { handle.watchService().close(); } catch (IOException ignored) {}
+            try {handle.watchService().close();} catch (IOException ignored) {}
         }
     }
 
@@ -297,4 +355,6 @@ public class DebateWebSocket {
             eventBus.unregister(connection);
         });
     }
+
+    record FileWatchHandle(WatchService watchService, Thread watchThread) {}
 }

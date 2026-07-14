@@ -10,6 +10,7 @@ import "./panels/review-tracker.js";
 import "./panels/context-gauge.js";
 import "./panels/doc-picker.js";
 import "./panels/document-timeline.js";
+import "@casehubio/pages-component-terminal";
 
 // ── Electron IPC Bridge ──────────────────────────────────────────────────
 
@@ -42,15 +43,17 @@ registerPanel("debate-feed", "channel-feed");
 registerPanel("review-tracker", "review-tracker");
 registerPanel("context-gauge", "context-gauge");
 registerPanel("document-timeline", "document-timeline");
+registerPanel("terminal", "pages-component-terminal");
 
 // Parse URL params
 const params = new URLSearchParams(window.location.search);
 const pathA = params.get("a") || "";
 const pathB = params.get("b") || "";
 const debateParam = params.get("debate");
+const mode = params.get("mode");
 
-// Build workbench layout
-const workbench = rows(
+// Build workbench layout based on mode
+const workbench = mode === "brainstorm" ? buildBrainstormLayout() : rows(
   // Topbar — all action controls; matches current index.html feature set
   html(`<div id="topbar" style="display:flex; align-items:center; gap:8px; padding:4px 12px; background:var(--topbar-bg); color:var(--topbar-fg);">
     <strong>DraftHouse</strong>
@@ -89,7 +92,33 @@ const workbench = rows(
   </div>`),
 );
 
+function buildBrainstormLayout() {
+  const wsProto = location.protocol === "https:" ? "wss:" : "ws:";
+  const terminalWsUrl = `${wsProto}//${location.host}/api/terminal?cols={cols}&rows={rows}`;
+
+  return rows(
+    html(`<div id="topbar" style="display:flex; align-items:center; gap:8px; padding:4px 12px; background:var(--topbar-bg); color:var(--topbar-fg);">
+      <strong>DraftHouse</strong>
+      <span style="font-size:12px; color:var(--muted);">Brainstorm</span>
+      <span style="flex:1"></span>
+    </div>`),
+    split("horizontal", [
+      hostPanel("terminal", { wsUrl: terminalWsUrl }),
+    ], { ratio: [100] }),
+  );
+}
+
 await loadSite(document.getElementById("app")!, workbench);
+
+// ── Terminal injection bridge ────────────────────────────────────────
+// Brainstorm panel (future Slice 4) dispatches terminal-inject events;
+// this bridge routes them to the terminal component's sendInput() method.
+if (mode === "brainstorm") {
+  document.addEventListener("terminal-inject", ((e: CustomEvent) => {
+    const terminal = document.querySelector("pages-component-terminal") as any;
+    if (terminal) terminal.sendInput(e.detail.text);
+  }) as EventListener);
+}
 
 // ── WebSocket connection ─────────────────────────────────────────────
 

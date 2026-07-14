@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@casehubio/pages-component": "file:../../../../../../pages/packages/pages-component",
+    "@casehubio/pages-component-terminal": "file:../../../../../../pages/components/pages-component-terminal",
     "@casehubio/pages-data": "file:../../../../../../pages/packages/pages-data",
     "@casehubio/pages-runtime": "file:../../../../../../pages/packages/pages-runtime",
     "@casehubio/pages-ui": "file:../../../../../../pages/packages/pages-ui",
