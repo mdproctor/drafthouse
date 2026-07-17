@@ -30,11 +30,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build pages packages and create symlink
+      - name: Build pages packages
         run: |
-          cd .pages-checkout && corepack enable && yarn install --immutable && yarn build
-          cd ..
-          ln -s "$GITHUB_WORKSPACE/.pages-checkout" "$GITHUB_WORKSPACE/../pages"
+          mv .pages-checkout "$GITHUB_WORKSPACE/../pages"
+          cd "$GITHUB_WORKSPACE/../pages" && corepack enable && yarn install --immutable && yarn build
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
