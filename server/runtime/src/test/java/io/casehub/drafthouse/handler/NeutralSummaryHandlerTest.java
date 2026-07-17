@@ -58,20 +58,20 @@ class NeutralSummaryHandlerTest {
     void empty_state_does_not_throw_uses_sentinel() {
         var state = new ConversationState(Map.of(), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
-        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         assertThat(task.assembledInput()).contains("(no debate entries)");
     }
 
     @Test
     void points_appear_in_assembled_input() {
         var thread = List.of(
-                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The raise content.")
+                new ThreadEntry("pt-1", null, null, "REV", 1, "RAISE", "The raise content.")
         );
-        var point = new ConversationPoint("pt-1",
+        var point = new ConversationPoint("pt-1", null,
                 new PointClassification(Priority.HIGH, "ISOLATED", null), thread, "OPEN");
         var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
-        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         assertThat(task.assembledInput()).contains("pt-1");
         assertThat(task.assembledInput()).contains("The raise content.");
     }
@@ -79,14 +79,14 @@ class NeutralSummaryHandlerTest {
     @Test
     void multi_entry_thread_all_entries_appear_in_assembled_input() {
         var thread = List.of(
-                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The concern."),
-                new ThreadEntry(null,   "IMP", 2, "DISPUTE", "I disagree because...")
+                new ThreadEntry("pt-1", null, null, "REV", 1, "RAISE", "The concern."),
+                new ThreadEntry(null, null, null, "IMP", 2, "DISPUTE", "I disagree because...")
         );
-        var point = new ConversationPoint("pt-1",
+        var point = new ConversationPoint("pt-1", null,
                 new PointClassification(Priority.MEDIUM, "SYSTEMIC", null), thread, "DISPUTED");
         var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));
-        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        AgentTask task = handler.prepareTask(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         assertThat(task.assembledInput()).contains("The concern.");
         assertThat(task.assembledInput()).contains("I disagree because...");
         assertThat(task.assembledInput()).contains("RAISE");

@@ -59,14 +59,14 @@ class ChannelAgentDispatcherTest {
     @Test
     void handler_found_dispatches_finding() {
         when(debateAgentProvider.analyse(any())).thenReturn("LLM finding text.");
-        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         verify(messageService).dispatch(argThat(d -> d.content().contains("FINDING:")));
     }
 
     @Test
     void provider_throws_dispatches_sanitized_error() {
         when(debateAgentProvider.analyse(any())).thenThrow(new RuntimeException("timeout"));
-        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().type()).isEqualTo(MessageType.STATUS);
@@ -86,7 +86,7 @@ class ChannelAgentDispatcherTest {
         };
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
                 List.of(throwingHandler), null);
-        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().content()).contains("Sub-agent returned an unreadable result.");
@@ -102,7 +102,7 @@ class ChannelAgentDispatcherTest {
         };
         dispatcher = new ChannelAgentDispatcher(debateAgentProvider, messageService,
                 List.of(noMatch), null);
-        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage));
+        dispatcher.onChannelAgentRequest(new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null));
         ArgumentCaptor<MessageDispatch> cap = ArgumentCaptor.forClass(MessageDispatch.class);
         verify(messageService).dispatch(cap.capture());
         assertThat(cap.getValue().type()).isEqualTo(MessageType.STATUS);

@@ -8,6 +8,8 @@ import static org.awaitility.Awaitility.await;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.AfterEach;
@@ -80,9 +82,15 @@ class SubAgentE2ETest {
 
         // 5. await async dispatch: MockDebateAgentProvider posts the finding (~500ms)
         await().atMost(5, SECONDS).untilAsserted(() -> {
-            String summary = tools.getDebateSummary(sessionId);
-            assertThat(summary).contains("⊕");
-            assertThat(summary).contains("Mock sub-agent finding.");
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                String summary = tools.getDebateSummary(sessionId);
+                assertThat(summary).contains("⊕");
+                assertThat(summary).contains("Mock sub-agent finding.");
+            } finally {
+                rc.deactivate();
+            }
         });
 
         // 6. post_memo
@@ -112,10 +120,15 @@ class SubAgentE2ETest {
         tools.requestSubagent(sessionId, "REV", "VERIFY", pointId, 1, null);
 
         await().atMost(5, SECONDS).untilAsserted(() -> {
-            String summary = tools.getDebateSummary(sessionId);
-            assertThat(summary).contains("Mock sub-agent finding.");
-            // Point-anchored findings appear before the standalone section
-            assertThat(summary).doesNotContain("Sub-task findings");
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                String summary = tools.getDebateSummary(sessionId);
+                assertThat(summary).contains("Mock sub-agent finding.");
+                assertThat(summary).doesNotContain("Sub-task findings");
+            } finally {
+                rc.deactivate();
+            }
         });
     }
 

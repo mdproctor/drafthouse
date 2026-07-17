@@ -69,7 +69,7 @@ class SectionHighlightVisualTest {
 
         screenshot("00-initial");
 
-        var points = page.locator("drafthouse-review-tracker .point-item");
+        var points = page.locator("review-tracker .point-item");
 
         for (int i = 0; i < locations.length; i++) {
             // Dump state BEFORE click
@@ -106,7 +106,7 @@ class SectionHighlightVisualTest {
     @SuppressWarnings("unchecked")
     private String dumpState(int clickIndex, String phase) {
         Object result = page.evaluate("(args) => {"
-                + "const tracker = document.querySelector('drafthouse-review-tracker');"
+                + "const tracker = document.querySelector('review-tracker');"
                 + "const diff = document.querySelector('document-diff');"
                 + "const trackerShadow = tracker.shadowRoot;"
                 + "const diffShadow = diff.shadowRoot;"
@@ -154,7 +154,7 @@ class SectionHighlightVisualTest {
         loadWithSampleDocs(page, index, sessionId);
         waitForTrackerPoints(page, locations.length);
 
-        var points = page.locator("drafthouse-review-tracker .point-item");
+        var points = page.locator("review-tracker .point-item");
 
         // Click each point forward: 0, 1, 2, 3, 4
         for (int i = 0; i < locations.length; i++) {
@@ -187,7 +187,7 @@ class SectionHighlightVisualTest {
 
     private boolean isPointNthSelected(int n) {
         Object val = page.evaluate(
-                "n => { const items = document.querySelector('drafthouse-review-tracker').shadowRoot.querySelectorAll('.point-item');"
+                "n => { const items = document.querySelector('review-tracker').shadowRoot.querySelectorAll('.point-item');"
                         + "return items[n] && items[n].classList.contains('selected'); }", n);
         return (Boolean) val;
     }

@@ -68,12 +68,12 @@ class VerifyHandlerTest {
                 + "\n\n";
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
-        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
+        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null);
     }
 
     private void setupState(String pointId, String raiseContent) {
-        var thread = List.of(new ThreadEntry(pointId, "REV", 1, "RAISE", raiseContent));
-        var point = new ConversationPoint(pointId,
+        var thread = List.of(new ThreadEntry(pointId, null, null, "REV", 1, "RAISE", raiseContent));
+        var point = new ConversationPoint(pointId, null,
                 new PointClassification(Priority.HIGH, "ISOLATED", null),
                 thread, "OPEN");
         var state = new ConversationState(Map.of(pointId, point), List.of(), List.of(), Map.of());
@@ -119,7 +119,7 @@ class VerifyHandlerTest {
                 + "entryType=SUB_TASK_REQUEST|role=REV|taskType=VERIFY|subTaskId=sub-1|round=3|pointId=pt-1"
                 + "\n\n";
         when(outboundMessage.content()).thenReturn(triggerContent);
-        var request = new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
+        var request = new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null);
         io.casehub.qhorus.api.message.Message stubMsg = io.casehub.qhorus.api.message.Message.builder()
                 .id(42L)
                 .build();
@@ -138,10 +138,10 @@ class VerifyHandlerTest {
         java.nio.file.Files.writeString(specFile, "# The Spec");
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec(specFile.toString())));
         var thread = List.of(
-                new ThreadEntry("pt-1", "REV", 1, "RAISE", "The claim."),
-                new ThreadEntry(null, "IMP", 2, "DISPUTE", "Other agent content.")
+                new ThreadEntry("pt-1", null, null, "REV", 1, "RAISE", "The claim."),
+                new ThreadEntry(null, null, null, "IMP", 2, "DISPUTE", "Other agent content.")
         );
-        var point = new ConversationPoint("pt-1",
+        var point = new ConversationPoint("pt-1", null,
                 new PointClassification(Priority.HIGH, "ISOLATED", null), thread, "DISPUTED");
         var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(any(), any())).thenReturn(new ProjectionResult<>(state, null));

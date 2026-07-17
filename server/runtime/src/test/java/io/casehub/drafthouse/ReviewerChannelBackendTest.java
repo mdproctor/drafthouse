@@ -248,10 +248,11 @@ class ReviewerChannelBackendTest {
 
     private static ConversationState buildAgreedState() {
         var thread = new java.util.ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry("P1", "REV", 0, "RAISE", "Prior question?"));
-        thread.add(new ThreadEntry(null, "IMP", 0, "AGREE", "Prior answer."));
+        thread.add(new ThreadEntry("P1", null, null, "REV", 0, "RAISE", "Prior question?"));
+        thread.add(new ThreadEntry(null, null, null, "IMP", 0, "AGREE", "Prior answer."));
         var point = new ConversationPoint(
                 "P1",
+                null,
                 new PointClassification(Priority.LOW, "ISOLATED", null),
                 thread,
                 "AGREED");

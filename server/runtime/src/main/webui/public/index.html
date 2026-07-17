@@ -40,7 +40,8 @@
         #app { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
         [data-component-type="rows"] { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         [data-component-type="rows"] > [data-slot] { flex: 0 0 auto; min-height: 0; }
-        [data-component-type="rows"] > [data-slot]:has(> [data-component-type="split"]) { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        [data-component-type="rows"] > [data-slot]:has(> [data-component-type="split"]),
+        [data-component-type="rows"] > [data-slot]:has(> [data-component-type="host-panel"]) { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
         [data-component-type="split"] { flex: 1; min-height: 0; overflow: hidden; }
         [data-component-type="split"] > [data-slot] { display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
         [data-component-type="host-panel"] { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }

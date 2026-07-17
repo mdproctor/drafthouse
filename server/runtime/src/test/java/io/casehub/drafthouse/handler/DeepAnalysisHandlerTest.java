@@ -67,7 +67,7 @@ class DeepAnalysisHandlerTest {
         String content = meta + "\n\n";
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
-        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
+        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null);
     }
 
     private DebateSession sessionWithSpec() {
@@ -90,8 +90,8 @@ class DeepAnalysisHandlerTest {
     @Test
     void with_pointId_having_location_uses_location_as_focus_hint() {
         when(registry.find(channelId)).thenReturn(Optional.of(sessionWithSpec()));
-        var thread = List.of(new ThreadEntry("pt-1", "REV", 1, "RAISE", "Concern text."));
-        var point = new ConversationPoint("pt-1",
+        var thread = List.of(new ThreadEntry("pt-1", null, null, "REV", 1, "RAISE", "Concern text."));
+        var point = new ConversationPoint("pt-1", null,
                 new PointClassification(Priority.HIGH, "ISOLATED", "§3.2 Authentication"), thread, "OPEN");
         var state = new ConversationState(Map.of("pt-1", point), List.of(), List.of(), Map.of());
         when(projectionService.project(eq(channelId), any())).thenReturn(new ProjectionResult<>(state, null));

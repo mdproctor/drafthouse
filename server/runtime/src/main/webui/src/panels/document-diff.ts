@@ -1016,7 +1016,8 @@ export class DocumentDiff extends LitElement {
   }
 
   private _normalizeLocation(text: string): string {
-    let s = text.replace(/^["'""'']+|["'""'']+$/g, '');
+    const quoteRe = new RegExp('^[\\x22\\x27\\u201C\\u201D\\u2018\\u2019]+|[\\x22\\x27\\u201C\\u201D\\u2018\\u2019]+$', 'g');
+    let s = text.replace(quoteRe, '');
     s = s.replace(/^(?:section|heading|under|in the|in|the)\s*[:.]?\s*/i, '');
     s = s.replace(/\s+(?:section|heading|area|part)$/i, '');
     return s.trim();

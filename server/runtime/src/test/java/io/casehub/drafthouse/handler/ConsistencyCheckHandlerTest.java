@@ -57,7 +57,7 @@ class ConsistencyCheckHandlerTest {
                 + (body != null ? body : "");
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
-        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
+        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null);
     }
 
     @Test
@@ -72,16 +72,16 @@ class ConsistencyCheckHandlerTest {
     @Test
     void only_agreed_points_included_open_excluded() {
         var agreedThread = List.of(
-                new ThreadEntry("pt-a", "REV", 1, "RAISE", "Agreed point content."),
-                new ThreadEntry(null, "IMP", 2, "AGREE", "Agreed.")
+                new ThreadEntry("pt-a", null, null, "REV", 1, "RAISE", "Agreed point content."),
+                new ThreadEntry(null, null, null, "IMP", 2, "AGREE", "Agreed.")
         );
         var openThread = List.of(
-                new ThreadEntry("pt-b", "IMP", 1, "RAISE", "Open point content.")
+                new ThreadEntry("pt-b", null, null, "IMP", 1, "RAISE", "Open point content.")
         );
         var state = new ConversationState(
                 Map.of(
-                    "pt-a", new ConversationPoint("pt-a", new PointClassification(Priority.HIGH, "ISOLATED", null), agreedThread, "AGREED"),
-                    "pt-b", new ConversationPoint("pt-b", new PointClassification(Priority.MEDIUM, "ISOLATED", null), openThread, "OPEN")
+                    "pt-a", new ConversationPoint("pt-a", null, new PointClassification(Priority.HIGH, "ISOLATED", null), agreedThread, "AGREED"),
+                    "pt-b", new ConversationPoint("pt-b", null, new PointClassification(Priority.MEDIUM, "ISOLATED", null), openThread, "OPEN")
                 ),
                 List.of(), List.of(), Map.of()
         );

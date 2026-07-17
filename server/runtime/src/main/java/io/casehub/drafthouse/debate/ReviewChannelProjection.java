@@ -57,8 +57,8 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
         var classification = new PointClassification(priority, scope,
                                                      location != null && !location.isBlank() ? location : null);
 
-        return ConversationFold.createPoint(state, entryId, classification,
-                                            role(message), 0, "RAISE", message.content());
+        return ConversationFold.createPoint(state, entryId, topicMeta, message.id(), message.type(),
+                                            classification, role(message), 0, "RAISE", message.content());
     }
 
     private ConversationState handleResponse(ConversationState state, MessageView message,
@@ -72,13 +72,13 @@ public class ReviewChannelProjection implements ChannelProjection<ConversationSt
         }
 
         String content = Objects.requireNonNullElse(message.content(), "");
-        return ConversationFold.respondToPoint(state, targetId, role(message), 0,
-                entryType, content, newStatus);
+        return ConversationFold.respondToPoint(state, targetId, message.id(), message.type(),
+                role(message), 0, entryType, content, newStatus);
     }
 
     private ConversationState handleFlagHuman(ConversationState state, MessageView message) {
         String content = Objects.requireNonNullElse(message.content(), "");
-        return ConversationFold.flagHuman(state, message.correlationId(),
+        return ConversationFold.flagHuman(state, message.correlationId(), message.id(),
                 role(message), 0, content);
     }
 

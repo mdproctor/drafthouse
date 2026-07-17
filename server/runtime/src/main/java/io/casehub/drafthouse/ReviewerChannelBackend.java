@@ -5,6 +5,8 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 import io.casehub.blocks.conversation.ConversationState;
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import io.casehub.drafthouse.debate.ReviewConversationRenderer;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelBackend;
@@ -54,6 +56,17 @@ public class ReviewerChannelBackend implements ChannelBackend {
     public void post(ChannelRef channel, OutboundMessage message) {
         if (message.type() != MessageType.QUERY) return;
 
+        var container = Arc.container();
+        ManagedContext rc = container != null ? container.requestContext() : null;
+        if (rc != null) rc.activate();
+        try {
+            doPost(channel, message);
+        } finally {
+            if (rc != null) rc.deactivate();
+        }
+    }
+
+    private void doPost(ChannelRef channel, OutboundMessage message) {
         ReviewSession session = registry.find(channelId).orElse(null);
         if (session == null) {
             LOG.warning("ReviewerChannelBackend.post() called but session not found for channel "

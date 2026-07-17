@@ -15,6 +15,8 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ManagedContext;
 import jakarta.inject.Inject;
 
 import org.junit.jupiter.api.AfterEach;
@@ -105,8 +107,15 @@ class ReviewSessionLifecycleTest {
                 .actorType(ActorType.HUMAN)
                 .build());
 
-        await().atMost(TIMEOUT).until(() ->
-                messageService.findDoneByCorrelationId(channelId, correlationId).isPresent());
+        await().atMost(TIMEOUT).until(() -> {
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                return messageService.findDoneByCorrelationId(channelId, correlationId).isPresent();
+            } finally {
+                rc.deactivate();
+            }
+        });
 
         final var done = messageService.findDoneByCorrelationId(channelId, correlationId);
         assertThat(done).isPresent();
@@ -165,9 +174,16 @@ class ReviewSessionLifecycleTest {
                 .actorType(ActorType.HUMAN)
                 .build());
 
-        await().atMost(TIMEOUT).until(() ->
-                messageService.findAllByCorrelationId(correlationId).stream()
-                        .anyMatch(m -> m.messageType() == MessageType.DECLINE));
+        await().atMost(TIMEOUT).until(() -> {
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                return messageService.findAllByCorrelationId(correlationId).stream()
+                        .anyMatch(m -> m.messageType() == MessageType.DECLINE);
+            } finally {
+                rc.deactivate();
+            }
+        });
 
         final var decline = messageService.findAllByCorrelationId(correlationId).stream()
                 .filter(m -> m.messageType() == MessageType.DECLINE)
@@ -200,9 +216,16 @@ class ReviewSessionLifecycleTest {
                 .actorType(ActorType.HUMAN)
                 .build());
 
-        await().atMost(TIMEOUT).until(() ->
-                messageService.findAllByCorrelationId(correlationId).stream()
-                        .anyMatch(m -> m.messageType() == MessageType.DECLINE));
+        await().atMost(TIMEOUT).until(() -> {
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                return messageService.findAllByCorrelationId(correlationId).stream()
+                        .anyMatch(m -> m.messageType() == MessageType.DECLINE);
+            } finally {
+                rc.deactivate();
+            }
+        });
 
         final var decline = messageService.findAllByCorrelationId(correlationId).stream()
                 .filter(m -> m.messageType() == MessageType.DECLINE)
@@ -229,8 +252,15 @@ class ReviewSessionLifecycleTest {
                 .sender(DraftHouseInstances.HUMAN_INSTANCE_ID)
                 .type(MessageType.QUERY).content("First question.")
                 .correlationId(corrId1).actorType(ActorType.HUMAN).build());
-        await().atMost(TIMEOUT).until(() ->
-                messageService.findDoneByCorrelationId(channelId, corrId1).isPresent());
+        await().atMost(TIMEOUT).until(() -> {
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                return messageService.findDoneByCorrelationId(channelId, corrId1).isPresent();
+            } finally {
+                rc.deactivate();
+            }
+        });
 
         // Second query
         String corrId2 = UUID.randomUUID().toString();
@@ -238,8 +268,15 @@ class ReviewSessionLifecycleTest {
                 .sender(DraftHouseInstances.HUMAN_INSTANCE_ID)
                 .type(MessageType.QUERY).content("Second question.")
                 .correlationId(corrId2).actorType(ActorType.HUMAN).build());
-        await().atMost(TIMEOUT).until(() ->
-                messageService.findDoneByCorrelationId(channelId, corrId2).isPresent());
+        await().atMost(TIMEOUT).until(() -> {
+            ManagedContext rc = Arc.container().requestContext();
+            rc.activate();
+            try {
+                return messageService.findDoneByCorrelationId(channelId, corrId2).isPresent();
+            } finally {
+                rc.deactivate();
+            }
+        });
 
         // Capture reviewHistory from both LLM calls — assert on the second invocation
         ArgumentCaptor<String> historyCaptor = ArgumentCaptor.forClass(String.class);

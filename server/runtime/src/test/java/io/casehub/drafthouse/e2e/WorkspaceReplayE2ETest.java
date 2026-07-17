@@ -65,7 +65,7 @@ class WorkspaceReplayE2ETest {
 
         DebateE2EFixtures.waitForTrackerPoints(page, 4);
 
-        Locator points = page.locator("drafthouse-review-tracker .point-item");
+        Locator points = page.locator("review-tracker .point-item");
         assertTrue(points.count() >= 4, "should show at least 4 review points");
     }
 
@@ -78,7 +78,7 @@ class WorkspaceReplayE2ETest {
 
         DebateE2EFixtures.waitForTrackerPoints(page, 4);
 
-        Locator verifiedIcons = page.locator("drafthouse-review-tracker .point-icon:text('✓✓')");
+        Locator verifiedIcons = page.locator("review-tracker .point-icon:text('✓✓')");
         assertTrue(verifiedIcons.count() >= 1, "should show at least one VERIFIED icon");
     }
 
@@ -91,7 +91,7 @@ class WorkspaceReplayE2ETest {
 
         DebateE2EFixtures.waitForDebateEntries(page, 1);
 
-        Locator entries = page.locator("drafthouse-debate .entry");
+        Locator entries = page.locator("channel-feed .entry");
         assertTrue(entries.count() >= 4, "should show debate conversation entries");
     }
 }

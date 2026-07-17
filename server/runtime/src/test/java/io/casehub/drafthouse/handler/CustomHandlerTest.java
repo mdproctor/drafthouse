@@ -50,7 +50,7 @@ class CustomHandlerTest {
                 + (body != null ? body : "");
         lenient().when(outboundMessage.content()).thenReturn(content);
         lenient().when(outboundMessage.correlationId()).thenReturn(null);
-        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage);
+        return new ChannelAgentRequest(channelId, "sub-1", outboundMessage, null);
     }
 
     @Test
