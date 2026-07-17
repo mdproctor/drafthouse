@@ -18,12 +18,12 @@ class ReviewConversationRendererTest {
     /** Builds a ConversationPoint with one RAISE thread entry and optionally one response entry. */
     private static ConversationPoint point(String id, String status, String question, String answer) {
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry(id, "REV", 0, "RAISE", question));
+        thread.add(new ThreadEntry(id, null, null, "REV", 0, "RAISE", question));
         if (answer != null) {
             String respType = "DECLINED".equals(status) ? "DECLINED" : "AGREE";
-            thread.add(new ThreadEntry(null, "IMP", 0, respType, answer));
+            thread.add(new ThreadEntry(null, null, null, "IMP", 0, respType, answer));
         }
-        return new ConversationPoint(id, new PointClassification(Priority.LOW, "ISOLATED", null), thread, status);
+        return new ConversationPoint(id, null, new PointClassification(Priority.LOW, "ISOLATED", null), thread, status);
     }
 
     private static ConversationState stateWith(ConversationPoint... points) {
@@ -91,10 +91,10 @@ class ReviewConversationRendererTest {
     void agreedPoint_withMultipleThreadEntries_returnsLastResponseContent() {
         // Build a point that has RAISE → QUALIFY → AGREE thread (3 entries)
         var thread = new ArrayList<ThreadEntry>();
-        thread.add(new ThreadEntry("R1", "REV", 0, "RAISE", "What changed?"));
-        thread.add(new ThreadEntry(null, "IMP", 0, "QUALIFY", "Partly addressed."));
-        thread.add(new ThreadEntry(null, "REV", 0, "AGREE", "Agreed after clarification."));
-        var point = new ConversationPoint("R1",
+        thread.add(new ThreadEntry("R1", null, null, "REV", 0, "RAISE", "What changed?"));
+        thread.add(new ThreadEntry(null, null, null, "IMP", 0, "QUALIFY", "Partly addressed."));
+        thread.add(new ThreadEntry(null, null, null, "REV", 0, "AGREE", "Agreed after clarification."));
+        var point = new ConversationPoint("R1", null,
                 new PointClassification(Priority.LOW, "ISOLATED", null),
                 thread, "AGREED");
         ConversationState s = new ConversationState(Map.of("R1", point), List.of(), List.of(), Map.of());
