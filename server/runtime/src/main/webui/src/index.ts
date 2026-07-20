@@ -10,6 +10,7 @@ import "./panels/review-tracker.js";
 import "./panels/context-gauge.js";
 import "./panels/doc-picker.js";
 import "./panels/document-timeline.js";
+import "./panels/workspace-status.js";
 import "@casehubio/pages-component-terminal";
 
 // ── Electron IPC Bridge ──────────────────────────────────────────────────
@@ -69,6 +70,7 @@ const workbench = mode === "brainstorm" ? buildBrainstormLayout() : rows(
       <span style="display:inline-block;width:10px;height:10px;background:var(--diff-ins);border:1px solid var(--diff-ins-text);border-radius:2px;" class="legend-ins"></span> B
     </span>
     <doc-picker></doc-picker>
+    <workspace-status></workspace-status>
     <span style="flex:1" id="topbar-spacer"></span>
     <button id="btn-debate" class="active" title="Toggle debate panel">💬 Debate</button>
     <button id="btn-review" class="active" title="Toggle review panel">📋 Review</button>
