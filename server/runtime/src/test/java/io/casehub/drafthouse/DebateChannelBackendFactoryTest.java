@@ -111,7 +111,7 @@ class DebateChannelBackendFactoryTest {
         OutboundMessage message = new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-subagent", MessageType.STATUS,
                 DebateProtocol.META_SENTINEL + "entryType=NEUTRAL_SUMMARY|role=REV\n\nSummary text",
-                UUID.randomUUID().toString(), null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of());
+                UUID.randomUUID().toString(), null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of(), null);
 
         debateBackend.post(channelRef, message);
 
@@ -161,7 +161,7 @@ class DebateChannelBackendFactoryTest {
         OutboundMessage msg = new OutboundMessage(
                 UUID.randomUUID(), "rev-agent", MessageType.QUERY,
                 DebateProtocol.META_SENTINEL + "entryType=RAISE|role=REV|round=1|priority=HIGH\n\nTest content",
-                null, null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of());
+                null, null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of(), null);
         debateBackend.post(ref, msg);
         verify(eventBus).pushDebateEntries(eq(channelId), anyList());
     }
@@ -171,6 +171,6 @@ class DebateChannelBackendFactoryTest {
                 + "entryType=SUB_TASK_REQUEST|role=REV|taskType=ARBITRATE|subTaskId=sub-1\n\n";
         return new OutboundMessage(
                 UUID.randomUUID(), "drafthouse-orchestrator", MessageType.STATUS,
-                content, correlationId != null ? correlationId.toString() : null, null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of());
+                content, correlationId != null ? correlationId.toString() : null, null, io.casehub.platform.api.identity.ActorType.AGENT, java.util.List.of(), null);
     }
 }

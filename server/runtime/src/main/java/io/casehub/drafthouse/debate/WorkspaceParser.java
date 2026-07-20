@@ -151,7 +151,7 @@ public final class WorkspaceParser {
 
         return rounds;}
 
-    private static ParsedRound parseRoundFromMarkdown(Path responsesDir, int roundNum, Set<String> existingIds) {
+    static ParsedRound parseRoundFromMarkdown(Path responsesDir, int roundNum, Set<String> existingIds) {
         String reviewerContent    = readFileOrNull(responsesDir.resolve("reviewer-" + roundNum + ".md"));
         String implementorContent = readFileOrNull(responsesDir.resolve("implementor-" + roundNum + ".md"));
 
@@ -187,7 +187,7 @@ public final class WorkspaceParser {
     }
 
 
-    private static int discoverMaxRound(Path responsesDir) {
+    static int discoverMaxRound(Path responsesDir) {
         int max = 0;
         for (int n = 1; n <= 100; n++) {
             if (Files.exists(responsesDir.resolve("reviewer-" + n + ".md"))
@@ -207,7 +207,7 @@ public final class WorkspaceParser {
     }
 
     @SuppressWarnings("unchecked")
-    private static ParsedRound parseRoundFromJsonl(Path responsesDir, int roundNum) {
+    static ParsedRound parseRoundFromJsonl(Path responsesDir, int roundNum) {
         List<ParsedIssue>           issues            = new ArrayList<>();
         List<ParsedResponse>        responses         = new ArrayList<>();
         List<ParsedConfirmation>    confirmations     = new ArrayList<>();
