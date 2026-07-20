@@ -41,7 +41,7 @@ import java.util.stream.Collectors;
 /**
  * MCP tool surface for debate sessions.
  * Any AgentType (REV, IMP, SUPERVISOR, MODERATOR, SELECTOR) may post via these tools.
- *
+ * <p>
  * Error handling: all errors returned as "error: ..." strings per mcp-tool-error-strings.md.
  * Session cleanup order: registry.remove() first, then channel.delete()
  * — prevents a live session handle pointing at a deleted channel.
@@ -52,20 +52,67 @@ public class DebateMcpTools {
     private static final Logger LOG = Logger.getLogger(DebateMcpTools.class.getName());
 
     private static final String VALID_ROLES = Arrays.stream(AgentType.values())
-            .map(Enum::name).collect(Collectors.joining(", "));
-
-    @Inject ChannelService channelService;
-    @Inject ChannelGateway channelGateway;
-    @Inject InstanceService instanceService;
-    @Inject MessageService messageService;
-    @Inject ProjectionService projectionService;
-    @Inject DebateSessionRegistry registry;
-    @Inject DebateChannelProjection debateProjection;
-    @Inject DraftHouseConfig config;
-    @Inject DebateEventResource debateEventResource;
-    @Inject ReviewerResolver resolver;
-    @Inject WebSocketEventBus eventBus;
+                                                    .map(Enum::name).collect(Collectors.joining(", "));
     private final java.util.concurrent.ConcurrentHashMap<String, io.casehub.drafthouse.debate.WorkspaceWatcher> activeWatchers = new java.util.concurrent.ConcurrentHashMap<>();
+    @Inject
+                  ChannelService                                                                                channelService;
+    @Inject
+                  ChannelGateway                                                                                channelGateway;
+    @Inject
+                  InstanceService                                                                               instanceService;
+    @Inject
+                  MessageService                                                                                messageService;
+    @Inject
+                  ProjectionService                                                                             projectionService;
+    @Inject
+                  DebateSessionRegistry                                                                         registry;
+    @Inject
+                  DebateChannelProjection                                                                       debateProjection;
+    @Inject
+                  DraftHouseConfig                                                                              config;
+    @Inject
+                  DebateEventResource                                                                           debateEventResource;
+    @Inject
+                  ReviewerResolver                                                                              resolver;
+    @Inject
+                  WebSocketEventBus                                                                             eventBus;
+
+    /**
+     * Parses an agentRole string, returning null for unknown values.
+     */
+    private static AgentType parseRole(final String agentRole) {
+        try {
+            return AgentType.valueOf(agentRole);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private static boolean isReviewComplete(java.nio.file.Path wsPath) {
+        java.nio.file.Path progressLog = wsPath.resolve("progress.log");
+        if (!java.nio.file.Files.exists(progressLog)) {return true;}
+        try {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(progressLog);
+            for (int i = lines.size() - 1; i >= Math.max(0, lines.size() - 20); i--) {
+                if (io.casehub.drafthouse.debate.ProgressLogParser.isTerminal(lines.get(i).trim())) {return true;}
+            }
+            return false;
+        } catch (java.io.IOException e) {
+            LOG.warning("Could not read progress.log: " + e.getMessage());
+            return true;
+        }
+    }
+
+    private static java.util.Set<String> collectIssueIds(
+            io.casehub.drafthouse.debate.WorkspaceParser.WorkspaceParseResult parseResult) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (var round : parseResult.rounds()) {
+            for (var issue : round.issues()) {
+                ids.add(issue.issueId());
+            }
+        }
+        return ids;
+    }
 
     @jakarta.annotation.PreDestroy
     void shutdown() {
@@ -75,19 +122,18 @@ public class DebateMcpTools {
         activeWatchers.clear();
     }
 
-
     @Tool(name = "start_debate",
           description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, specPath, and reviewer.")
     public String startDebate(
             @ToolArg(description = "Absolute path to the spec file being debated") String specPath,
             @ToolArg(description = "Eidos agent ID for the reviewer (e.g. 'drafthouse-structural-reviewer'). "
-                    + "Omit for default reviewer. Use list_reviewers to see available agents.")
+                                   + "Omit for default reviewer. Use list_reviewers to see available agents.")
             String agentId) {
 
-        String debateSlug = "d-" + UUID.randomUUID();
+        String debateSlug  = "d-" + UUID.randomUUID();
         String channelName = "drafthouse/debate/" + debateSlug;
 
-        Channel channel = null;
+        Channel       channel = null;
         DebateSession session = null;
         try {
             ResolvedReviewer reviewer;
@@ -98,11 +144,11 @@ public class DebateMcpTools {
             }
 
             channel = channelService.create(ChannelCreateRequest.builder(channelName)
-                    .description("DraftHouse debate session")
-                    .semantic(ChannelSemantic.APPEND).build());
+                                                                .description("DraftHouse debate session")
+                                                                .semantic(ChannelSemantic.APPEND).build());
 
             String debateSessionId = channel.id().toString();
-            String resolvedName = channel.name();
+            String resolvedName    = channel.name();
 
             session = new DebateSession(channel.id(), debateSessionId, resolvedName, reviewer.agentId());
             session.addDocument(specPath, "spec");
@@ -125,21 +171,27 @@ public class DebateMcpTools {
             }
 
             return "{\"debateSessionId\":\"" + debateSessionId + "\",\"channel\":\"" + resolvedName
-                    + "\",\"specPath\":" + DraftHouseMcpTools.jsonString(specPath)
-                    + ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(reviewer.agentId())
-                    + ",\"name\":" + DraftHouseMcpTools.jsonString(reviewer.name())
-                    + ",\"instructions\":" + DraftHouseMcpTools.jsonString(reviewer.instructions()) + "}}";
+                   + "\",\"specPath\":" + DraftHouseMcpTools.jsonString(specPath)
+                   + ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(reviewer.agentId())
+                   + ",\"name\":" + DraftHouseMcpTools.jsonString(reviewer.name())
+                   + ",\"instructions\":" + DraftHouseMcpTools.jsonString(reviewer.instructions()) + "}}";
 
         } catch (Exception e) {
             LOG.warning("start_debate failed: " + e.getMessage() + " — attempting cleanup");
             if (channel != null) {
                 if (session != null) {
                     session.participants().values().forEach(id -> {
-                        try { instanceService.deregister(id); } catch (Exception ce) { LOG.warning("cleanup instance: " + ce.getMessage()); }
+                        try {instanceService.deregister(id);} catch (Exception ce) {
+                            LOG.warning("cleanup instance: " + ce.getMessage());
+                        }
                     });
-                    try { registry.remove(channel.id()); } catch (Exception ce) { LOG.warning("cleanup registry: " + ce.getMessage()); }
+                    try {registry.remove(channel.id());} catch (Exception ce) {
+                        LOG.warning("cleanup registry: " + ce.getMessage());
+                    }
                 }
-                try { channelService.delete(channel.id(), true); } catch (Exception ce) { LOG.warning("cleanup channel: " + ce.getMessage()); }
+                try {channelService.delete(channel.id(), true);} catch (Exception ce) {
+                    LOG.warning("cleanup channel: " + ce.getMessage());
+                }
             }
             return "error: " + e.getMessage();
         }
@@ -157,13 +209,13 @@ public class DebateMcpTools {
             @ToolArg(description = "Optional location: spec section, heading, or free-form. Null to omit.") String location) {
 
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         AgentType role = parseRole(agentRole);
-        if (role == null) return roleError(agentRole);
+        if (role == null) {return roleError(agentRole);}
 
-        String pointId = UUID.randomUUID().toString();
-        Map<String, String> meta = new LinkedHashMap<>();
+        String              pointId = UUID.randomUUID().toString();
+        Map<String, String> meta    = new LinkedHashMap<>();
         meta.put(ConversationProtocol.ENTRY_TYPE, "RAISE");
         meta.put(ConversationProtocol.ROLE, agentRole);
         meta.put(ConversationProtocol.ROUND, String.valueOf(round));
@@ -175,13 +227,13 @@ public class DebateMcpTools {
         String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, content);
 
         messageService.dispatch(MessageDispatch.builder()
-                .channelId(session.channelId())
-                .sender(sender(session, role))
-                .type(MessageType.QUERY)
-                .content(encodedContent)
-                .correlationId(pointId)
-                .actorType(ActorType.AGENT)
-                .build());
+                                               .channelId(session.channelId())
+                                               .sender(sender(session, role))
+                                               .type(MessageType.QUERY)
+                                               .content(encodedContent)
+                                               .correlationId(pointId)
+                                               .actorType(ActorType.AGENT)
+                                               .build());
 
         trackAndPush(session, encodedContent.length());
         return "{\"pointId\":\"" + pointId + "\",\"status\":\"dispatched\"}";
@@ -198,13 +250,13 @@ public class DebateMcpTools {
             @ToolArg(description = "Your response content") String content) {
 
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         AgentType role = parseRole(agentRole);
-        if (role == null) return roleError(agentRole);
+        if (role == null) {return roleError(agentRole);}
 
         MessageType qhorusType = switch (entryType) {
-            case "agree"   -> MessageType.DONE;
+            case "agree" -> MessageType.DONE;
             case "dispute" -> MessageType.DECLINE;
             case "declined" -> MessageType.DECLINE;
             case "qualify", "counter" -> MessageType.RESPONSE;
@@ -215,7 +267,7 @@ public class DebateMcpTools {
         }
 
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id()).orElse(null);
-        if (inReplyTo == null) return "error: point not found: " + pointId;
+        if (inReplyTo == null) {return "error: point not found: " + pointId;}
 
         Map<String, String> meta = new LinkedHashMap<>();
         meta.put(ConversationProtocol.ENTRY_TYPE, entryType.toUpperCase());
@@ -224,14 +276,14 @@ public class DebateMcpTools {
         String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, content);
 
         messageService.dispatch(MessageDispatch.builder()
-                .channelId(session.channelId())
-                .sender(sender(session, role))
-                .type(qhorusType)
-                .content(encodedContent)
-                .correlationId(pointId)
-                .inReplyTo(inReplyTo)
-                .actorType(ActorType.AGENT)
-                .build());
+                                               .channelId(session.channelId())
+                                               .sender(sender(session, role))
+                                               .type(qhorusType)
+                                               .content(encodedContent)
+                                               .correlationId(pointId)
+                                               .inReplyTo(inReplyTo)
+                                               .actorType(ActorType.AGENT)
+                                               .build());
 
         trackAndPush(session, encodedContent.length());
         return "{\"status\":\"dispatched\"}";
@@ -247,13 +299,13 @@ public class DebateMcpTools {
             @ToolArg(description = "Reason for escalating to human") String reason) {
 
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         AgentType role = parseRole(agentRole);
-        if (role == null) return roleError(agentRole);
+        if (role == null) {return roleError(agentRole);}
 
         Long inReplyTo = messageService.findByCorrelationId(pointId).map(m -> m.id()).orElse(null);
-        if (inReplyTo == null) return "error: point not found: " + pointId;
+        if (inReplyTo == null) {return "error: point not found: " + pointId;}
 
         Map<String, String> meta = new LinkedHashMap<>();
         meta.put(ConversationProtocol.ENTRY_TYPE, "FLAG_HUMAN");
@@ -262,15 +314,15 @@ public class DebateMcpTools {
         String encodedContent = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, reason);
 
         messageService.dispatch(MessageDispatch.builder()
-                .channelId(session.channelId())
-                .sender(sender(session, role))
-                .type(MessageType.HANDOFF)
-                .content(encodedContent)
-                .target(DraftHouseInstances.HUMAN_INSTANCE_ID)
-                .correlationId(pointId)
-                .inReplyTo(inReplyTo)
-                .actorType(ActorType.AGENT)
-                .build());
+                                               .channelId(session.channelId())
+                                               .sender(sender(session, role))
+                                               .type(MessageType.HANDOFF)
+                                               .content(encodedContent)
+                                               .target(DraftHouseInstances.HUMAN_INSTANCE_ID)
+                                               .correlationId(pointId)
+                                               .inReplyTo(inReplyTo)
+                                               .actorType(ActorType.AGENT)
+                                               .build());
 
         trackAndPush(session, encodedContent.length());
         return "{\"status\":\"dispatched\"}";
@@ -282,9 +334,9 @@ public class DebateMcpTools {
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId) {
 
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
-        var result = projectionService.project(session.channelId(), debateProjection);
+        var    result  = projectionService.project(session.channelId(), debateProjection);
         String summary = debateProjection.render(result);
 
         summary = appendWorkingSet(summary, session);
@@ -306,7 +358,7 @@ public class DebateMcpTools {
             var name = resolver.findDescriptor(session.agentId()).map(AgentDescriptor::name).orElse(null);
             if (name != null) {
                 reviewerJson = ",\"reviewer\":{\"agentId\":" + DraftHouseMcpTools.jsonString(session.agentId())
-                        + ",\"name\":" + DraftHouseMcpTools.jsonString(name) + "}";
+                               + ",\"name\":" + DraftHouseMcpTools.jsonString(name) + "}";
             }
         }
         return "{\"summary\":" + DraftHouseMcpTools.jsonString(summary) + reviewerJson + "}";
@@ -356,12 +408,13 @@ public class DebateMcpTools {
         }
 
         return "{\"debateSessionId\":\"" + debateSessionId + "\",\"status\":\"ended\",\"channelDeleted\":"
-               + deleteChannel + "}";}
+               + deleteChannel + "}";
+    }
 
     @Tool(name = "post_memo",
           description = "Write a per-round reasoning memo to the debate channel. Call after your last "
-                  + "raise/respond of a round to record working hypotheses, patterns noticed, and why "
-                  + "concessions feel solid vs provisional.")
+                        + "raise/respond of a round to record working hypotheses, patterns noticed, and why "
+                        + "concessions feel solid vs provisional.")
     public String postMemo(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
@@ -369,22 +422,22 @@ public class DebateMcpTools {
             @ToolArg(description = "Your reasoning memo content") String content) {
         try {
             DebateSession session = resolveSession(debateSessionId);
-            if (session == null) return sessionError(debateSessionId);
+            if (session == null) {return sessionError(debateSessionId);}
             AgentType role = parseRole(agentRole);
-            if (role == null) return roleError(agentRole);
+            if (role == null) {return roleError(agentRole);}
             Map<String, String> meta = new LinkedHashMap<>();
             meta.put(ConversationProtocol.ENTRY_TYPE, "MEMO");
             meta.put(ConversationProtocol.ROLE, agentRole);
             meta.put(ConversationProtocol.ROUND, String.valueOf(round));
             String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta,
-                    Objects.requireNonNullElse(content, ""));
+                                                       Objects.requireNonNullElse(content, ""));
             messageService.dispatch(MessageDispatch.builder()
-                    .channelId(session.channelId())
-                    .sender(sender(session, role))
-                    .type(MessageType.STATUS)
-                    .content(encoded)
-                    .actorType(ActorType.AGENT)
-                    .build());
+                                                   .channelId(session.channelId())
+                                                   .sender(sender(session, role))
+                                                   .type(MessageType.STATUS)
+                                                   .content(encoded)
+                                                   .actorType(ActorType.AGENT)
+                                                   .build());
             trackAndPush(session, encoded.length());
             return "{\"status\":\"dispatched\"}";
         } catch (Exception e) {
@@ -395,9 +448,9 @@ public class DebateMcpTools {
 
     @Tool(name = "request_subagent",
           description = "Dispatch a fresh-context sub-agent for focused analysis. Finding appears in "
-                  + "get_debate_summary (⏳ while pending). You may continue raising/responding while it runs. "
-                  + "taskType: VERIFY | ARBITRATE | DEEP_ANALYSIS | CONSISTENCY_CHECK | NEUTRAL_SUMMARY | CUSTOM. "
-                  + "customInput: for CUSTOM — the full context; for CONSISTENCY_CHECK — the proposed resolution text.")
+                        + "get_debate_summary (⏳ while pending). You may continue raising/responding while it runs. "
+                        + "taskType: VERIFY | ARBITRATE | DEEP_ANALYSIS | CONSISTENCY_CHECK | NEUTRAL_SUMMARY | CUSTOM. "
+                        + "customInput: for CUSTOM — the full context; for CONSISTENCY_CHECK — the proposed resolution text.")
     public String requestSubagent(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Your agent role: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR") String agentRole,
@@ -407,11 +460,11 @@ public class DebateMcpTools {
             @ToolArg(description = "For CUSTOM: full context. For CONSISTENCY_CHECK: proposed resolution. Null otherwise.") String customInput) {
         try {
             DebateSession session = resolveSession(debateSessionId);
-            if (session == null) return sessionError(debateSessionId);
+            if (session == null) {return sessionError(debateSessionId);}
             AgentType role = parseRole(agentRole);
-            if (role == null) return roleError(agentRole);
-            String subTaskId = UUID.randomUUID().toString();
-            Map<String, String> meta = new LinkedHashMap<>();
+            if (role == null) {return roleError(agentRole);}
+            String              subTaskId = UUID.randomUUID().toString();
+            Map<String, String> meta      = new LinkedHashMap<>();
             meta.put(ConversationProtocol.ENTRY_TYPE, "SUB_TASK_REQUEST");
             meta.put(ConversationProtocol.ROLE, agentRole);
             meta.put(ConversationProtocol.TASK_TYPE, Objects.requireNonNullElse(taskType, "CUSTOM"));
@@ -421,15 +474,15 @@ public class DebateMcpTools {
                 meta.put(ConversationProtocol.POINT_ID, pointId);
             }
             String encoded = ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta,
-                    Objects.requireNonNullElse(customInput, ""));
+                                                       Objects.requireNonNullElse(customInput, ""));
             messageService.dispatch(MessageDispatch.builder()
-                    .channelId(session.channelId())
-                    .sender(sender(session, role))
-                    .type(MessageType.QUERY)
-                    .content(encoded)
-                    .correlationId(subTaskId)
-                    .actorType(ActorType.AGENT)
-                    .build());
+                                                   .channelId(session.channelId())
+                                                   .sender(sender(session, role))
+                                                   .type(MessageType.QUERY)
+                                                   .content(encoded)
+                                                   .correlationId(subTaskId)
+                                                   .actorType(ActorType.AGENT)
+                                                   .build());
             trackAndPush(session, encoded.length());
             return "{\"subTaskId\":\"" + subTaskId + "\",\"status\":\"dispatched\"}";
         } catch (Exception e) {
@@ -440,33 +493,33 @@ public class DebateMcpTools {
 
     @Tool(name = "get_debate_summary_at_round",
           description = "Get the debate summary as it stood at the end of round N. Only messages with "
-                  + "round ≤ N are included. Use to preview a prior state before restart_from_round, "
-                  + "or to inspect any round on a live session. "
-                  + "Note: always use the ORIGINAL session's ID to inspect prior rounds — a restarted "
-                  + "session's channel contains no prior debate content.")
+                        + "round ≤ N are included. Use to preview a prior state before restart_from_round, "
+                        + "or to inspect any round on a live session. "
+                        + "Note: always use the ORIGINAL session's ID to inspect prior rounds — a restarted "
+                        + "session's channel contains no prior debate content.")
     public String getDebateSummaryAtRound(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Maximum round to include (must be ≥ 1)") int round) {
-        if (round < 1) return "error: round must be ≥ 1 (got " + round + ")";
+        if (round < 1) {return "error: round must be ≥ 1 (got " + round + ")";}
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
         var bounded = new DebateChannelProjection.RoundBoundedProjection(round, debateProjection);
-        var result = projectionService.project(session.channelId(), bounded);
+        var result  = projectionService.project(session.channelId(), bounded);
         return renderBounded(result.state(), round);
     }
 
     @Tool(name = "restart_from_round",
           description = "Create a new debate session branching from the state at round N. "
-                  + "The new session starts with the debate history up to and including round N "
-                  + "as its bootstrap context. Rounds after N from the original are not visible "
-                  + "in the new session. Sub-agent findings from rounds ≤ N are included; "
-                  + "findings from later rounds remain in the original session only. "
-                  + "The original session stays live — call end_debate on originalDebateSessionId "
-                  + "when done with it.")
+                        + "The new session starts with the debate history up to and including round N "
+                        + "as its bootstrap context. Rounds after N from the original are not visible "
+                        + "in the new session. Sub-agent findings from rounds ≤ N are included; "
+                        + "findings from later rounds remain in the original session only. "
+                        + "The original session stays live — call end_debate on originalDebateSessionId "
+                        + "when done with it.")
     public String restartFromRound(
             @ToolArg(description = "debateSessionId of the original session") String debateSessionId,
             @ToolArg(description = "Branch from this round's state (must be ≥ 1). "
-                    + "Pass the last completed round to resume; pass an earlier round to redo from there.") int round) {
+                                   + "Pass the last completed round to resume; pass an earlier round to redo from there.") int round) {
         if (round < 1) {return "error: round must be ≥ 1 (got " + round + ")";}
 
         DebateSession original = resolveSession(debateSessionId);
@@ -478,13 +531,13 @@ public class DebateMcpTools {
 
         String summary = renderBounded(boundedResult.state(), round);
         int findingsComplete = (int) boundedResult.state().subTaskFindings().values().stream()
-                .filter(f -> f.status() == TaskStatus.COMPLETED)
-                .count();
+                                                  .filter(f -> f.status() == TaskStatus.COMPLETED)
+                                                  .count();
         int findingsPending = (int) boundedResult.state().subTaskFindings().values().stream()
-                .filter(f -> f.status() == TaskStatus.PENDING)
-                .count();
+                                                 .filter(f -> f.status() == TaskStatus.PENDING)
+                                                 .count();
         int findingsInOriginalOnly = fullResult.state().subTaskFindings().size()
-                - boundedResult.state().subTaskFindings().size();
+                                     - boundedResult.state().subTaskFindings().size();
         int pointCount = boundedResult.state().points().size();
 
         String        debateSlug  = "d-" + UUID.randomUUID();
@@ -561,18 +614,19 @@ public class DebateMcpTools {
                 }
             }
             return "error: " + e.getMessage();
-        }}
+        }
+    }
 
     @Tool(name = "report_context",
           description = "Report current context window usage for a debate session. "
-                      + "Call periodically (e.g. every 2-3 rounds) to improve the accuracy "
-                      + "of the context meter. Returns advisory warning when threshold exceeded.")
+                        + "Call periodically (e.g. every 2-3 rounds) to improve the accuracy "
+                        + "of the context meter. Returns advisory warning when threshold exceeded.")
     public String reportContext(
             @ToolArg(description = "Debate session ID") String debateSessionId,
             @ToolArg(description = "Context usage as percentage (0-100)") double usagePercent) {
         try {
             DebateSession session = resolveSession(debateSessionId);
-            if (session == null) return sessionError(debateSessionId);
+            if (session == null) {return sessionError(debateSessionId);}
 
             session.contextTracker().reportAgentUsage(usagePercent);
             ContextSnapshot snap = session.contextTracker().snapshot(
@@ -582,8 +636,8 @@ public class DebateMcpTools {
 
             if (snap.thresholdExceeded()) {
                 return "{\"status\":\"warning\",\"effectivePercent\":" + snap.effectivePercent()
-                        + ",\"message\":\"Context usage at " + String.format("%.1f", snap.effectivePercent())
-                        + "% — consider committing state and restarting session\"}";
+                       + ",\"message\":\"Context usage at " + String.format("%.1f", snap.effectivePercent())
+                       + "% — consider committing state and restarting session\"}";
             }
             return "{\"status\":\"ok\",\"effectivePercent\":" + snap.effectivePercent() + "}";
         } catch (Exception e) {
@@ -599,7 +653,7 @@ public class DebateMcpTools {
             @ToolArg(description = "Absolute path to the document") String path,
             @ToolArg(description = "Label for this document (e.g. 'spec', 'impl', 'test')") String label) {
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         boolean added = session.addDocument(path, label);
         if (!added) {
@@ -617,7 +671,7 @@ public class DebateMcpTools {
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Path of the document to remove") String path) {
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         try {
             boolean comparisonCleared = session.removeDocument(path);
@@ -638,10 +692,13 @@ public class DebateMcpTools {
     public String listDocuments(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId) {
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         return DocumentSetJson.documentsAndComparisonToJson(session);
     }
+
+
+    // ── helpers ───────────────────────────────────────────────────────────────
 
     @Tool(name = "set_comparison",
           description = "Set which two documents the browser diff viewer should compare. Both paths must be in the working set.")
@@ -650,14 +707,14 @@ public class DebateMcpTools {
             @ToolArg(description = "Path for the A (left) side") String pathA,
             @ToolArg(description = "Path for the B (right) side") String pathB) {
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         try {
             session.setComparison(pathA, pathB);
             registry.persist(session);
             debateEventResource.pushComparisonChanged(session.channelId(), session.currentComparison());
             return "{\"status\":\"set\",\"pathA\":" + DraftHouseMcpTools.jsonString(pathA)
-                    + ",\"pathB\":" + DraftHouseMcpTools.jsonString(pathB) + "}";
+                   + ",\"pathB\":" + DraftHouseMcpTools.jsonString(pathB) + "}";
         } catch (IllegalArgumentException e) {
             return "error: " + e.getMessage();
         }
@@ -670,10 +727,10 @@ public class DebateMcpTools {
             @ToolArg(description = "Absolute path for the output markdown file") String outputPath) {
 
         DebateSession session = resolveSession(debateSessionId);
-        if (session == null) return sessionError(debateSessionId);
+        if (session == null) {return sessionError(debateSessionId);}
 
         try {
-            var result = projectionService.project(session.channelId(), debateProjection);
+            var    result  = projectionService.project(session.channelId(), debateProjection);
             String summary = debateProjection.render(result);
 
             SelectionScope sel = session.currentSelection();
@@ -705,7 +762,7 @@ public class DebateMcpTools {
             java.nio.file.Files.write(path, bytes);
 
             return "{\"status\":\"exported\",\"path\":" + DraftHouseMcpTools.jsonString(path.toAbsolutePath().toString())
-                    + ",\"bytes\":" + bytes.length + "}";
+                   + ",\"bytes\":" + bytes.length + "}";
         } catch (Exception e) {
             LOG.warning("export_debate_summary failed: " + e.getMessage());
             return "error: " + e.getMessage();
@@ -740,16 +797,16 @@ public class DebateMcpTools {
             }
         }
 
-        Channel channel       = null;
+        Channel       channel = null;
         DebateSession session = null;
         try {
             var parseResult = io.casehub.drafthouse.debate.WorkspaceParser.parse(wsPath);
 
             channel = existingChannel.isPresent()
-                    ? existingChannel.get()
-                    : channelService.create(ChannelCreateRequest.builder(channelName)
-                                                                .description("DraftHouse replay session")
-                                                                .semantic(ChannelSemantic.APPEND).build());
+                      ? existingChannel.get()
+                      : channelService.create(ChannelCreateRequest.builder(channelName)
+                                                                  .description("DraftHouse replay session")
+                                                                  .semantic(ChannelSemantic.APPEND).build());
 
             String debateSessionId = channel.id().toString();
             session = new DebateSession(channel.id(), debateSessionId, channel.name(), null);
@@ -780,7 +837,7 @@ public class DebateMcpTools {
                     parseResult.specPath(), null));
 
             boolean reviewComplete = isReviewComplete(wsPath);
-            String status = "loaded";
+            String  status         = "loaded";
 
             if (!reviewComplete) {
                 var existingWatcher = activeWatchers.get(session.debateSessionId());
@@ -799,8 +856,8 @@ public class DebateMcpTools {
                 try {
                     java.util.Set<String> existingIds = collectIssueIds(parseResult);
                     watcher.start(wsPath, parseResult.rounds().size(), existingIds,
-                            result.raiseMessageIds(), result.lastMessageId(),
-                            parseResult.projectRepoPath(), parseResult.specPath());
+                                  result.raiseMessageIds(), result.lastMessageId(),
+                                  parseResult.projectRepoPath(), parseResult.specPath());
                     activeWatchers.put(session.debateSessionId(), watcher);
                     status = "watching";
                 } catch (java.io.IOException e) {
@@ -836,16 +893,13 @@ public class DebateMcpTools {
         }
     }
 
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-
     private void trackAndPush(DebateSession session, long contentChars) {
         session.contextTracker().addContribution(contentChars);
         try {
             debateEventResource.pushContextSnapshot(session.channelId(),
-                    session.contextTracker().snapshot(
-                            config.context().windowSizeChars(),
-                            config.context().thresholdPercent()));
+                                                    session.contextTracker().snapshot(
+                                                            config.context().windowSizeChars(),
+                                                            config.context().thresholdPercent()));
         } catch (Exception e) {
             LOG.warning("Context push failed for " + session.debateSessionId() + ": " + e.getMessage());
         }
@@ -853,7 +907,7 @@ public class DebateMcpTools {
 
     private String appendWorkingSet(String summary, DebateSession session) {
         var docs = session.documents();
-        if (docs.size() <= 1) return summary;
+        if (docs.size() <= 1) {return summary;}
         StringBuilder sb = new StringBuilder(summary);
         sb.append("\n\n## Working Set\n");
         for (var doc : docs) {
@@ -862,15 +916,17 @@ public class DebateMcpTools {
         var cp = session.currentComparison();
         if (cp != null) {
             String labelA = docs.stream().filter(d -> d.path().equals(cp.pathA()))
-                    .map(DocumentEntry::label).findFirst().orElse(cp.pathA());
+                                .map(DocumentEntry::label).findFirst().orElse(cp.pathA());
             String labelB = docs.stream().filter(d -> d.path().equals(cp.pathB()))
-                    .map(DocumentEntry::label).findFirst().orElse(cp.pathB());
+                                .map(DocumentEntry::label).findFirst().orElse(cp.pathB());
             sb.append("\n**Comparing:** ").append(labelA).append(" ↔ ").append(labelB).append("\n");
         }
         return sb.toString();
     }
 
-    /** Renders a bounded state, returning a custom message when the state has no debate content. */
+    /**
+     * Renders a bounded state, returning a custom message when the state has no debate content.
+     */
     private String renderBounded(ConversationState state, int round) {
         if (state.points().isEmpty() && state.memos().isEmpty() && state.subTaskFindings().isEmpty()) {
             return "No debate activity up to round " + round + ".";
@@ -896,45 +952,9 @@ public class DebateMcpTools {
         }
     }
 
-    /** Parses an agentRole string, returning null for unknown values. */
-    private static AgentType parseRole(final String agentRole) {
-        try {
-            return AgentType.valueOf(agentRole);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
-    }
-
     private String roleError(final String agentRole) {
         return "error: invalid agentRole '" + agentRole + "' — must be one of: " + VALID_ROLES;
     }
-
-    private static boolean isReviewComplete(java.nio.file.Path wsPath) {
-        java.nio.file.Path progressLog = wsPath.resolve("progress.log");
-        if (!java.nio.file.Files.exists(progressLog)) {return true;}
-        try {
-            java.util.List<String> lines = java.nio.file.Files.readAllLines(progressLog);
-            for (int i = lines.size() - 1; i >= Math.max(0, lines.size() - 20); i--) {
-                if (io.casehub.drafthouse.debate.ProgressLogParser.isTerminal(lines.get(i).trim())) {return true;}
-            }
-            return false;
-        } catch (java.io.IOException e) {
-            LOG.warning("Could not read progress.log: " + e.getMessage());
-            return true;
-        }
-    }
-
-    private static java.util.Set<String> collectIssueIds(
-            io.casehub.drafthouse.debate.WorkspaceParser.WorkspaceParseResult parseResult) {
-        java.util.Set<String> ids = new java.util.HashSet<>();
-        for (var round : parseResult.rounds()) {
-            for (var issue : round.issues()) {
-                ids.add(issue.issueId());
-            }
-        }
-        return ids;
-    }
-
 
     /**
      * Returns the Qhorus instance ID for the given role, registering it on first use.
@@ -945,8 +965,8 @@ public class DebateMcpTools {
         String instanceId = session.registerIfAbsent(role, () -> {
             final String id = DebateSession.instanceId(role, session.debateSessionId());
             instanceService.register(id,
-                    "DraftHouse " + role.name().toLowerCase() + " " + session.debateSessionId(),
-                    List.of("document-debate-" + role.name().toLowerCase()));
+                                     "DraftHouse " + role.name().toLowerCase() + " " + session.debateSessionId(),
+                                     List.of("document-debate-" + role.name().toLowerCase()));
             return id;
         });
         if (existing == null) {
