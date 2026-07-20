@@ -65,6 +65,16 @@ public class DebateMcpTools {
     @Inject DebateEventResource debateEventResource;
     @Inject ReviewerResolver resolver;
     @Inject WebSocketEventBus eventBus;
+    private final java.util.concurrent.ConcurrentHashMap<String, io.casehub.drafthouse.debate.WorkspaceWatcher> activeWatchers = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @jakarta.annotation.PreDestroy
+    void shutdown() {
+        activeWatchers.values().forEach(w -> {
+            try {w.stop();} catch (Exception e) {LOG.warning("shutdown: " + e.getMessage());}
+        });
+        activeWatchers.clear();
+    }
+
 
     @Tool(name = "start_debate",
           description = "Start a debate session. Any agent role may participate: REV | IMP | SUPERVISOR | MODERATOR | SELECTOR. Returns JSON with debateSessionId (use for all subsequent calls), channel name, specPath, and reviewer.")
@@ -307,7 +317,6 @@ public class DebateMcpTools {
     public String endDebate(
             @ToolArg(description = "debateSessionId returned by start_debate") String debateSessionId,
             @ToolArg(description = "Whether to delete the Qhorus channel (default: false)") boolean deleteChannel) {
-
         UUID channelId;
         try {
             channelId = UUID.fromString(debateSessionId);
@@ -320,13 +329,21 @@ public class DebateMcpTools {
             return "{\"debateSessionId\":\"" + debateSessionId + "\",\"status\":\"not-found\"}";
         }
 
+        var watcher = activeWatchers.remove(debateSessionId);
+        if (watcher != null) {
+            try {watcher.stop();} catch (Exception e) {
+                LOG.warning("endDebate: watcher stop failed: " + e.getMessage());
+            }
+        }
+
         registry.remove(channelId);
 
         eventBus.broadcast("session-ended", java.util.Map.of("debateSessionId", debateSessionId));
 
         session.participants().values().forEach(instanceId -> {
-            try { instanceService.deregister(instanceId); }
-            catch (Exception e) { LOG.warning("end_debate: deregister failed: " + e.getMessage()); }
+            try {instanceService.deregister(instanceId);} catch (Exception e) {
+                LOG.warning("end_debate: deregister failed: " + e.getMessage());
+            }
         });
 
         if (deleteChannel) {
@@ -334,13 +351,12 @@ public class DebateMcpTools {
                 channelService.delete(session.channelId(), true);
             } catch (Exception e) {
                 LOG.warning("end_debate: channel delete failed for " + session.channelName()
-                        + ": " + e.getMessage());
+                            + ": " + e.getMessage());
             }
         }
 
         return "{\"debateSessionId\":\"" + debateSessionId + "\",\"status\":\"ended\",\"channelDeleted\":"
-                + deleteChannel + "}";
-    }
+               + deleteChannel + "}";}
 
     @Tool(name = "post_memo",
           description = "Write a per-round reasoning memo to the debate channel. Call after your last "
@@ -763,12 +779,41 @@ public class DebateMcpTools {
                     session.debateSessionId(), session.channelName(),
                     parseResult.specPath(), null));
 
+            boolean reviewComplete = isReviewComplete(wsPath);
+            String status = "loaded";
+
+            if (!reviewComplete) {
+                var existingWatcher = activeWatchers.get(session.debateSessionId());
+                if (existingWatcher != null) {
+                    return "{\"debateSessionId\":\"" + debateSessionId
+                           + "\",\"channel\":\"" + channel.name()
+                           + "\",\"status\":\"already_watching\"}";
+                }
+
+                var watchAdapter = new io.casehub.drafthouse.debate.WorkspaceReplayAdapter(
+                        messageService, instanceService, channelGateway, eventBus, channel.tenancyId());
+                var watcher = new io.casehub.drafthouse.debate.WorkspaceWatcher(
+                        watchAdapter, eventBus, session, messageService,
+                        channel.tenancyId(),
+                        () -> activeWatchers.remove(debateSessionId));
+                try {
+                    java.util.Set<String> existingIds = collectIssueIds(parseResult);
+                    watcher.start(wsPath, parseResult.rounds().size(), existingIds,
+                            result.raiseMessageIds(), result.lastMessageId(),
+                            parseResult.projectRepoPath(), parseResult.specPath());
+                    activeWatchers.put(session.debateSessionId(), watcher);
+                    status = "watching";
+                } catch (java.io.IOException e) {
+                    LOG.warning("Failed to start workspace watcher: " + e.getMessage());
+                }
+            }
+
             return "{\"debateSessionId\":\"" + debateSessionId
                    + "\",\"channel\":\"" + channel.name()
                    + "\",\"entryCount\":" + result.entryCount()
                    + ",\"issues\":" + parseResult.trackerStatuses().size()
                    + ",\"rounds\":" + parseResult.rounds().size()
-                   + ",\"status\":\"loaded\"}";
+                   + ",\"status\":\"" + status + "\"}";
 
         } catch (Exception e) {
             LOG.warning("load_workspace failed: " + e.getMessage());
@@ -863,6 +908,33 @@ public class DebateMcpTools {
     private String roleError(final String agentRole) {
         return "error: invalid agentRole '" + agentRole + "' — must be one of: " + VALID_ROLES;
     }
+
+    private static boolean isReviewComplete(java.nio.file.Path wsPath) {
+        java.nio.file.Path progressLog = wsPath.resolve("progress.log");
+        if (!java.nio.file.Files.exists(progressLog)) {return true;}
+        try {
+            java.util.List<String> lines = java.nio.file.Files.readAllLines(progressLog);
+            for (int i = lines.size() - 1; i >= Math.max(0, lines.size() - 20); i--) {
+                if (io.casehub.drafthouse.debate.ProgressLogParser.isTerminal(lines.get(i).trim())) {return true;}
+            }
+            return false;
+        } catch (java.io.IOException e) {
+            LOG.warning("Could not read progress.log: " + e.getMessage());
+            return true;
+        }
+    }
+
+    private static java.util.Set<String> collectIssueIds(
+            io.casehub.drafthouse.debate.WorkspaceParser.WorkspaceParseResult parseResult) {
+        java.util.Set<String> ids = new java.util.HashSet<>();
+        for (var round : parseResult.rounds()) {
+            for (var issue : round.issues()) {
+                ids.add(issue.issueId());
+            }
+        }
+        return ids;
+    }
+
 
     /**
      * Returns the Qhorus instance ID for the given role, registering it on first use.

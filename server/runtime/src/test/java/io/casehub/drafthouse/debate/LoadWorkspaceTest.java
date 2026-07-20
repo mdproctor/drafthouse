@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 class LoadWorkspaceTest {
@@ -52,4 +53,17 @@ class LoadWorkspaceTest {
         String result = tools.loadWorkspace(path);
         assertTrue(result.startsWith("error:"));
     }
+
+    @Test
+    void load_workspace_detects_in_progress_review() {
+        String path = Path.of("src/test/resources/fixtures/workspace-watching")
+                          .toAbsolutePath().toString();
+        String result = tools.loadWorkspace(path);
+
+        assertFalse(result.startsWith("error:"), "should not be error: " + result);
+        assertTrue(result.contains("\"status\":\"watching\"")
+                   || result.contains("\"status\":\"already_watching\""),
+                   "in-progress workspace should get watching status: " + result);
+    }
+
 }
