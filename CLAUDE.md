@@ -130,9 +130,10 @@ Note: The `install` step is needed so `runtime` can resolve `api` from the local
 | `server/runtime/src/main/webui/src/panels/context-gauge.ts` | `<context-gauge>` — topbar context usage gauge (pages-event subscriber) |
 | `server/runtime/src/main/webui/src/panels/doc-picker.ts` | `<doc-picker>` — topbar document badge dropdown for A/B slot assignment (pages-event subscriber, standalone custom element) |
 | `server/runtime/src/main/webui/src/panels/document-timeline.ts` | `<document-timeline>` — document version timeline strip above diff panel (pages-event subscriber, emits timeline-comparison-changed) |
+| `server/runtime/src/main/webui/src/panels/workspace-status.ts` | `<workspace-status>` — topbar live workspace watching progress (pages-event subscriber, workspace-progress topic) |
 | `server/api/` | Pure Java domain model — depends on casehub-blocks (context tracking, message meta, bounded projection) and qhorus-api; includes `debate/` package, `DebateSession`, `DebateSessionSnapshot`, `DebateSessionStore` SPI, `DocumentEntry`, `ComparisonPair`, `ResolvedReviewer`, `EntryType` (RAISE, AGREE, COUNTER, DISPUTE, QUALIFY, FLAG_HUMAN, DECLINED, VERIFIED, DEFERRED, MEMO, SUB_TASK_*, RESTART_CONTEXT, ROUND_SNAPSHOT), `AgentType`, `SnapshotSource` (sealed), `DocumentSnapshot`, `DocumentTimeline`, `BrainstormSession`, `BrainstormOption` |
 | `server/runtime/` | Quarkus 3.34.3 app — all resources, Qhorus, platform AgentProvider |
-| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, BrainstormMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, BrainstormSessionRegistry, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, TerminalEndpoint, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, DocumentReviewer, PlatformDebateAgentProvider, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter) |
+| `server/runtime/src/main/java/io/casehub/drafthouse/` | Java resources: Ping, File, Ui, DraftHouseMcpTools, DebateMcpTools, BrainstormMcpTools, DraftHouseInstances, ReviewerChannelBackend, ReviewerChannelBackendFactory, ReviewSessionRegistryImpl, DebateSessionRegistryImpl, BrainstormSessionRegistry, DebateChannelBackend, DebateChannelBackendFactory, DebateEventResource, WebSocketEventBus, DebateWebSocket, TerminalEndpoint, NoOpDebateSessionStore, JpaDebateSessionStore, DebateSessionEntity, DraftHouseReviewerRegistry, SimplePromptRenderer, ReviewerDescriptorSeeder, ReviewerResolver, DocumentReviewer, PlatformDebateAgentProvider, debate/ (includes WorkspaceParser, WorkspaceReplayAdapter, WorkspaceWatcher, ProgressLogParser) |
 | `server/claude-agent/` | Optional module — ClaudeAgentSdkDebateAgentProvider (AgentProvider-backed, displaces PlatformDebateAgentProvider) |
 | `server/runtime/src/main/resources/application.properties` | Quarkus config |
 | `server/runtime/target/drafthouse-server-runner.jar` | Built uber-jar (not committed) |
@@ -156,7 +157,7 @@ Quarkus Server (drafthouse-server-runner.jar)
   ├── MCP tools (review)     ← start_review, update_selection, query_review, end_review, list_reviewers, get_reviewer_instructions
   ├── MCP tools (debate)     ← start_debate, raise_point, respond_to, flag_human, get_debate_summary, end_debate, report_context
   ├── MCP tools (documents)  ← add_document, remove_document, list_documents, set_comparison, export_debate_summary
-  ├── MCP tools (workspace)  ← load_workspace (replay completed design-review workspaces as debate sessions)
+  ├── MCP tools (workspace)  ← load_workspace (replay completed workspaces OR watch in-progress reviews via WorkspaceWatcher)
   ├── POST /api/debate/{id}/selection  ← store selection scope on debate session
   ├── DELETE /api/debate/{id}/selection  ← clear selection scope
   ├── GET /api/debate/{id}/documents  ← list working set documents + current comparison
@@ -186,6 +187,8 @@ Browser UI (casehub-pages workbench + Lit panels)
   ├── <document-timeline>          ← document version timeline (LitElement, Shadow DOM)
   │   ├── pages-event              ← filters ROUND_SNAPSHOT from debate-entries
   │   └── timeline-comparison-changed → diff panel fetches snapshot content
+  ├── <workspace-status>            ← live workspace watching progress (LitElement, Shadow DOM, topbar)
+  │   └── pages-event              ← workspace-progress metadata events (agent status, cost, terminal state)
   └── <pages-component-terminal>   ← xterm.js terminal (from @casehubio/pages-component-terminal, brainstorm mode only)
 ```
 
@@ -205,7 +208,7 @@ DraftHouse uses **casehub-pages workbench** with **Lit** (LitElement) panels. Th
 
 ## Quarkus Server Notes
 
-- Version: 3.34.3 (quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, casehub-pages-push 0.2-SNAPSHOT, casehub-platform-agent-api 0.2-SNAPSHOT, quarkus-quinoa 2.8.3, pty4j 0.13.11)
+- Version: 3.34.3 (quarkus-websockets-next, casehub-qhorus 0.2-SNAPSHOT, casehub-blocks 0.2-SNAPSHOT, casehub-pages-push 0.2-SNAPSHOT, casehub-platform-agent-api 0.2-SNAPSHOT, quarkus-quinoa 2.8.3, pty4j 0.13.11, directory-watcher 0.18.0)
 - Java package: `io.casehub.drafthouse`
 - Quinoa serves bundled TypeScript webui from `server/runtime/src/main/webui/` — bundles on every build
 - Port: 9001 (default), configurable via `quarkus.http.port`
