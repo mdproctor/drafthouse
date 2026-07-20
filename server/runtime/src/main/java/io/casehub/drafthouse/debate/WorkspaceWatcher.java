@@ -173,64 +173,68 @@ public class WorkspaceWatcher implements Closeable {
 
     private void processReviewerFile(Path responsesDir, int roundNum) {
         String stem = "reviewer-" + roundNum;
-        if (!processedFiles.add(stem)) return;
+        if (!processedFiles.add(stem)) {return;}
 
-        if (!waitForFile(responsesDir, stem)) return;
+        if (!waitForFile(responsesDir, stem)) {
+            processedFiles.remove(stem);
+            return;
+        }
 
         try {
             boolean hasJsonl = Files.exists(responsesDir.resolve(stem + ".jsonl"));
             WorkspaceParser.ParsedRound round = hasJsonl
-                    ? WorkspaceParser.parseRoundFromJsonl(responsesDir, roundNum)
-                    : WorkspaceParser.parseRoundFromMarkdown(
-                            responsesDir, roundNum, existingIssueIds);
+                                                ? WorkspaceParser.parseRoundFromJsonl(responsesDir, roundNum)
+                                                : WorkspaceParser.parseRoundFromMarkdown(
+                    responsesDir, roundNum, existingIssueIds);
 
             String revSender = session.instanceIdFor(AgentType.REV);
-            UUID channelId = session.channelId();
+            UUID   channelId = session.channelId();
 
             int count = 0;
             count += adapter.dispatchIssues(channelId, revSender, round, raiseMessageIds);
             count += adapter.dispatchConfirmations(channelId, revSender, round, raiseMessageIds);
             count += adapter.dispatchMemos(channelId, revSender, round.roundNumber(),
-                    round.assumptions(), round.settledDecisions());
+                                           round.assumptions(), round.settledDecisions());
 
             round.issues().forEach(i -> existingIssueIds.add(i.issueId()));
 
-            if (count > 0) pushNewEntries();
+            if (count > 0) {pushNewEntries();}
 
             LOG.info("Watcher processed " + stem + ": " + count + " entries dispatched");
         } catch (Exception e) {
             LOG.warning("Failed to process " + stem + ": " + e.getMessage());
-        }
-    }
+        }}
 
     private void processImplementorFile(Path responsesDir, int roundNum) {
         String stem = "implementor-" + roundNum;
-        if (!processedFiles.add(stem)) return;
+        if (!processedFiles.add(stem)) {return;}
 
-        if (!waitForFile(responsesDir, stem)) return;
+        if (!waitForFile(responsesDir, stem)) {
+            processedFiles.remove(stem);
+            return;
+        }
 
         try {
             boolean hasJsonl = Files.exists(responsesDir.resolve(stem + ".jsonl"));
             WorkspaceParser.ParsedRound round = hasJsonl
-                    ? WorkspaceParser.parseRoundFromJsonl(responsesDir, roundNum)
-                    : WorkspaceParser.parseRoundFromMarkdown(
-                            responsesDir, roundNum, existingIssueIds);
+                                                ? WorkspaceParser.parseRoundFromJsonl(responsesDir, roundNum)
+                                                : WorkspaceParser.parseRoundFromMarkdown(
+                    responsesDir, roundNum, existingIssueIds);
 
             String impSender = session.instanceIdFor(AgentType.IMP);
-            UUID channelId = session.channelId();
+            UUID   channelId = session.channelId();
 
             int count = 0;
             count += adapter.dispatchResponses(channelId, impSender, round, raiseMessageIds);
 
-            if (count > 0) pushNewEntries();
+            if (count > 0) {pushNewEntries();}
 
             lastReplayedRound = roundNum;
 
             LOG.info("Watcher processed " + stem + ": " + count + " entries dispatched");
         } catch (Exception e) {
             LOG.warning("Failed to process " + stem + ": " + e.getMessage());
-        }
-    }
+        }}
 
     private boolean waitForFile(Path dir, String stem) {
         Path md = dir.resolve(stem + ".md");
