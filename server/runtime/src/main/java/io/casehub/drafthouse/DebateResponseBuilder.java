@@ -1,12 +1,12 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.agentic.AgentResult;
-import io.casehub.blocks.channel.ChannelMessageMeta;
-import io.casehub.blocks.conversation.ConversationProtocol;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.ThreadEntry;
-import io.casehub.blocks.conversation.orchestration.AgentParticipant;
-import io.casehub.blocks.conversation.orchestration.ResponseMessageBuilder;
+import io.casehub.agency.agentic.AgentResult;
+import io.casehub.agency.channel.ChannelMessageMeta;
+import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.ThreadEntry;
+import io.casehub.agency.conversation.orchestration.AgentParticipant;
+import io.casehub.agency.conversation.orchestration.ResponseMessageBuilder;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;

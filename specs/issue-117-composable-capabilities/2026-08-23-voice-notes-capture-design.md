@@ -47,9 +47,9 @@ Browser                              Quarkus Server                        Files
                                                                           └─────────────────┘
 ```
 
-## 3. Speech SPIs (casehub-blocks)
+## 3. Speech SPIs (casehub-agency)
 
-Speech capabilities are domain-agnostic composable building blocks — they live in casehub-blocks as a speech module, reusable across CaseHub apps.
+Speech capabilities are domain-agnostic composable building blocks — they live in casehub-agency as a speech module, reusable across CaseHub apps.
 
 ### 3.1 SpeechToTextService
 
@@ -99,13 +99,13 @@ Alternative implementations pluggable via CDI for external services (Deepgram, G
 
 The SPI abstraction is critical: latency and quality vary significantly across models and services. Implementations must be swappable without touching consumer code.
 
-**Blocks module structure:** casehub-blocks is currently a single Maven module. Adding speech SPIs requires restructuring into a multi-module reactor: `blocks-speech-api/` (pure Java SPI interfaces) and `blocks-speech-sherpa/` (FFM implementation with native library dependency). This restructuring must be coordinated with the blocks repo — a separate issue tracks it.
+**Blocks module structure:** casehub-agency is currently a single Maven module. Adding speech SPIs requires restructuring into a multi-module reactor: `blocks-speech-api/` (pure Java SPI interfaces) and `blocks-speech-sherpa/` (FFM implementation with native library dependency). This restructuring must be coordinated with the blocks repo — a separate issue tracks it.
 
 **Model management:** Sherpa-onnx models are stored under a configurable path (`casehub.drafthouse.speech.model-path`, default `~/.drafthouse/models/`). Models are downloaded on first use — the implementation checks for the model file and fetches it if absent. STT model selection is configurable (`casehub.drafthouse.speech.stt-model`, default `whisper-tiny` — 39MB, fast, acceptable quality for voice notes). Larger models (`whisper-base`, `whisper-small`) configurable for higher accuracy at the cost of latency. Platform-specific native libraries are resolved via standard JNI/FFM library path — macOS (Apple Silicon Metal), Linux (CPU/CUDA) supported.
 
 ### 3.4 Future: avatar lip-sync
 
-TTS phoneme timing output feeds avatar lip-sync animation (casehubio/blocks#154). Not in scope for this design — filed as a future capability.
+TTS phoneme timing output feeds avatar lip-sync animation (casehubio/agency#154). Not in scope for this design — filed as a future capability.
 
 ## 4. Voice Capture Pipeline
 
@@ -280,8 +280,8 @@ Events are scoped to `voice:{sessionId}` topic — clients subscribe to a specif
 
 | Dependency | What | Where |
 |------------|------|-------|
-| blocks-speech-api | STT + TTS SPI interfaces (pure Java) | New module in casehubio/blocks (requires multi-module restructuring) |
-| blocks-speech-sherpa | sherpa-onnx FFM implementation | New module in casehubio/blocks |
+| blocks-speech-api | STT + TTS SPI interfaces (pure Java) | New module in casehubio/agency (requires multi-module restructuring) |
+| blocks-speech-sherpa | sherpa-onnx FFM implementation | New module in casehubio/agency |
 | sherpa-onnx native library | whisper + VITS/Piper models | Runtime dependency, Apple Silicon Metal + Linux CPU/CUDA |
 | LangChain4j ChatModel | Pipeline structured output calls | Already available via casehub-platform-agent-langchain4j |
 | DraftHouseSession + Facet | Session container, facet lifecycle | Already implemented on branch |
@@ -296,7 +296,7 @@ Events are scoped to `voice:{sessionId}` topic — clients subscribe to a specif
 - `server/runtime/src/main/java/io/casehub/drafthouse/SessionMcpTools.java` — session-level MCP tools (activate_facet stub)
 - `server/runtime/src/main/java/io/casehub/drafthouse/DraftHouseSessionRegistry.java` — session lifecycle
 - casehubio/drafthouse#117 — parent epic (composable capability architecture)
-- casehubio/blocks#154 — future avatar lip-sync capability
+- casehubio/agency#154 — future avatar lip-sync capability
 - `casehub-platform-agent-langchain4j` — ChatModel ↔ AgentProvider bridge
 - `PlatformDebateAgentProvider.java` — existing agent provider pattern
 - `DebateWebSocket.java` — existing WebSocket /api/ws endpoint

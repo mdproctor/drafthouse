@@ -10,9 +10,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
-import io.casehub.blocks.channel.ContextSnapshot;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.SubTaskFinding;
+import io.casehub.agency.channel.ContextSnapshot;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.SubTaskFinding;
 import io.casehub.api.model.TaskStatus;
 import io.casehub.eidos.api.AgentDescriptor;
 import io.casehub.eidos.api.Resource;

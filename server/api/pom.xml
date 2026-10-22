@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.casehub</groupId>
     <artifactId>casehub-drafthouse-parent</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.4-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -20,12 +20,12 @@
   <dependencies>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-blocks</artifactId>
+      <artifactId>casehub-agency</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>io.casehub</groupId>
-      <artifactId>casehub-blocks-speech-api</artifactId>
+      <artifactId>casehub-agency-speech-api</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

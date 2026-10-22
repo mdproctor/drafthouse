@@ -309,7 +309,7 @@ before tackling complex ones, not because of runtime dependencies between panels
 
 **Added:** `lit` (LitElement, html, css, decorators)
 
-**Not added yet:** `@casehubio/blocks-ui-core` — the fetch pattern in `document-diff`
+**Not added yet:** `@casehubio/agency-ui-core` — the fetch pattern in `document-diff`
 is implemented locally, replicating only the AbortController lifecycle and
 loading/error state management from `DataEndpointMixin`. The full mixin (with
 `willUpdate()`-driven re-fetch, microtask-deferred configure, and SSE management)

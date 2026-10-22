@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract the structured conversation protocol (data model, projection, renderer) from DraftHouse to casehub-blocks as the `io.casehub.blocks.conversation` package, then migrate DraftHouse to consume it.
+**Goal:** Extract the structured conversation protocol (data model, projection, renderer) from DraftHouse to casehub-agency as the `io.casehub.agency.conversation` package, then migrate DraftHouse to consume it.
 
 **Architecture:** Concrete protocol with string-typed entry types and a three-method subclass hook on an abstract `ConversationProjection`. Data model is records with defensive immutability. Renderer is a concrete class configurable via vocabulary maps. DraftHouse becomes a thin vocabulary layer over the blocks protocol.
 
@@ -10,11 +10,11 @@
 
 ## Global Constraints
 
-- casehub-blocks version: `0.2-SNAPSHOT` (already a dependency of DraftHouse server/api)
+- casehub-agency version: `0.2-SNAPSHOT` (already a dependency of DraftHouse server/api)
 - Qhorus SPI: `ChannelProjection<S>` in `io.casehub.qhorus.api.spi`, `MessageView` in `io.casehub.qhorus.api.message`
 - `apply()` must never throw (protocol PP-20260610-a47ef5) — parse defensively, log, return state unchanged
 - `identity()` must return a fresh instance on every call (Qhorus contract)
-- Sentinel encoding via `ChannelMessageMeta` (already in blocks `io.casehub.blocks.channel`)
+- Sentinel encoding via `ChannelMessageMeta` (already in blocks `io.casehub.agency.channel`)
 - Tests use JUnit 5 + AssertJ + Mockito (no Quarkus harness for blocks unit tests)
 - All blocks test classes use a `TestConversationProjection` — no DraftHouse terminology leaks into blocks
 - Breaking changes cost nothing — fix the design, not the callers
@@ -32,20 +32,20 @@ Before starting any task, read:
 
 ### Task 1: Blocks data model — records, enums, protocol constants
 
-All new code in casehub-blocks (`~/claude/casehub/blocks`).
+All new code in casehub-agency (`~/claude/casehub/blocks`).
 
 **Files:**
-- Create: `src/main/java/io/casehub/blocks/conversation/Priority.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/SubTaskStatus.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/PointClassification.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/ThreadEntry.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/FlagEntry.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/RoundMemo.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/SubTaskFinding.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationPoint.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationState.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationProtocol.java`
-- Create: `src/test/java/io/casehub/blocks/conversation/ConversationStateTest.java`
+- Create: `src/main/java/io/casehub/agency/conversation/Priority.java`
+- Create: `src/main/java/io/casehub/agency/conversation/SubTaskStatus.java`
+- Create: `src/main/java/io/casehub/agency/conversation/PointClassification.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ThreadEntry.java`
+- Create: `src/main/java/io/casehub/agency/conversation/FlagEntry.java`
+- Create: `src/main/java/io/casehub/agency/conversation/RoundMemo.java`
+- Create: `src/main/java/io/casehub/agency/conversation/SubTaskFinding.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationPoint.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationState.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationProtocol.java`
+- Create: `src/test/java/io/casehub/agency/conversation/ConversationStateTest.java`
 
 **Interfaces:**
 - Produces: All data types used by Task 2 (ConversationProjection) and Task 3 (ConversationRenderer)
@@ -67,7 +67,7 @@ All new code in casehub-blocks (`~/claude/casehub/blocks`).
 **ConversationProtocol** — final utility class with string constants only:
 
 ```java
-package io.casehub.blocks.conversation;
+package io.casehub.agency.conversation;
 
 public final class ConversationProtocol {
     private ConversationProtocol() {}
@@ -100,7 +100,7 @@ public final class ConversationProtocol {
 **ConversationState** — defensive immutability pattern (same as existing `ReviewState`):
 
 ```java
-package io.casehub.blocks.conversation;
+package io.casehub.agency.conversation;
 
 import java.util.List;
 import java.util.Map;
@@ -125,7 +125,7 @@ All other records follow the same pattern — see current DraftHouse sources for
 - [ ] **Step 1: Write ConversationState immutability tests**
 
 ```java
-package io.casehub.blocks.conversation;
+package io.casehub.agency.conversation;
 
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -190,7 +190,7 @@ Create all 10 source files listed above. Each is a small record or enum — port
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C ~/claude/casehub/blocks add src/main/java/io/casehub/blocks/conversation/ src/test/java/io/casehub/blocks/conversation/
+git -C ~/claude/casehub/blocks add src/main/java/io/casehub/agency/conversation/ src/test/java/io/casehub/agency/conversation/
 git -C ~/claude/casehub/blocks commit -m "feat: add conversation protocol data model and constants
 
 Records: ConversationState, ConversationPoint, ThreadEntry,
@@ -206,19 +206,19 @@ Refs casehubio/drafthouse#81"
 ### Task 2: ConversationProjection — abstract fold with hook methods
 
 **Files:**
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationProjection.java`
-- Create: `src/test/java/io/casehub/blocks/conversation/ConversationProjectionTest.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationProjection.java`
+- Create: `src/test/java/io/casehub/agency/conversation/ConversationProjectionTest.java`
 
 **Interfaces:**
-- Consumes: All data model types from Task 1, `ChannelProjection<ConversationState>` from `io.casehub.qhorus.api.spi`, `MessageView` from `io.casehub.qhorus.api.message`, `ChannelMessageMeta` from `io.casehub.blocks.channel`
+- Consumes: All data model types from Task 1, `ChannelProjection<ConversationState>` from `io.casehub.qhorus.api.spi`, `MessageView` from `io.casehub.qhorus.api.message`, `ChannelMessageMeta` from `io.casehub.agency.channel`
 - Produces: `ConversationProjection` — abstract base class for app-specific projections (consumed by DraftHouse Task 5)
 
 **Abstract class structure:**
 
 ```java
-package io.casehub.blocks.conversation;
+package io.casehub.agency.conversation;
 
-import io.casehub.blocks.channel.ChannelMessageMeta;
+import io.casehub.agency.channel.ChannelMessageMeta;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import java.lang.System.Logger;
@@ -348,9 +348,9 @@ Refs casehubio/drafthouse#81"
 ### Task 3: ConversationRenderer + ConversationRendererConfig
 
 **Files:**
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationRendererConfig.java`
-- Create: `src/main/java/io/casehub/blocks/conversation/ConversationRenderer.java`
-- Create: `src/test/java/io/casehub/blocks/conversation/ConversationRendererTest.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationRendererConfig.java`
+- Create: `src/main/java/io/casehub/agency/conversation/ConversationRenderer.java`
+- Create: `src/test/java/io/casehub/agency/conversation/ConversationRendererTest.java`
 
 **Interfaces:**
 - Consumes: All data model types from Task 1
@@ -440,7 +440,7 @@ Test categories:
 /opt/homebrew/bin/mvn -f ~/claude/casehub/blocks/pom.xml install -DskipTests
 ```
 
-DraftHouse depends on `casehub-blocks:0.2-SNAPSHOT`. This `install` makes the new conversation package available.
+DraftHouse depends on `casehub-agency:0.2-SNAPSHOT`. This `install` makes the new conversation package available.
 
 - [ ] **Step 7: Commit**
 
@@ -480,7 +480,7 @@ All work in casehub-drafthouse (`~/claude/casehub/drafthouse`).
 - Modify: `server/api/src/main/java/io/casehub/drafthouse/DebateSessionSnapshot.java`
 
 **Interfaces:**
-- Consumes: blocks `io.casehub.blocks.conversation.*`
+- Consumes: blocks `io.casehub.agency.conversation.*`
 - Produces: Clean server/api with blocks imports
 
 **ReviewConversationRenderer migration:**
@@ -511,7 +511,7 @@ All work in casehub-drafthouse (`~/claude/casehub/drafthouse`).
 - [ ] **Step 5: Commit**
 
 ```bash
-git -C ~/claude/casehub/drafthouse commit -am "refactor: delete types moved to casehub-blocks conversation package
+git -C ~/claude/casehub/drafthouse commit -am "refactor: delete types moved to casehub-agency conversation package
 
 Removed: ReviewState, ReviewPoint, ThreadEntry, PointClassification,
 Priority, Scope, ReviewStatus, FlagEntry, RoundMemo, SubTaskFinding,
@@ -611,7 +611,7 @@ public final class DebateProtocol {
 
 **DebateStreamEntry** — update field types:
 - `Scope scope` → `String scope`
-- `Priority` import → `io.casehub.blocks.conversation.Priority`
+- `Priority` import → `io.casehub.agency.conversation.Priority`
 - `parsePriority()` → map `"P1"/"P2"/"P3"` as legacy AND `"HIGH"/"MEDIUM"/"LOW"` as current
 - `parseScope()` → direct string extraction
 - `meta.get("agent")` → `meta.get(ConversationProtocol.ROLE)` — but note: wire key changes from `"agent"` to `"role"`, so during transition this needs to handle both keys
@@ -724,7 +724,7 @@ Refs #81"
 
 **DebateMcpTools** (767 lines) — the largest migration. Key changes:
 - All `ReviewState` → `ConversationState`
-- All `SubTaskStatus.*` → `io.casehub.blocks.conversation.SubTaskStatus.*`
+- All `SubTaskStatus.*` → `io.casehub.agency.conversation.SubTaskStatus.*`
 - All `SubTaskFinding` → blocks `SubTaskFinding` (field `requestingAgent` → `requestedBy`)
 - Encoding: manual string concat → `ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, body)`
 - Wire key: `"agent"` → `ConversationProtocol.ROLE` (i.e., `"role"`)

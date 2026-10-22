@@ -7,7 +7,7 @@
   <parent>
     <groupId>io.casehub</groupId>
     <artifactId>casehub-drafthouse-parent</artifactId>
-    <version>0.2-SNAPSHOT</version>
+    <version>0.4-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
 
@@ -78,7 +78,7 @@
     <dependency>
       <groupId>io.casehub</groupId>
       <artifactId>casehub-pages-push</artifactId>
-      <version>0.2-SNAPSHOT</version>
+      <version>0.4-SNAPSHOT</version>
     </dependency>
 
     <!-- WebSockets Next — WebSocket support for debate event push -->
@@ -200,7 +200,7 @@
                 <artifactItem>
                   <groupId>io.casehub</groupId>
                   <artifactId>casehub-pages-npm</artifactId>
-                  <version>0.2-SNAPSHOT</version>
+                  <version>0.4-SNAPSHOT</version>
                   <outputDirectory>${project.basedir}/src/main/webui/.casehub-packages</outputDirectory>
                 </artifactItem>
               </artifactItems>

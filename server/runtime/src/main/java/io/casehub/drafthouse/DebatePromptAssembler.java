@@ -1,9 +1,9 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.orchestration.AgentParticipant;
-import io.casehub.blocks.conversation.orchestration.PromptAssembler;
-import io.casehub.blocks.summarisation.observation.PartitionedDrain;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.orchestration.AgentParticipant;
+import io.casehub.agency.conversation.orchestration.PromptAssembler;
+import io.casehub.agency.summarisation.observation.PartitionedDrain;
 
 import java.util.function.Function;
 import java.util.function.Supplier;

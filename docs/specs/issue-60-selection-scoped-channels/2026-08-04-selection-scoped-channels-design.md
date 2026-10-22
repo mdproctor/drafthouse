@@ -172,7 +172,7 @@ confusion and make each panel's contract explicit.
 
 ### UI
 
-**`<selection-threads>` panel** — new LitElement in `@casehubio/blocks-ui-document-workbench`:
+**`<selection-threads>` panel** — new LitElement in `@casehubio/agency-ui-document-workbench`:
 
 - **Thread list view** (default): compact cards showing anchor text snippet,
   status badge (open/resolved), reply count, latest reply preview. Sorted by

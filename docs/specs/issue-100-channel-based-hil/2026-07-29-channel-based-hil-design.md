@@ -77,7 +77,7 @@ would be invisible in the projected `ConversationState` that agents consume via
 Wrapped in try-catch per PP-20260610-a47ef5.
 
 **Cross-module dependency:** Requires adding `reprioritisePoint()` to
-`ConversationFold` in casehub-blocks (SNAPSHOT dependency). This follows the
+`ConversationFold` in casehub-agency (SNAPSHOT dependency). This follows the
 established pattern — every state mutation goes through ConversationFold methods.
 
 Update `DEBATE_CONFIG`:

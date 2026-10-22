@@ -1,4 +1,4 @@
-# Design: Extract Document Panels as @casehubio/blocks-ui-document-workbench
+# Design: Extract Document Panels as @casehubio/agency-ui-document-workbench
 
 **Issue:** casehubio/drafthouse#101
 **Date:** 2026-07-30
@@ -7,7 +7,7 @@
 ## Overview
 
 Extract all 9 DraftHouse Lit panels into a single blocks-ui component package
-(`@casehubio/blocks-ui-document-workbench`) for cross-app embedding. Update the
+(`@casehubio/agency-ui-document-workbench`) for cross-app embedding. Update the
 blocks-ui showcase gallery with a new "Document Workbench" category. Refactor
 DraftHouse to consume the extracted package instead of owning the panels directly.
 
@@ -30,7 +30,7 @@ All 9 panels extract as new components.
 
 ```
 blocks-ui/components/document-workbench/
-  package.json          # @casehubio/blocks-ui-document-workbench
+  package.json          # @casehubio/agency-ui-document-workbench
   src/
     index.ts            # barrel export
     types.ts            # shared interfaces
@@ -49,7 +49,7 @@ blocks-ui/components/document-workbench/
 
 `channel-feed` is renamed to `debate-feed` (custom element tag `debate-feed`)
 to avoid collision with the existing `blocks-channel-feed` tag in
-`@casehubio/blocks-ui-channel-activity`.
+`@casehubio/agency-ui-channel-activity`.
 
 All other panels keep their current tag names — no collisions exist.
 
@@ -223,7 +223,7 @@ via properties or by dispatching pages-events, add a brief description.
 Add alias to `examples/vite.config.ts`:
 
 ```typescript
-{ find: '@casehubio/blocks-ui-document-workbench',
+{ find: '@casehubio/agency-ui-document-workbench',
   replacement: resolve(__dirname, '../components/document-workbench/src') },
 ```
 
@@ -236,7 +236,7 @@ Add imports for the 9 new pages to the bootstrap sequence.
 After extraction:
 
 1. **Delete** all 9 files from `server/runtime/src/main/webui/src/panels/`
-2. **Update** `index.ts` to import from `@casehubio/blocks-ui-document-workbench`
+2. **Update** `index.ts` to import from `@casehubio/agency-ui-document-workbench`
    instead of local `./panels/*`
 3. **No apiBaseUrl needed** — drafthouse runs same-origin, default `''` works
 4. **Dependency resolution** via existing Maven SNAPSHOT WebJar pattern (portal:

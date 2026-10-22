@@ -214,7 +214,7 @@ All endpoints at `/api/debate/{debateSessionId}/human/`:
 
 ## Tech Stack
 
-Quarkus 3.34, casehub-qhorus (channels + projections), casehub-blocks
+Quarkus 3.34, casehub-qhorus (channels + projections), casehub-agency
 (conversation fold, context tracking), casehub-pages (workbench layout),
 LitElement (Shadow DOM panels), Quinoa (frontend bundling), pty4j (terminal),
 Playwright (E2E tests).

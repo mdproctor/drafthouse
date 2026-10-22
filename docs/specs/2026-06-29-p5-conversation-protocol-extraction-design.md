@@ -1,8 +1,8 @@
-# P5: Structured Conversation Protocol Extraction to casehub-blocks
+# P5: Structured Conversation Protocol Extraction to casehub-agency
 
 **Date:** 2026-06-29
 **Issue:** casehubio/drafthouse#81
-**Parent epic:** casehubio/drafthouse#76 (target revised from Qhorus to casehub-blocks — blocks is the right tier for composed patterns above foundation primitives)
+**Parent epic:** casehubio/drafthouse#76 (target revised from Qhorus to casehub-agency — blocks is the right tier for composed patterns above foundation primitives)
 
 ## Problem
 
@@ -29,7 +29,7 @@ registries, no framework abstractions.
 
 ## Package
 
-`io.casehub.blocks.conversation`
+`io.casehub.agency.conversation`
 
 ## Data model
 
@@ -391,7 +391,7 @@ ConversationRendererConfig.builder()
   render bounded state without constructing its own renderer or duplicating config.
 - `DebateProtocol` — thins to sentinel constant + convenience wrappers
 - `DebateMcpTools` — import paths change (`ReviewState` → `ConversationState`,
-  `SubTaskStatus` → `io.casehub.blocks.conversation.SubTaskStatus`). Encoding
+  `SubTaskStatus` → `io.casehub.agency.conversation.SubTaskStatus`). Encoding
   migrates from manual string concatenation to
   `ChannelMessageMeta.encode(sentinel, meta, body)`. Wire key changes from
   `"agent"` to `"role"` to match the protocol constant. `renderBounded()` replaces
@@ -401,7 +401,7 @@ ConversationRendererConfig.builder()
 - `DebateChannelBackend`, `DebateChannelBackendFactory` — unchanged
 - `DebateEventResource` — unchanged
 - `DebateStreamEntry` — updated: `Scope scope` field → `String scope`,
-  `Priority` import → `io.casehub.blocks.conversation.Priority`,
+  `Priority` import → `io.casehub.agency.conversation.Priority`,
   `parsePriority()` updated for HIGH/MEDIUM/LOW values,
   `parseScope()` replaced with direct String extraction,
   `meta.get("agent")` → `meta.get("role")`
@@ -455,12 +455,12 @@ No migration script or backward-compatible parsing is needed.
 
 ### Dependency
 
-`casehub-blocks` is already a dependency of `server/api` (from P1–P4). No new
+`casehub-agency` is already a dependency of `server/api` (from P1–P4). No new
 dependency needed.
 
 ## Testing
 
-### In casehub-blocks (~30-35 tests)
+### In casehub-agency (~30-35 tests)
 
 Tests use a `TestConversationProjection` with a minimal vocabulary: `OPEN_TOPIC`
 (initiator), `ACCEPT`/`REJECT`/`CHALLENGE` (responses) mapping to statuses

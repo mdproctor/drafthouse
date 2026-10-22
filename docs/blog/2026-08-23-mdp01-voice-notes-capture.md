@@ -48,6 +48,6 @@ reference material for a debate session — load them into the working set
 alongside the document under review.
 
 The speech SPIs — `SpeechToTextService` and the audio encoding abstractions —
-live in `casehub-blocks`, not in DraftHouse. Any CaseHub application that
+live in `casehub-agency`, not in DraftHouse. Any CaseHub application that
 needs STT gets the same interface. DraftHouse provides the capture UI and
 the note pipeline; the speech capability is platform infrastructure.

@@ -69,7 +69,7 @@ explicitly human-authoritative. Once overridden, agents don't revisit it.
 
 `REPRIORITISE` was the interesting one. Priority lives in `PointClassification`,
 which is set at point creation and never changes. Updating it required a new
-`ConversationFold.reprioritisePoint()` method in casehub-blocks — the first
+`ConversationFold.reprioritisePoint()` method in casehub-agency — the first
 cross-module change for this feature. The method builds a new classification
 with the updated priority, preserving scope and location, and adds a `ThreadEntry`
 so the change is visible in the projected state. Claude caught during design review

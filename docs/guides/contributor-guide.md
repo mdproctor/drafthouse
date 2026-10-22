@@ -41,7 +41,7 @@ Quarkus Server (drafthouse-server-runner.jar, port 9001)
 
 ### server/api/ — `casehub-drafthouse-api`
 
-Pure Java domain model. No Quarkus, no JPA, no CDI annotations. Depends on `casehub-blocks` (context tracking, message meta, bounded projection), `casehub-qhorus-api`, and `casehub-eidos-api`.
+Pure Java domain model. No Quarkus, no JPA, no CDI annotations. Depends on `casehub-agency` (context tracking, message meta, bounded projection), `casehub-qhorus-api`, and `casehub-eidos-api`.
 
 **Package `io.casehub.drafthouse`:**
 
@@ -222,7 +222,7 @@ TypeScript webui built with Quinoa. casehub-pages workbench with Lit (LitElement
 
 **Entry point:** `src/index.ts` — workbench layout, WebSocket connection, topbar wiring, session discovery, keyboard shortcuts, cross-panel event routing, Electron IPC bridge.
 
-**Panels (from `@casehubio/blocks-ui-document-workbench`):**
+**Panels (from `@casehubio/agency-ui-document-workbench`):**
 
 | Panel | Element | Implementation |
 |-------|---------|---------------|
@@ -265,7 +265,7 @@ TypeScript webui built with Quinoa. casehub-pages workbench with Lit (LitElement
 | `DebateAgentProvider` | `io.casehub.drafthouse.debate` | `String analyse(AgentTask task)` | LLM invocation for sub-agent handlers. `PlatformDebateAgentProvider` (`@DefaultBean` via platform `AgentProvider`) and `ClaudeAgentSdkDebateAgentProvider` (optional claude-agent module). |
 | `ReviewSessionRegistry` | `io.casehub.drafthouse` | `find`, `put`, `remove`, `updateSelection` | Session storage abstraction. |
 | `DebateSessionRegistry` | `io.casehub.drafthouse` | `find`, `put`, `remove`, `persist`, `activeSessions` | Debate session storage with persistence delegation. |
-| `ChannelAgentHandler` | `io.casehub.blocks.channel` (from casehub-blocks) | `handle(ChannelAgentRequest)` | Sub-agent task handler. 6 concrete handlers in `handler/` package. |
+| `ChannelAgentHandler` | `io.casehub.agency.channel` (from casehub-agency) | `handle(ChannelAgentRequest)` | Sub-agent task handler. 6 concrete handlers in `handler/` package. |
 | `AgentRegistry` | `io.casehub.eidos.api` (from casehub-eidos) | `register`, `find`, `query` | Multi-LLM reviewer registry. `DraftHouseReviewerRegistry` implements this. |
 
 ---
@@ -293,7 +293,7 @@ Nothing in the casehubio ecosystem — application tier only. DraftHouse is a le
 
 - Three-module Maven project (`server/api/` + `server/runtime/` + `server/claude-agent/`)
 - Version: `0.2-SNAPSHOT`, Quarkus `3.34.3`, Java 21
-- casehub-qhorus `0.2-SNAPSHOT`, casehub-blocks `0.2-SNAPSHOT`, casehub-eidos `0.2-SNAPSHOT`, casehub-platform `0.2-SNAPSHOT`
+- casehub-qhorus `0.2-SNAPSHOT`, casehub-agency `0.2-SNAPSHOT`, casehub-eidos `0.2-SNAPSHOT`, casehub-platform `0.2-SNAPSHOT`
 - casehub-pages-push `0.2-SNAPSHOT` for typed WebSocket protocol
 - Quinoa `2.8.3` for frontend build integration
 - 30 MCP tools across 3 tool classes
@@ -330,7 +330,7 @@ Nothing in the casehubio ecosystem — application tier only. DraftHouse is a le
 - **Round restart** — `restart_from_round` + `get_debate_summary_at_round` for branching debates.
 - **Post memo** — `post_memo` MCP tool for per-round reasoning memos.
 - **Maven SNAPSHOT for pages (#115)** — Frontend dependencies via Maven artifact instead of npm file: references.
-- **Blocks extraction (#79-83)** — Context tracking, message meta, conversation protocol, channel agent dispatch extracted to casehub-blocks.
+- **Blocks extraction (#79-83)** — Context tracking, message meta, conversation protocol, channel agent dispatch extracted to casehub-agency.
 - **Playwright E2E tests** — E2E coverage for diff panel, debate feed, review tracker, brainstorm options, cross-panel coordination.
 
 ---
@@ -375,7 +375,7 @@ The `install` step is required so `runtime` can resolve `api` from the local Mav
 | 110 | Live watcher: emit ROUND_SNAPSHOT entries and dispatch DEFERRED/evidence from tracker diffs |
 | 109 | Investigate reviewer awareness of chunk boundaries |
 | 108 | Explore context-aware chunking if basic chunking shows quality loss |
-| 106 | Promote terminal component to @casehubio/blocks-ui-terminal |
+| 106 | Promote terminal component to @casehubio/agency-ui-terminal |
 | 101 | Extract document panels as reusable @casehubio components |
 | 93 | Document workbench — unify design-review and DraftHouse into reusable platform |
 | 84 | Brainstorming UI on casehub-pages — foundation + feature |

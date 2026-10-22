@@ -3,8 +3,8 @@ package io.casehub.drafthouse.debate;
 import java.time.Instant;
 import java.util.Map;
 
-import io.casehub.blocks.conversation.ConversationProtocol;
-import io.casehub.blocks.conversation.Priority;
+import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.conversation.Priority;
 import io.casehub.qhorus.api.message.Message;
 
 public record DebateStreamEntry(

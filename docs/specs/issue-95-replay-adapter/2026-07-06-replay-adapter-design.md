@@ -223,7 +223,7 @@ PP-20260604-6e8d5d.
 
 ### Server-side — DebateChannelProjection
 
-`DebateChannelProjection` extends `ConversationProjection` (from `casehub-blocks`).
+`DebateChannelProjection` extends `ConversationProjection` (from `casehub-agency`).
 Infrastructure entry types (MEMO, SUB_TASK_*, FLAG_HUMAN, RESTART_CONTEXT) are handled
 by the base class automatically. Domain entry types are dispatched via the `handleDomain()`
 → `statusAfter()` hook path. The base class enforces PP-20260610-a47ef5 (apply must not

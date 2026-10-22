@@ -1,14 +1,14 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.agentic.AgentRef;
-import io.casehub.blocks.agentic.AgentResult;
-import io.casehub.blocks.conversation.ConversationPoint;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.PointClassification;
-import io.casehub.blocks.conversation.Priority;
-import io.casehub.blocks.conversation.orchestration.AgentParticipant;
-import io.casehub.blocks.summarisation.observation.ObservationResult;
-import io.casehub.blocks.summarisation.observation.PartitionedDrain;
+import io.casehub.agency.agentic.AgentRef;
+import io.casehub.agency.agentic.AgentResult;
+import io.casehub.agency.conversation.ConversationPoint;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.PointClassification;
+import io.casehub.agency.conversation.Priority;
+import io.casehub.agency.conversation.orchestration.AgentParticipant;
+import io.casehub.agency.summarisation.observation.ObservationResult;
+import io.casehub.agency.summarisation.observation.PartitionedDrain;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;

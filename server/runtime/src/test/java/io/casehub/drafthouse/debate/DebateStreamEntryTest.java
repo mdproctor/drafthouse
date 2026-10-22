@@ -8,7 +8,7 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-import io.casehub.blocks.conversation.Priority;
+import io.casehub.agency.conversation.Priority;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.Message;

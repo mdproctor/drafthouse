@@ -7,7 +7,7 @@
 > editing. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Focal issue:** #117 — Composable capability architecture with voice-first drafting mode
-**Issue group:** #120 (VoiceFacet), #121 (NotesFacet), #122 (auto-session wiring); casehubio/blocks#155, #157 (speech SPIs)
+**Issue group:** #120 (VoiceFacet), #121 (NotesFacet), #122 (auto-session wiring); casehubio/agency#155, #157 (speech SPIs)
 
 **Goal:** Implement voice notes capture from browser mic through a fidelity-preserving cleanup pipeline to an Obsidian-compatible vault.
 
@@ -19,7 +19,7 @@
 
 - Java 21 (FFM/Panama requires 21+)
 - Quarkus 3.34.3 (existing version — do not upgrade)
-- casehub-blocks 0.2-SNAPSHOT (existing SNAPSHOT range)
+- casehub-agency 0.2-SNAPSHOT (existing SNAPSHOT range)
 - All MCP tools use `@Tool` / `@ToolArg` from `io.quarkiverse.mcp.server`
 - All LLM pipeline calls via LangChain4j ChatModel, not AgentProvider
 - Obsidian frontmatter format: YAML between `---` fences
@@ -29,25 +29,25 @@
 
 ---
 
-## Batch 1: Speech SPI interfaces (blocks repo — casehubio/blocks)
+## Batch 1: Speech SPI interfaces (blocks repo — casehubio/agency)
 
 ### Task 1: Create blocks-speech-api module with SPI interfaces
 
 **Repo:** `/Users/mdproctor/claude/casehub/blocks`
-**Issue:** casehubio/blocks#155, #157
+**Issue:** casehubio/agency#155, #157
 
 **Files:**
 - Create: `speech-api/pom.xml`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/SpeechToTextService.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/TranscriptionResult.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/TranscriptionOptions.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/TextToSpeechService.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/SynthesisResult.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/SynthesisOptions.java`
-- Create: `speech-api/src/main/java/io/casehub/blocks/speech/PhonemeTiming.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/SpeechToTextService.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/TranscriptionResult.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/TranscriptionOptions.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/TextToSpeechService.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/SynthesisResult.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/SynthesisOptions.java`
+- Create: `speech-api/src/main/java/io/casehub/agency/speech/PhonemeTiming.java`
 - Modify: `pom.xml` (parent — add `<module>speech-api</module>`)
-- Test: `speech-api/src/test/java/io/casehub/blocks/speech/TranscriptionOptionsTest.java`
-- Test: `speech-api/src/test/java/io/casehub/blocks/speech/SynthesisOptionsTest.java`
+- Test: `speech-api/src/test/java/io/casehub/agency/speech/TranscriptionOptionsTest.java`
+- Test: `speech-api/src/test/java/io/casehub/agency/speech/SynthesisOptionsTest.java`
 
 **Interfaces:**
 - Produces: `SpeechToTextService.transcribe(Path, TranscriptionOptions) → TranscriptionResult`
@@ -73,12 +73,12 @@ Add `<module>speech-api</module>` to the `<modules>` list in `/Users/mdproctor/c
 
   <parent>
     <groupId>io.casehub</groupId>
-    <artifactId>casehub-blocks-parent</artifactId>
+    <artifactId>casehub-agency-parent</artifactId>
     <version>0.2-SNAPSHOT</version>
   </parent>
 
-  <artifactId>casehub-blocks-speech-api</artifactId>
-  <name>casehub-blocks-speech-api</name>
+  <artifactId>casehub-agency-speech-api</artifactId>
+  <name>casehub-agency-speech-api</name>
   <description>Speech capability SPIs — provider-agnostic STT and TTS interfaces</description>
 
   <!-- Pure Java — zero foundation dependencies, zero CDI/Quarkus -->
@@ -94,10 +94,10 @@ Add `<module>speech-api</module>` to the `<modules>` list in `/Users/mdproctor/c
 
 - [ ] **Step 3: Write the SpeechToTextService SPI interface**
 
-Create `speech-api/src/main/java/io/casehub/blocks/speech/SpeechToTextService.java`:
+Create `speech-api/src/main/java/io/casehub/agency/speech/SpeechToTextService.java`:
 
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import java.nio.file.Path;
 
@@ -110,7 +110,7 @@ public interface SpeechToTextService {
 
 Create `TranscriptionResult.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 public record TranscriptionResult(String text, String language, double confidence) {
     public TranscriptionResult {
@@ -121,7 +121,7 @@ public record TranscriptionResult(String text, String language, double confidenc
 
 Create `TranscriptionOptions.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 public record TranscriptionOptions(String audioFormat, String languageHint, String modelSize) {
     public static TranscriptionOptions defaults() {
@@ -132,10 +132,10 @@ public record TranscriptionOptions(String audioFormat, String languageHint, Stri
 
 - [ ] **Step 5: Write the TextToSpeechService SPI interface**
 
-Create `speech-api/src/main/java/io/casehub/blocks/speech/TextToSpeechService.java`:
+Create `speech-api/src/main/java/io/casehub/agency/speech/TextToSpeechService.java`:
 
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 public interface TextToSpeechService {
     SynthesisResult synthesise(String text, SynthesisOptions options);
@@ -146,7 +146,7 @@ public interface TextToSpeechService {
 
 Create `SynthesisResult.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import java.util.List;
 
@@ -161,7 +161,7 @@ public record SynthesisResult(byte[] audioData, String audioFormat, List<Phoneme
 
 Create `PhonemeTiming.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 public record PhonemeTiming(String phoneme, long startMs, long endMs) {
     public PhonemeTiming {
@@ -173,7 +173,7 @@ public record PhonemeTiming(String phoneme, long startMs, long endMs) {
 
 Create `SynthesisOptions.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 public record SynthesisOptions(String voice, String language, String audioFormat, boolean includePhonemes) {
     public static SynthesisOptions defaults() {
@@ -186,7 +186,7 @@ public record SynthesisOptions(String voice, String language, String audioFormat
 
 Create `TranscriptionOptionsTest.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -203,7 +203,7 @@ class TranscriptionOptionsTest {
 
 Create `SynthesisOptionsTest.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -219,7 +219,7 @@ class SynthesisOptionsTest {
 
 Create `TranscriptionResultTest.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -241,7 +241,7 @@ class TranscriptionResultTest {
 
 Create `PhonemeTimingTest.java`:
 ```java
-package io.casehub.blocks.speech;
+package io.casehub.agency.speech;
 
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -306,7 +306,7 @@ Add to the `<dependencies>` section of `server/api/pom.xml`:
 ```xml
 <dependency>
   <groupId>io.casehub</groupId>
-  <artifactId>casehub-blocks-speech-api</artifactId>
+  <artifactId>casehub-agency-speech-api</artifactId>
   <version>${project.version}</version>
 </dependency>
 ```
@@ -459,9 +459,9 @@ Create `server/runtime/src/test/java/io/casehub/drafthouse/VoiceUploadResourceTe
 ```java
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.speech.SpeechToTextService;
-import io.casehub.blocks.speech.TranscriptionOptions;
-import io.casehub.blocks.speech.TranscriptionResult;
+import io.casehub.agency.speech.SpeechToTextService;
+import io.casehub.agency.speech.TranscriptionOptions;
+import io.casehub.agency.speech.TranscriptionResult;
 import io.casehub.drafthouse.voice.TranscriptReady;
 import jakarta.enterprise.event.Event;
 import org.junit.jupiter.api.BeforeEach;
@@ -552,8 +552,8 @@ Create `server/runtime/src/main/java/io/casehub/drafthouse/VoiceUploadResource.j
 ```java
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.speech.SpeechToTextService;
-import io.casehub.blocks.speech.TranscriptionOptions;
+import io.casehub.agency.speech.SpeechToTextService;
+import io.casehub.agency.speech.TranscriptionOptions;
 import io.casehub.drafthouse.voice.TranscriptReady;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Event;
@@ -653,9 +653,9 @@ Create `server/runtime/src/main/java/io/casehub/drafthouse/StubSpeechToTextServi
 ```java
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.speech.SpeechToTextService;
-import io.casehub.blocks.speech.TranscriptionOptions;
-import io.casehub.blocks.speech.TranscriptionResult;
+import io.casehub.agency.speech.SpeechToTextService;
+import io.casehub.agency.speech.TranscriptionOptions;
+import io.casehub.agency.speech.TranscriptionResult;
 import io.quarkus.arc.DefaultBean;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.nio.file.Path;

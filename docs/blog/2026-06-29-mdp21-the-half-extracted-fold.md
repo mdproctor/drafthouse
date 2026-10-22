@@ -8,7 +8,7 @@ subtype: diary
 projects: [DraftHouse]
 ---
 
-P5 moved the conversation protocol to casehub-blocks — the state model, the renderer, the abstract projection. Any CaseHub app could now fold channel messages into `ConversationState` and render the result. Except they couldn't.
+P5 moved the conversation protocol to casehub-agency — the state model, the renderer, the abstract projection. Any CaseHub app could now fold channel messages into `ConversationState` and render the result. Except they couldn't.
 
 The problem was hiding in plain sight. `ConversationProjection` does two things in sequence: it parses sentinel-encoded metadata from message content, then it folds the parsed values into state. Both steps were private methods inside one class. You could only reach the fold through the sentinel parser.
 

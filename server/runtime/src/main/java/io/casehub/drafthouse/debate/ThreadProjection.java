@@ -1,7 +1,7 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.blocks.channel.ChannelMessageMeta;
-import io.casehub.blocks.conversation.ConversationProtocol;
+import io.casehub.agency.channel.ChannelMessageMeta;
+import io.casehub.agency.conversation.ConversationProtocol;
 import io.casehub.drafthouse.DocumentSide;
 import io.casehub.drafthouse.SelectionScope;
 import io.casehub.drafthouse.ThreadEntry;

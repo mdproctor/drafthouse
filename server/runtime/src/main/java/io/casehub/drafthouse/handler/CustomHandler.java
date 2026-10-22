@@ -1,7 +1,7 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.blocks.channel.ChannelAgentRequest;
-import io.casehub.blocks.channel.AgentTask;
+import io.casehub.agency.channel.ChannelAgentRequest;
+import io.casehub.agency.channel.AgentTask;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import jakarta.enterprise.context.ApplicationScoped;
 

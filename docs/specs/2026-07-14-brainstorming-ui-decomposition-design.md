@@ -14,7 +14,7 @@ DraftHouse and Claudony both need an embedded CLI experience. xterm.js (`@xterm/
 must be introduced as a new dependency — it is not currently in the stack. The terminal
 component starts in DraftHouse (consistent with the Lit migration spec's convention
 that components live in DraftHouse before promotion to blocks-ui) and will be promoted
-to `@casehubio/blocks-ui-terminal` once blocks-ui component hosting conventions are
+to `@casehubio/agency-ui-terminal` once blocks-ui component hosting conventions are
 validated by existing panel promotions.
 
 ## Architecture
@@ -294,7 +294,7 @@ xterm.js terminal panel in DraftHouse. Connects to a server-side
 PTY-over-WebSocket endpoint. Hosts a CLI session. Includes both the
 frontend panel (`<terminal-panel>`) and the server-side `TerminalEndpoint`.
 
-Promotion to `@casehubio/blocks-ui-terminal` for cross-app reuse (Claudony)
+Promotion to `@casehubio/agency-ui-terminal` for cross-app reuse (Claudony)
 is future work, once blocks-ui component conventions are validated.
 
 - Scale: L · Complexity: High

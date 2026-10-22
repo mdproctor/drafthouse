@@ -1,14 +1,14 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.blocks.channel.BoundedProjectionDecorator;
-import io.casehub.blocks.channel.ChannelMessageMeta;
-import io.casehub.blocks.conversation.ConversationFold;
-import io.casehub.blocks.conversation.ConversationProjection;
-import io.casehub.blocks.conversation.ConversationProtocol;
-import io.casehub.blocks.conversation.ConversationRenderer;
-import io.casehub.blocks.conversation.ConversationRendererConfig;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.Priority;
+import io.casehub.agency.channel.BoundedProjectionDecorator;
+import io.casehub.agency.channel.ChannelMessageMeta;
+import io.casehub.agency.conversation.ConversationFold;
+import io.casehub.agency.conversation.ConversationProjection;
+import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.conversation.ConversationRenderer;
+import io.casehub.agency.conversation.ConversationRendererConfig;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.Priority;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ProjectionResult;
 import io.casehub.qhorus.api.spi.RenderableProjection;

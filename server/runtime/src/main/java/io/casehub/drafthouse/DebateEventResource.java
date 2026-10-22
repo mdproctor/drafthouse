@@ -17,7 +17,7 @@ import jakarta.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.casehub.blocks.channel.ContextSnapshot;
+import io.casehub.agency.channel.ContextSnapshot;
 
 @ApplicationScoped
 @Path("/api/debate")

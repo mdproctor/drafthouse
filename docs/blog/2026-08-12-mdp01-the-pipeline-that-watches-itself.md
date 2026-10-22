@@ -54,7 +54,7 @@ The biggest was the module boundary violation: `PipelineSession` was spec'd for
 `DimensionStatus` gained a `FAILED` state for crashed reviews. Checkpoint resolution
 got explicit phase advancement triggers. Browser reconnect recovery got specified.
 
-The panel lives in `@casehubio/blocks-ui-document-workbench` alongside the other Lit
+The panel lives in `@casehubio/agency-ui-document-workbench` alongside the other Lit
 panels. Default hidden, auto-shown when a `pipeline-progress` event arrives. The
 `workspace-status` topbar indicator also picks up pipeline events — showing a compact
 "Pipeline: 2/3 dimensions running" when active.

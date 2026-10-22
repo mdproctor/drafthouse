@@ -1,8 +1,8 @@
 package io.casehub.drafthouse.voice;
 
-import io.casehub.blocks.speech.SpeechToTextService;
-import io.casehub.blocks.speech.TranscriptionOptions;
-import io.casehub.blocks.speech.TranscriptionResult;
+import io.casehub.agency.speech.SpeechToTextService;
+import io.casehub.agency.speech.TranscriptionOptions;
+import io.casehub.agency.speech.TranscriptionResult;
 import io.casehub.drafthouse.DraftHouseSessionRegistry;
 import io.casehub.drafthouse.NoOpDraftHouseSessionStore;
 import io.casehub.drafthouse.WebSocketEventBus;

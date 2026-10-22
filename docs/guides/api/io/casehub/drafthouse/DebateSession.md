@@ -32,7 +32,7 @@ REV and IMP are registered eagerly by start_debate; other roles register on firs
 
 ### `documentSet` (`io.casehub.drafthouse.DocumentSet`)
 
-### `orchestrator` (`io.casehub.blocks.conversation.orchestration.ConversationOrchestrator`)
+### `orchestrator` (`io.casehub.agency.conversation.orchestration.ConversationOrchestrator`)
 
 ### `participants` (`java.util.concurrent.ConcurrentHashMap<io.casehub.drafthouse.debate.AgentType,java.lang.String>`)
 
@@ -155,7 +155,7 @@ Returns the stored instance ID for a role, or null if not yet registered.
 
 ### `public boolean markConverseStarted()`
 
-### `public io.casehub.blocks.conversation.orchestration.ConversationOrchestrator orchestrator()`
+### `public io.casehub.agency.conversation.orchestration.ConversationOrchestrator orchestrator()`
 
 ### `public java.util.Map<io.casehub.drafthouse.debate.AgentType,java.lang.String> participants()`
 
@@ -224,11 +224,11 @@ Sets the comparison pair.
 
 - `IllegalArgumentException` — if either path is not in the document set
 
-### `public void setOrchestrator(io.casehub.blocks.conversation.orchestration.ConversationOrchestrator orchestrator)`
+### `public void setOrchestrator(io.casehub.agency.conversation.orchestration.ConversationOrchestrator orchestrator)`
 
 #### Parameters
 
-- `orchestrator` (`io.casehub.blocks.conversation.orchestration.ConversationOrchestrator`)
+- `orchestrator` (`io.casehub.agency.conversation.orchestration.ConversationOrchestrator`)
 
 ### `public void setSnapshotContent(java.util.Map<java.lang.Integer,java.lang.String> content)`
 

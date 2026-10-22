@@ -6,7 +6,7 @@
 
   <groupId>io.casehub</groupId>
   <artifactId>casehub-drafthouse-parent</artifactId>
-  <version>0.2-SNAPSHOT</version>
+  <version>0.4-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <modules>
@@ -20,9 +20,9 @@
     <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
     <quarkus.platform.version>3.34.3</quarkus.platform.version>
     <quarkus-playwright.version>2.3.4</quarkus-playwright.version>
-    <casehub.qhorus.version>0.2-SNAPSHOT</casehub.qhorus.version>
-    <casehub.platform.version>0.2-SNAPSHOT</casehub.platform.version>
-    <casehub.eidos.version>0.2-SNAPSHOT</casehub.eidos.version>
+    <casehub.qhorus.version>0.4-SNAPSHOT</casehub.qhorus.version>
+    <casehub.platform.version>0.4-SNAPSHOT</casehub.platform.version>
+    <casehub.eidos.version>0.4-SNAPSHOT</casehub.eidos.version>
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>

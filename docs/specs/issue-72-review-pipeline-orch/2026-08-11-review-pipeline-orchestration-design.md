@@ -431,7 +431,7 @@ active — the pipeline panel owns the detailed view.
 
 ### New panel: `review-pipeline`
 
-A LitElement panel in `@casehubio/blocks-ui-document-workbench`, following
+A LitElement panel in `@casehubio/agency-ui-document-workbench`, following
 existing patterns (Shadow DOM, `configure(props)`, `onPagesEvent()`,
 `_cleanups[]` teardown).
 
@@ -546,7 +546,7 @@ existing patterns (Shadow DOM, `configure(props)`, `onPagesEvent()`,
 - No new external dependencies
 - Extends existing `ProgressLogParser` (new sealed records)
 - New `PipelineWatcher` (extracts tail logic, reuses `DirectoryWatcher`)
-- New panel in `@casehubio/blocks-ui-document-workbench` (existing package)
+- New panel in `@casehubio/agency-ui-document-workbench` (existing package)
 - review.py already emits required JSONL events (soredium#198 shipped)
 
 ## Non-goals

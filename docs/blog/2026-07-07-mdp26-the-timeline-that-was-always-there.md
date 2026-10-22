@@ -60,7 +60,7 @@ and `verifyRound` — data that was already in the review tracker's entry sequen
 not surfaced in the event.
 
 The design review caught eleven issues across three rounds. The biggest was recognising
-that `ConversationState` is a platform type in `casehub-blocks` — adding timeline state
+that `ConversationState` is a platform type in `casehub-agency` — adding timeline state
 there would violate the application boundary. That forced the client-side approach,
 which turned out cleaner: no platform changes, no projection state, the browser builds
 what it needs from filtered events.

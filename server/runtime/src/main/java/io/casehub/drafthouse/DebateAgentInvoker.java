@@ -1,10 +1,10 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.agentic.AgentRef;
-import io.casehub.blocks.agentic.AgentResult;
-import io.casehub.blocks.agentic.model.AgentInvoker;
-import io.casehub.blocks.channel.AgentTask;
-import io.casehub.blocks.conversation.orchestration.AgentParticipant;
+import io.casehub.agency.agentic.AgentRef;
+import io.casehub.agency.agentic.AgentResult;
+import io.casehub.agency.agentic.model.AgentInvoker;
+import io.casehub.agency.channel.AgentTask;
+import io.casehub.agency.conversation.orchestration.AgentParticipant;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
 import io.smallrye.mutiny.Uni;
 

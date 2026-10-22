@@ -290,7 +290,7 @@ Terminal + brainstorm options side by side.
 
 ## Channel Usage Pattern
 
-DraftHouse uses a single APPEND Qhorus channel per session. Debate entries use `ChannelMessageMeta` encoding with structured metadata (entry type, role, round, priority, scope, location). The `ConversationProtocol` from `casehub-blocks` provides the metadata key constants.
+DraftHouse uses a single APPEND Qhorus channel per session. Debate entries use `ChannelMessageMeta` encoding with structured metadata (entry type, role, round, priority, scope, location). The `ConversationProtocol` from `casehub-agency` provides the metadata key constants.
 
 Review sessions use `QUERY`/`RESPONSE` message types. Debate sessions use the full `MessageType` taxonomy: `QUERY` (raise), `RESPONSE` (qualify/counter), `DONE` (agree/verified), `DECLINE` (dispute/declined/deferred), `HANDOFF` (flag_human), `STATUS` (memo/restart_context).
 
@@ -318,7 +318,7 @@ All configuration under `casehub.drafthouse.*`:
 | `casehub-qhorus` | `casehub-qhorus` (runtime) | Channel mesh runtime — `ChannelService`, `ChannelGateway`, `MessageService`, `InstanceService`, `ProjectionService` |
 | `casehub-qhorus` | `casehub-qhorus-api` | Channel mesh SPIs — `Channel`, `ChannelCreateRequest`, `ChannelSemantic`, `MessageDispatch`, `MessageType` |
 | `casehub-eidos` | `casehub-eidos-api` | `AgentRegistry`, `AgentDescriptor`, `AgentDisposition`, `AgentCapability`, `Resource` — Eidos identity model for reviewer registry |
-| `casehub-blocks` | `casehub-blocks` | Context tracking (`ContextSnapshot`), message meta encoding (`ChannelMessageMeta`), conversation protocol (`ConversationProtocol`, `ConversationState`, `ConversationPoint`), channel agent dispatch (`ChannelAgentHandler`, `ChannelAgentDispatcher`, `AgentTask`), bounded projection |
+| `casehub-agency` | `casehub-agency` | Context tracking (`ContextSnapshot`), message meta encoding (`ChannelMessageMeta`), conversation protocol (`ConversationProtocol`, `ConversationState`, `ConversationPoint`), channel agent dispatch (`ChannelAgentHandler`, `ChannelAgentDispatcher`, `AgentTask`), bounded projection |
 | `casehub-platform` | `casehub-platform` (runtime) | `MockCurrentPrincipal` `@DefaultBean` required by Qhorus JPA stores |
 | `casehub-platform` | `casehub-platform-agent-api` | `AgentProvider` SPI — provider-agnostic LLM invocation for sub-agent dispatch |
 | `casehub-pages` | `casehub-pages-push` | Typed push protocol SDK — `PushMessage`, `PushRequest` wire format |

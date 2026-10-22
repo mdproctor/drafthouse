@@ -12,18 +12,18 @@
 **Exploration:** quick
 **Status:** captured
 
-## D2: Speech SPIs — casehub-blocks with sherpa-onnx default
+## D2: Speech SPIs — casehub-agency with sherpa-onnx default
 
-**Choice:** STT and TTS SPI interfaces in casehub-blocks, default sherpa-onnx implementation via Java FFM/Panama. Sherpa-onnx serves as unified runtime for both directions (Whisper models for STT, VITS/Piper models for TTS).
+**Choice:** STT and TTS SPI interfaces in casehub-agency, default sherpa-onnx implementation via Java FFM/Panama. Sherpa-onnx serves as unified runtime for both directions (Whisper models for STT, VITS/Piper models for TTS).
 **Alternatives:**
 - DraftHouse-local — review R1-02 moved SPIs here citing no second consumer and category mismatch. Overridden: STT + TTS are reusable capabilities any CaseHub app could use, not DraftHouse-specific infrastructure. Building in blocks from the start avoids extract-later tax and signals architectural intent.
 - whisper.cpp for STT + sherpa-onnx for TTS — two separate native integrations. Unnecessary since sherpa-onnx handles both.
 - Direct LangChain4j integration — locks to one provider, no SPI swappability
-**Rationale:** Speech capabilities are domain-agnostic composable building blocks — exactly what casehub-blocks is for. The SPI abstraction is critical: latency and quality vary across models and services, so implementations must be swappable without touching consumer code. Sherpa-onnx as default gives offline capability, no API costs, one FFM binding for both directions. External service implementations (Deepgram, Google, ElevenLabs) pluggable via CDI.
-**Trade-offs:** Requires creating the blocks speech module (new submodule in casehub-blocks). Cross-repo coordination with blocks release cycle.
+**Rationale:** Speech capabilities are domain-agnostic composable building blocks — exactly what casehub-agency is for. The SPI abstraction is critical: latency and quality vary across models and services, so implementations must be swappable without touching consumer code. Sherpa-onnx as default gives offline capability, no API costs, one FFM binding for both directions. External service implementations (Deepgram, Google, ElevenLabs) pluggable via CDI.
+**Trade-offs:** Requires creating the blocks speech module (new submodule in casehub-agency). Cross-repo coordination with blocks release cycle.
 **Sources:** #117 issue body (whisper.cpp + Java FFM), #118 issue (blocks SPI pattern), user override of R1-02
 **Exploration:** quick
-**Status:** revised — restored to casehub-blocks per user direction. Review's DraftHouse-local placement overridden: two related SPIs (STT + TTS) form a coherent speech capability module intended for cross-app reuse.
+**Status:** revised — restored to casehub-agency per user direction. Review's DraftHouse-local placement overridden: two related SPIs (STT + TTS) form a coherent speech capability module intended for cross-app reuse.
 
 ## D3: Pipeline stages
 
@@ -134,20 +134,20 @@
 **Exploration:** quick
 **Status:** revised — changed from WebSocket binary frames to HTTP POST upload per R1-05. Push-to-talk doesn't need streaming; HTTP upload is the simplest correct transport.
 
-## D12: Speech SPI location — casehub-blocks
+## D12: Speech SPI location — casehub-agency
 
-**Choice:** Both STT and TTS SPI interfaces in casehub-blocks as a speech capability module. Superseded by D2 revision — see D2 for full rationale.
+**Choice:** Both STT and TTS SPI interfaces in casehub-agency as a speech capability module. Superseded by D2 revision — see D2 for full rationale.
 **Alternatives:**
 - DraftHouse-local — review R1-02 recommendation, overridden by user
 **Rationale:** Aligned with D2. Two related SPIs form a coherent speech module intended for cross-app reuse.
 **Trade-offs:** See D2.
 **Sources:** See D2.
 **Exploration:** quick
-**Status:** revised — restored to casehub-blocks, aligned with D2 revision per user direction.
+**Status:** revised — restored to casehub-agency, aligned with D2 revision per user direction.
 
 ## D14: TTS SPI — text-to-speech capability
 
-**Choice:** TTS SPI interface in casehub-blocks alongside STT (D2/D12). Default implementation via sherpa-onnx (VITS/Piper models) using Java FFM/Panama. Alternative implementations for external services (ElevenLabs, Google TTS, Amazon Polly) pluggable via CDI.
+**Choice:** TTS SPI interface in casehub-agency alongside STT (D2/D12). Default implementation via sherpa-onnx (VITS/Piper models) using Java FFM/Panama. Alternative implementations for external services (ElevenLabs, Google TTS, Amazon Polly) pluggable via CDI.
 **Alternatives:**
 - No TTS — voice capture is input-only. Limits future use cases (read notes aloud, audio preview of cleaned text).
 - DraftHouse-local — inconsistent with D2/D12 blocks placement

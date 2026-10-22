@@ -1,6 +1,6 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.blocks.conversation.ConversationState;
+import io.casehub.agency.conversation.ConversationState;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.MessageView;
@@ -278,7 +278,7 @@ class DebateChannelProjectionTest {
         ConversationState s1 = proj.apply(s0,
                                           msg(MessageType.RESPONSE, "pt-1", reprioritiseMeta, "Actually critical."));
         assertThat(s1.points().get("pt-1").classification().priority())
-                .isEqualTo(io.casehub.blocks.conversation.Priority.HIGH);
+                .isEqualTo(io.casehub.agency.conversation.Priority.HIGH);
         assertThat(s1.points().get("pt-1").thread()).hasSize(2);
         assertThat(s1.points().get("pt-1").status()).isEqualTo("OPEN");
     }
@@ -301,6 +301,6 @@ class DebateChannelProjectionTest {
         ConversationState s1 = proj.apply(s0,
                                           msg(MessageType.RESPONSE, "pt-1", reprioritiseMeta, "Bad priority."));
         assertThat(s1.points().get("pt-1").classification().priority())
-                .isEqualTo(io.casehub.blocks.conversation.Priority.LOW);
+                .isEqualTo(io.casehub.agency.conversation.Priority.LOW);
     }
 }

@@ -1,6 +1,6 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.channel.ContextTracker;
+import io.casehub.agency.channel.ContextTracker;
 import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DocumentTimeline;
 
@@ -36,7 +36,7 @@ public class DebateSession {
     private volatile DocumentTimeline timeline;
     private volatile String           workspacePath;
     private volatile boolean          autonomous;
-    private transient volatile io.casehub.blocks.conversation.orchestration.ConversationOrchestrator orchestrator;
+    private transient volatile io.casehub.agency.conversation.orchestration.ConversationOrchestrator orchestrator;
     private final              java.util.concurrent.atomic.AtomicBoolean                             converseStarted = new java.util.concurrent.atomic.AtomicBoolean(false);
 
 
@@ -168,9 +168,9 @@ public class DebateSession {
 
     public void setAutonomous(boolean autonomous)                                                                   {this.autonomous = autonomous;}
 
-    public io.casehub.blocks.conversation.orchestration.ConversationOrchestrator orchestrator()                     {return orchestrator;}
+    public io.casehub.agency.conversation.orchestration.ConversationOrchestrator orchestrator()                     {return orchestrator;}
 
-    public void setOrchestrator(io.casehub.blocks.conversation.orchestration.ConversationOrchestrator orchestrator) {this.orchestrator = orchestrator;}
+    public void setOrchestrator(io.casehub.agency.conversation.orchestration.ConversationOrchestrator orchestrator) {this.orchestrator = orchestrator;}
 
     public boolean markConverseStarted() {
         return converseStarted.compareAndSet(false, true);

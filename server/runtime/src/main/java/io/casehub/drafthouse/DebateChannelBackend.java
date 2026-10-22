@@ -1,6 +1,6 @@
 package io.casehub.drafthouse;
 
-import io.casehub.blocks.channel.ChannelAgentRequest;
+import io.casehub.agency.channel.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelBackend;
@@ -142,11 +142,11 @@ public class DebateChannelBackend implements ChannelBackend {
     }
 
     private void handleCompletion(UUID channelId, DebateSession session,
-                                  io.casehub.blocks.conversation.orchestration.ConversationOutcome outcome) {
+                                  io.casehub.agency.conversation.orchestration.ConversationOutcome outcome) {
         String reason = switch (outcome.terminationDecision()) {
-            case io.casehub.blocks.agentic.termination.TerminationDecision.Complete c -> c.result() != null ? c.result().toString() : "completed";
-            case io.casehub.blocks.agentic.termination.TerminationDecision.Escalate e -> "escalated: " + e.reason();
-            case io.casehub.blocks.agentic.termination.TerminationDecision.Failed f -> "failed: " + f.reason();
+            case io.casehub.agency.agentic.termination.TerminationDecision.Complete c -> c.result() != null ? c.result().toString() : "completed";
+            case io.casehub.agency.agentic.termination.TerminationDecision.Escalate e -> "escalated: " + e.reason();
+            case io.casehub.agency.agentic.termination.TerminationDecision.Failed f -> "failed: " + f.reason();
             default -> "unknown";
         };
         eventBus.pushMetadata(channelId, "autonomous-completed",

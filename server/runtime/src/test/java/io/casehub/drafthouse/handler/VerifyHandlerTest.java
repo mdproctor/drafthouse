@@ -1,12 +1,12 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.blocks.channel.AgentTask;
-import io.casehub.blocks.channel.ChannelAgentRequest;
-import io.casehub.blocks.conversation.ConversationPoint;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.PointClassification;
-import io.casehub.blocks.conversation.Priority;
-import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.agency.channel.AgentTask;
+import io.casehub.agency.channel.ChannelAgentRequest;
+import io.casehub.agency.conversation.ConversationPoint;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.PointClassification;
+import io.casehub.agency.conversation.Priority;
+import io.casehub.agency.conversation.ThreadEntry;
 import io.casehub.drafthouse.DebateSession;
 import io.casehub.drafthouse.DebateSessionRegistry;
 import io.casehub.drafthouse.debate.DebateChannelProjection;

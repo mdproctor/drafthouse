@@ -1,8 +1,8 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.blocks.conversation.ConversationPoint;
-import io.casehub.blocks.conversation.ConversationState;
-import io.casehub.blocks.conversation.ThreadEntry;
+import io.casehub.agency.conversation.ConversationPoint;
+import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.conversation.ThreadEntry;
 
 import java.util.List;
 

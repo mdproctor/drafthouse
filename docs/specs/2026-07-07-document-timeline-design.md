@@ -157,8 +157,8 @@ by `ReplayResult.snapshotContent()`). Returns 404 if index doesn't exist.
 
 ### Projection changes
 
-`ConversationState` is **not modified** — it is a platform type in `casehub-blocks`
-(`io.casehub.blocks.conversation`), and adding DraftHouse-specific timeline state would
+`ConversationState` is **not modified** — it is a platform type in `casehub-agency`
+(`io.casehub.agency.conversation`), and adding DraftHouse-specific timeline state would
 violate the application boundary established by the P5 conversation-protocol extraction.
 
 `DebateChannelProjection` overrides `apply()` to intercept `ROUND_SNAPSHOT` entries before
@@ -188,7 +188,7 @@ For non-ROUND_SNAPSHOT messages, meta is parsed twice (once here, once in `doApp
 This is redundant but not a correctness concern at DraftHouse scale — the meta header is
 ~100 characters and the session processes hundreds of messages, not millions. A
 `skipEntryTypes()` hook in `ConversationProjection` would eliminate the double-parse, but
-that is a platform change deferred to casehubio/blocks#39.
+that is a platform change deferred to casehubio/agency#39.
 
 Without this override, `ROUND_SNAPSHOT` would fall through to `handleDomain()` in the base
 class, which checks for a role (null → WARNING log and discard) and then tries point
