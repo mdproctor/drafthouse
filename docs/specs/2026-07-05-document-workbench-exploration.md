@@ -20,7 +20,7 @@ Two systems model structured conversations about documents:
   Currently a standalone app.
 
 Both systems share a common foundation: the **P5 conversation protocol** extracted to
-`casehub-agency` (`io.casehub.agency.conversation` — see `docs/superpowers/specs/2026-06-29-p5-conversation-protocol-extraction-design.md`). `ConversationState`,
+`casehub-agency` (`io.casehub.agency.deliberation.conversation` — see `docs/superpowers/specs/2026-06-29-p5-conversation-protocol-extraction-design.md`). `ConversationState`,
 `ConversationProjection`, `ConversationProtocol`, and `ConversationRenderer` provide
 application-agnostic structured conversation infrastructure. DraftHouse's
 `DebateChannelProjection` is already a ~15-line subclass of `ConversationProjection`,
@@ -157,7 +157,7 @@ discriminator tells the timeline whether a snapshot came from git, an explicit s
 
 ### 4.2 Files and channels are competing transports, not competing storage
 
-The canonical representation is **`ConversationState`** (P5, `io.casehub.agency.conversation`) —
+The canonical representation is **`ConversationState`** (P5, `io.casehub.agency.deliberation.conversation`) —
 the fold accumulator for any structured conversation. Both systems produce the same
 semantic content; they differ only in transport.
 

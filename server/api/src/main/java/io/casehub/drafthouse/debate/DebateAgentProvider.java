@@ -1,6 +1,6 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.agency.channel.AgentTask;
+import io.casehub.agency.communication.dispatch.AgentTask;
 
 public interface DebateAgentProvider {
     /**

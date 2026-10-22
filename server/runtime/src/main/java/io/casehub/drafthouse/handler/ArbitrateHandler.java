@@ -1,10 +1,10 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.agency.channel.ChannelAgentRequest;
-import io.casehub.agency.channel.AgentTask;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.ConversationPoint;
-import io.casehub.agency.conversation.ThreadEntry;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
+import io.casehub.agency.communication.dispatch.AgentTask;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.ConversationPoint;
+import io.casehub.agency.deliberation.conversation.ThreadEntry;
 import jakarta.enterprise.context.ApplicationScoped;
 
 import java.util.Map;

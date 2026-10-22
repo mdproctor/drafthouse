@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extract the structured conversation protocol (data model, projection, renderer) from DraftHouse to casehub-agency as the `io.casehub.agency.conversation` package, then migrate DraftHouse to consume it.
+**Goal:** Extract the structured conversation protocol (data model, projection, renderer) from DraftHouse to casehub-agency as the `io.casehub.agency.deliberation.conversation` package, then migrate DraftHouse to consume it.
 
 **Architecture:** Concrete protocol with string-typed entry types and a three-method subclass hook on an abstract `ConversationProjection`. Data model is records with defensive immutability. Renderer is a concrete class configurable via vocabulary maps. DraftHouse becomes a thin vocabulary layer over the blocks protocol.
 
@@ -14,7 +14,7 @@
 - Qhorus SPI: `ChannelProjection<S>` in `io.casehub.qhorus.api.spi`, `MessageView` in `io.casehub.qhorus.api.message`
 - `apply()` must never throw (protocol PP-20260610-a47ef5) — parse defensively, log, return state unchanged
 - `identity()` must return a fresh instance on every call (Qhorus contract)
-- Sentinel encoding via `ChannelMessageMeta` (already in blocks `io.casehub.agency.channel`)
+- Sentinel encoding via `ChannelMessageMeta` (already in blocks `io.casehub.agency.communication.dispatch`)
 - Tests use JUnit 5 + AssertJ + Mockito (no Quarkus harness for blocks unit tests)
 - All blocks test classes use a `TestConversationProjection` — no DraftHouse terminology leaks into blocks
 - Breaking changes cost nothing — fix the design, not the callers
@@ -67,7 +67,7 @@ All new code in casehub-agency (`~/claude/casehub/blocks`).
 **ConversationProtocol** — final utility class with string constants only:
 
 ```java
-package io.casehub.agency.conversation;
+package io.casehub.agency.deliberation.conversation;
 
 public final class ConversationProtocol {
     private ConversationProtocol() {}
@@ -100,7 +100,7 @@ public final class ConversationProtocol {
 **ConversationState** — defensive immutability pattern (same as existing `ReviewState`):
 
 ```java
-package io.casehub.agency.conversation;
+package io.casehub.agency.deliberation.conversation;
 
 import java.util.List;
 import java.util.Map;
@@ -125,7 +125,7 @@ All other records follow the same pattern — see current DraftHouse sources for
 - [ ] **Step 1: Write ConversationState immutability tests**
 
 ```java
-package io.casehub.agency.conversation;
+package io.casehub.agency.deliberation.conversation;
 
 import org.junit.jupiter.api.Test;
 import java.util.*;
@@ -210,15 +210,15 @@ Refs casehubio/drafthouse#81"
 - Create: `src/test/java/io/casehub/agency/conversation/ConversationProjectionTest.java`
 
 **Interfaces:**
-- Consumes: All data model types from Task 1, `ChannelProjection<ConversationState>` from `io.casehub.qhorus.api.spi`, `MessageView` from `io.casehub.qhorus.api.message`, `ChannelMessageMeta` from `io.casehub.agency.channel`
+- Consumes: All data model types from Task 1, `ChannelProjection<ConversationState>` from `io.casehub.qhorus.api.spi`, `MessageView` from `io.casehub.qhorus.api.message`, `ChannelMessageMeta` from `io.casehub.agency.communication.dispatch`
 - Produces: `ConversationProjection` — abstract base class for app-specific projections (consumed by DraftHouse Task 5)
 
 **Abstract class structure:**
 
 ```java
-package io.casehub.agency.conversation;
+package io.casehub.agency.deliberation.conversation;
 
-import io.casehub.agency.channel.ChannelMessageMeta;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import java.lang.System.Logger;
@@ -480,7 +480,7 @@ All work in casehub-drafthouse (`~/claude/casehub/drafthouse`).
 - Modify: `server/api/src/main/java/io/casehub/drafthouse/DebateSessionSnapshot.java`
 
 **Interfaces:**
-- Consumes: blocks `io.casehub.agency.conversation.*`
+- Consumes: blocks `io.casehub.agency.deliberation.conversation.*`
 - Produces: Clean server/api with blocks imports
 
 **ReviewConversationRenderer migration:**
@@ -611,7 +611,7 @@ public final class DebateProtocol {
 
 **DebateStreamEntry** — update field types:
 - `Scope scope` → `String scope`
-- `Priority` import → `io.casehub.agency.conversation.Priority`
+- `Priority` import → `io.casehub.agency.deliberation.conversation.Priority`
 - `parsePriority()` → map `"P1"/"P2"/"P3"` as legacy AND `"HIGH"/"MEDIUM"/"LOW"` as current
 - `parseScope()` → direct string extraction
 - `meta.get("agent")` → `meta.get(ConversationProtocol.ROLE)` — but note: wire key changes from `"agent"` to `"role"`, so during transition this needs to handle both keys
@@ -724,7 +724,7 @@ Refs #81"
 
 **DebateMcpTools** (767 lines) — the largest migration. Key changes:
 - All `ReviewState` → `ConversationState`
-- All `SubTaskStatus.*` → `io.casehub.agency.conversation.SubTaskStatus.*`
+- All `SubTaskStatus.*` → `io.casehub.agency.deliberation.conversation.SubTaskStatus.*`
 - All `SubTaskFinding` → blocks `SubTaskFinding` (field `requestingAgent` → `requestedBy`)
 - Encoding: manual string concat → `ChannelMessageMeta.encode(DebateProtocol.META_SENTINEL, meta, body)`
 - Wire key: `"agent"` → `ConversationProtocol.ROLE` (i.e., `"role"`)

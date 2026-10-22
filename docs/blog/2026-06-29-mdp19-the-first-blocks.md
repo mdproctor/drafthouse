@@ -13,7 +13,7 @@ The blocks repo has been sitting empty since its scaffold landed earlier this we
 
 The three are small and independent. `ChannelMessageMeta` handles sentinel-prefixed key=value metadata headers in channel message bodies — the encoding scheme DraftHouse invented so structured data can ride alongside free-text LLM output without ambiguity. `ContextTracker` tracks cumulative LLM context window usage with threshold warnings. `BoundedProjectionDecorator` wraps any qhorus `ChannelProjection` and skips messages past a configurable bound — the "replay state at round N" pattern.
 
-None of them required design work. The audit from a few days ago had already mapped every file, every line count, every dependency. The extraction was mechanical: create classes in `io.casehub.agency.channel`, write tests, wire DraftHouse as a consumer.
+None of them required design work. The audit from a few days ago had already mapped every file, every line count, every dependency. The extraction was mechanical: create classes in `io.casehub.agency.communication.dispatch`, write tests, wire DraftHouse as a consumer.
 
 The one thing that wasn't mechanical was an invisible byte. DraftHouse's `META_SENTINEL` constant contains a SOH byte (U+0001) before the visible `DHMETA:` prefix — it's a collision-resistance measure, since LLMs never produce SOH. The Javadoc says "length 8" but the visible string is 7 characters. Claude rewrote `DebateProtocol.java` to delegate to the new blocks class, and the SOH byte silently vanished. The Read tool doesn't render it. The Write tool can't insert it. The file looked identical before and after.
 

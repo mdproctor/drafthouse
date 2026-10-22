@@ -1,6 +1,6 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.ConversationState;
 import io.casehub.drafthouse.DebateSession;
 import io.casehub.drafthouse.DebateSessionRegistry;
 import io.casehub.drafthouse.WebSocketEventBus;

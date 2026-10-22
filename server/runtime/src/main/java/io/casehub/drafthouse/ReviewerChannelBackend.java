@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.logging.Logger;
 
-import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.ConversationState;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ManagedContext;
 import io.casehub.drafthouse.debate.ReviewConversationRenderer;

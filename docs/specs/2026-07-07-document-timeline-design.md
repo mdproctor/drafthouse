@@ -158,7 +158,7 @@ by `ReplayResult.snapshotContent()`). Returns 404 if index doesn't exist.
 ### Projection changes
 
 `ConversationState` is **not modified** — it is a platform type in `casehub-agency`
-(`io.casehub.agency.conversation`), and adding DraftHouse-specific timeline state would
+(`io.casehub.agency.deliberation.conversation`), and adding DraftHouse-specific timeline state would
 violate the application boundary established by the P5 conversation-protocol extraction.
 
 `DebateChannelProjection` overrides `apply()` to intercept `ROUND_SNAPSHOT` entries before

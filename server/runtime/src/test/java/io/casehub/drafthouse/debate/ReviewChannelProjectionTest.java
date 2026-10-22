@@ -1,8 +1,8 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.agency.conversation.ConversationPoint;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.Priority;
+import io.casehub.agency.deliberation.conversation.ConversationPoint;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.Priority;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageType;
 import io.casehub.qhorus.api.message.MessageView;

@@ -1,9 +1,9 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.agentic.AgentRef;
-import io.casehub.agency.agentic.AgentResult;
-import io.casehub.agency.channel.AgentTask;
-import io.casehub.agency.conversation.orchestration.AgentParticipant;
+import io.casehub.agency.core.AgentRef;
+import io.casehub.agency.core.AgentResult;
+import io.casehub.agency.communication.dispatch.AgentTask;
+import io.casehub.agency.deliberation.conversation.orchestration.AgentParticipant;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
 import org.junit.jupiter.api.Test;
 

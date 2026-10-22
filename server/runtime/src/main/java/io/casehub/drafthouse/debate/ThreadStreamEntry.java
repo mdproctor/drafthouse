@@ -1,7 +1,7 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.agency.channel.ChannelMessageMeta;
-import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
+import io.casehub.agency.deliberation.conversation.ConversationProtocol;
 
 import java.time.Instant;
 import java.util.Map;

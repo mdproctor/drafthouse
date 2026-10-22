@@ -1,6 +1,6 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.channel.ChannelAgentRequest;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.qhorus.api.gateway.ChannelInitialisedEvent;
 import io.casehub.qhorus.api.gateway.ChannelRef;
@@ -190,9 +190,9 @@ class DebateChannelBackendFactoryTest {
                 channelId, channelId.toString(), channelRef.name(), null);
         session.setAutonomous(true);
 
-        var orchestrator = mock(io.casehub.agency.conversation.orchestration.ConversationOrchestrator.class);
-        var outcome = new io.casehub.agency.conversation.orchestration.ConversationOutcome(
-                null, new io.casehub.agency.agentic.termination.TerminationDecision.Complete("All agreed"),
+        var orchestrator = mock(io.casehub.agency.deliberation.conversation.orchestration.ConversationOrchestrator.class);
+        var outcome = new io.casehub.agency.deliberation.conversation.orchestration.ConversationOutcome(
+                null, new io.casehub.agency.orchestration.termination.TerminationDecision.Complete("All agreed"),
                 java.util.List.of(), 4, java.time.Duration.ofSeconds(10));
         when(orchestrator.converse(any())).thenReturn(
                 io.smallrye.mutiny.Uni.createFrom().item(outcome));
@@ -222,13 +222,13 @@ class DebateChannelBackendFactoryTest {
                 channelId, channelId.toString(), channelRef.name(), null);
         session.setAutonomous(true);
 
-        var                                 orchestrator = mock(io.casehub.agency.conversation.orchestration.ConversationOrchestrator.class);
+        var                                 orchestrator = mock(io.casehub.agency.deliberation.conversation.orchestration.ConversationOrchestrator.class);
         java.util.concurrent.CountDownLatch latch        = new java.util.concurrent.CountDownLatch(1);
         when(orchestrator.converse(any())).thenReturn(
                 io.smallrye.mutiny.Uni.createFrom().item(() -> {
                     try {latch.await();} catch (InterruptedException e) {Thread.currentThread().interrupt();}
-                    return new io.casehub.agency.conversation.orchestration.ConversationOutcome(
-                            null, new io.casehub.agency.agentic.termination.TerminationDecision.Complete("done"),
+                    return new io.casehub.agency.deliberation.conversation.orchestration.ConversationOutcome(
+                            null, new io.casehub.agency.orchestration.termination.TerminationDecision.Complete("done"),
                             java.util.List.of(), 2, java.time.Duration.ofSeconds(5));
                 }));
         session.setOrchestrator(orchestrator);
@@ -286,7 +286,7 @@ class DebateChannelBackendFactoryTest {
         session.setAutonomous(true);
         session.markConverseStarted();
 
-        var orchestrator = mock(io.casehub.agency.conversation.orchestration.ConversationOrchestrator.class);
+        var orchestrator = mock(io.casehub.agency.deliberation.conversation.orchestration.ConversationOrchestrator.class);
         session.setOrchestrator(orchestrator);
 
         when(debateRegistry.find(channelId)).thenReturn(Optional.of(session));

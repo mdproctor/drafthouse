@@ -1,10 +1,10 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.conversation.ConversationPoint;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.PointClassification;
-import io.casehub.agency.conversation.Priority;
-import io.casehub.agency.conversation.ThreadEntry;
+import io.casehub.agency.deliberation.conversation.ConversationPoint;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.PointClassification;
+import io.casehub.agency.deliberation.conversation.Priority;
+import io.casehub.agency.deliberation.conversation.ThreadEntry;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.gateway.ChannelRef;
 import io.casehub.qhorus.api.gateway.OutboundMessage;

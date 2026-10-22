@@ -1,9 +1,9 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.channel.ChannelMessageMeta;
-import io.casehub.agency.conversation.ConversationProtocol;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.Priority;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
+import io.casehub.agency.deliberation.conversation.ConversationProtocol;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.Priority;
 import io.casehub.drafthouse.debate.AgentType;
 import io.casehub.drafthouse.debate.DebateChannelProjection;
 import io.casehub.drafthouse.debate.DebateProtocol;

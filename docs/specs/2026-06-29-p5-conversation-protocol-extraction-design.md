@@ -29,7 +29,7 @@ registries, no framework abstractions.
 
 ## Package
 
-`io.casehub.agency.conversation`
+`io.casehub.agency.deliberation.conversation`
 
 ## Data model
 
@@ -391,7 +391,7 @@ ConversationRendererConfig.builder()
   render bounded state without constructing its own renderer or duplicating config.
 - `DebateProtocol` — thins to sentinel constant + convenience wrappers
 - `DebateMcpTools` — import paths change (`ReviewState` → `ConversationState`,
-  `SubTaskStatus` → `io.casehub.agency.conversation.SubTaskStatus`). Encoding
+  `SubTaskStatus` → `io.casehub.agency.deliberation.conversation.SubTaskStatus`). Encoding
   migrates from manual string concatenation to
   `ChannelMessageMeta.encode(sentinel, meta, body)`. Wire key changes from
   `"agent"` to `"role"` to match the protocol constant. `renderBounded()` replaces
@@ -401,7 +401,7 @@ ConversationRendererConfig.builder()
 - `DebateChannelBackend`, `DebateChannelBackendFactory` — unchanged
 - `DebateEventResource` — unchanged
 - `DebateStreamEntry` — updated: `Scope scope` field → `String scope`,
-  `Priority` import → `io.casehub.agency.conversation.Priority`,
+  `Priority` import → `io.casehub.agency.deliberation.conversation.Priority`,
   `parsePriority()` updated for HIGH/MEDIUM/LOW values,
   `parseScope()` replaced with direct String extraction,
   `meta.get("agent")` → `meta.get("role")`

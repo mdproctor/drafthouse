@@ -1,7 +1,7 @@
 package io.casehub.drafthouse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.casehub.agency.channel.ContextSnapshot;
+import io.casehub.agency.communication.dispatch.ContextSnapshot;
 import io.casehub.drafthouse.debate.DebateStreamEntry;
 import io.casehub.pages.push.PushMessage;
 import io.casehub.pages.push.PushRequest;

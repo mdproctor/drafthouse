@@ -1,8 +1,8 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.agency.channel.AgentTask;
-import io.casehub.agency.channel.ChannelAgentRequest;
-import io.casehub.agency.conversation.ConversationState;
+import io.casehub.agency.communication.dispatch.AgentTask;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
+import io.casehub.agency.deliberation.conversation.ConversationState;
 import io.casehub.drafthouse.debate.*;
 import jakarta.enterprise.context.ApplicationScoped;
 

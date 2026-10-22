@@ -265,7 +265,7 @@ TypeScript webui built with Quinoa. casehub-pages workbench with Lit (LitElement
 | `DebateAgentProvider` | `io.casehub.drafthouse.debate` | `String analyse(AgentTask task)` | LLM invocation for sub-agent handlers. `PlatformDebateAgentProvider` (`@DefaultBean` via platform `AgentProvider`) and `ClaudeAgentSdkDebateAgentProvider` (optional claude-agent module). |
 | `ReviewSessionRegistry` | `io.casehub.drafthouse` | `find`, `put`, `remove`, `updateSelection` | Session storage abstraction. |
 | `DebateSessionRegistry` | `io.casehub.drafthouse` | `find`, `put`, `remove`, `persist`, `activeSessions` | Debate session storage with persistence delegation. |
-| `ChannelAgentHandler` | `io.casehub.agency.channel` (from casehub-agency) | `handle(ChannelAgentRequest)` | Sub-agent task handler. 6 concrete handlers in `handler/` package. |
+| `ChannelAgentHandler` | `io.casehub.agency.communication.dispatch` (from casehub-agency) | `handle(ChannelAgentRequest)` | Sub-agent task handler. 6 concrete handlers in `handler/` package. |
 | `AgentRegistry` | `io.casehub.eidos.api` (from casehub-eidos) | `register`, `find`, `query` | Multi-LLM reviewer registry. `DraftHouseReviewerRegistry` implements this. |
 
 ---

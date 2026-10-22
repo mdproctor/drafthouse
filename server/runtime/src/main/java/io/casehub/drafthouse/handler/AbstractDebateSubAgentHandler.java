@@ -1,11 +1,11 @@
 package io.casehub.drafthouse.handler;
 
-import io.casehub.agency.channel.ChannelAgentHandler;
-import io.casehub.agency.channel.ChannelAgentRequest;
-import io.casehub.agency.channel.ChannelMessageMeta;
-import io.casehub.agency.conversation.ConversationProtocol;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.ConversationPoint;
+import io.casehub.agency.communication.dispatch.ChannelAgentHandler;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
+import io.casehub.agency.deliberation.conversation.ConversationProtocol;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.ConversationPoint;
 import io.casehub.drafthouse.DebateSessionRegistry;
 import io.casehub.drafthouse.DebateSession;
 import io.casehub.drafthouse.debate.*;

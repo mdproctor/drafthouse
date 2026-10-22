@@ -1,11 +1,11 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.channel.AgentTask;
-import io.casehub.agency.channel.ChannelAgentHandler;
-import io.casehub.agency.channel.ChannelAgentRequest;
+import io.casehub.agency.communication.dispatch.AgentTask;
+import io.casehub.agency.communication.dispatch.ChannelAgentHandler;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
-import io.casehub.agency.channel.ChannelMessageMeta;
-import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
+import io.casehub.agency.deliberation.conversation.ConversationProtocol;
 import io.casehub.drafthouse.debate.DebateProtocol;
 import io.casehub.platform.api.identity.ActorType;
 import io.casehub.qhorus.api.message.MessageDispatch;
@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 @ApplicationScoped
-public class ChannelAgentDispatcher extends io.casehub.agency.channel.ChannelAgentDispatcher {
+public class ChannelAgentDispatcher extends io.casehub.agency.communication.dispatch.ChannelAgentDispatcher {
 
     static final String SUBAGENT_INSTANCE_ID = "drafthouse-subagent";
 

@@ -2,8 +2,8 @@ package io.casehub.drafthouse.debate;
 
 import java.util.Map;
 
-import io.casehub.agency.channel.ChannelMessageMeta;
-import io.casehub.agency.conversation.ConversationProtocol;
+import io.casehub.agency.communication.dispatch.ChannelMessageMeta;
+import io.casehub.agency.deliberation.conversation.ConversationProtocol;
 
 /**
  * DraftHouse-specific sentinel and convenience methods.

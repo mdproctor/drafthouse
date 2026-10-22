@@ -1,9 +1,9 @@
 package io.casehub.drafthouse.debate;
 
-import io.casehub.agency.conversation.ConversationFold;
-import io.casehub.agency.conversation.ConversationState;
-import io.casehub.agency.conversation.PointClassification;
-import io.casehub.agency.conversation.Priority;
+import io.casehub.agency.deliberation.conversation.ConversationFold;
+import io.casehub.agency.deliberation.conversation.ConversationState;
+import io.casehub.agency.deliberation.conversation.PointClassification;
+import io.casehub.agency.deliberation.conversation.Priority;
 import io.casehub.qhorus.api.message.MessageView;
 import io.casehub.qhorus.api.spi.ChannelProjection;
 import jakarta.enterprise.context.ApplicationScoped;

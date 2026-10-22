@@ -1,9 +1,9 @@
 package io.casehub.drafthouse;
 
-import io.casehub.agency.channel.AgentResultParseException;
-import io.casehub.agency.channel.AgentTask;
-import io.casehub.agency.channel.ChannelAgentHandler;
-import io.casehub.agency.channel.ChannelAgentRequest;
+import io.casehub.agency.communication.dispatch.AgentResultParseException;
+import io.casehub.agency.communication.dispatch.AgentTask;
+import io.casehub.agency.communication.dispatch.ChannelAgentHandler;
+import io.casehub.agency.communication.dispatch.ChannelAgentRequest;
 import io.casehub.drafthouse.debate.DebateAgentProvider;
 import io.casehub.qhorus.api.message.MessageDispatch;
 import io.casehub.qhorus.api.message.MessageType;
